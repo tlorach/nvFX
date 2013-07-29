@@ -89,7 +89,7 @@ set(CV_HEADERS "${CV_DIR}/curveEngine.h" "${CV_DIR}/curvereader.h")
 set(CV_SOURCES "${CV_DIR}/curveEngine.cpp" "${CV_DIR}/curvereader.cpp")
 #####################################################################################
 # folder for various models and textures
-find_path(RESOURCE_DIR gargoyle_anim_tris_noteeth_v133.bk3d.gz "resources")
+find_path(RESOURCE_DIR gargoyle_v133.bk3d.gz "resources")
 
 #####################################################################################
 # glut sample
