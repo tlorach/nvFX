@@ -1,0 +1,8 @@
+/**
+\page API Using the API from C++ code
+
+Here is a typical example of how to use nvFX from C++ code.
+
+This doesn't show all the possiblities, but at least allows to understand that basics.
+
+**/

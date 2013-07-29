@@ -1,0 +1,103 @@
+/**
+\page TECHPASS Techniques and Passes
+
+The techniques and Passes are the signature of an effect as we used to know from the very beginning : when Cg showed-up years ago.
+
+We keep this approach, but added few new features. Here is a typical Technique/Pass declaration :
+
+\code
+Technique myTech1
+{
+    // associate a named attribute to an attribute ID
+    Attribute(position) = 0;
+    Attribute("normal") = 1;
+    Pass myPass1
+    {
+        // associate a named attribute to an attribute ID only for this pass
+        Attribute("texcoord0") = 4;
+        // state assignment via state groups:
+        rasterization_state = rasterStateFloor;
+        dst_state = dstStateFloor;
+        // direct State assignment:
+        GL_DEPTH_WRITEMASK = true;
+        GL_DEPTH_FUNC = LEqual;
+        // Programs:
+        VertexProgram = ObjectVS;
+        FragmentProgram = ObjectPS;
+        FragmentProgram[lightmodel] = DefaultLighting;
+        // some direct assignment to a uniform parameter:
+        someUniform = {3.1, 2.2, 0.1};
+    }
+    Pass myPass2
+    {
+    ...
+    }
+}
+\endcode
+
+\section TECH Technique
+The technique simply contains :
+ - \b Attribute ( \e attribname ) = attr#; : to associate a named attribute to an input attribute ID. This is especially needed in OpenGL ES2 where all attributes are generic. In GLSL 4.1, we can assign an ID directly from within GLSL code (layout(location=...))
+ - Pass <passname> { ... } : declare a pass in the technique
+
+\section PASS Pass
+a Pass contains various states assignments and also uniform assignments
+
+ - any states from \ref SG "State-groups" : to simplify things, it is indeed possible to directly assign render-states from a pass, without getting through the \ref StateGroups "State-Group mechanism".
+ - \b DSTState = someDSTState; : setup the states for Depth-Stencil stage
+ - \b RasterizationState = someRasterState; : setup the states for rasterization stage
+ - \b ColorSampleState = someCSState; : setup the states for Color-Sampling
+ - \b VertexProgram = myVShader; : \b adds a Shader module (== GLSL Shader Object) to the vertex program of this pass. This means that of you write many times this assignment, all the shaders will be part of the program
+ - \b FragmentProgram = myFPShader; : \b adds a Shader module to the fragment program of this pass.
+ - \b any \b uniform assignment : "myUniformParam = 0.5;" for example
+ - \b Attribute ( \e attribname ) = attr#; : to associate a named attribute to an input attribute ID. This is especially needed in OpenGL ES2 where all attributes are generic. In GLSL 4.1, we can assign an ID directly from within GLSL code (layout(location=...))
+
+\note because we can directly assign uniforms from a pass, the additional care must be taken to the syntax of a state keyword, to make sure this keyword doesn't get interpreted as a possible uniform. In other words, a mistake in the spelling of a special keyword may not raise an error...
+ 
+\subsection PRGS Programs and shaders
+\b FragmentProgram and \b VertexProgram offer more features to allow you to create flexible combinations of shader code.
+
+First, let's remember that we assign shader modules to programs. These shader modules are declared with \ref GLSLShader. In these examples, myPS, myHelpers are \ref GLSLShader objects.
+
+In OpenGL, these GLSLShaders are directly translated to \b GLSL \b Shader \b Objects. When we add them to a program, we \b link them to a \b GLSL \b Program.
+
+assignment of a \b list of shaders : 
+ - FragmentProgram = {myPS, myHelpers, myShadowMapping}; : this will add 3 shader modules to the fragment program of the pass
+assignement of a shader or a list of shaders with a \b named \b group:
+ - FragmentProgram[myGroupName] = {Light0_as_directional, Light1_as_spot, Light2_as_point}; : this will add 3 shader modules to the fragment program of the pass. On top of this, the nvFX-runtime will associate them to the group named "myGroupName" (in this example).
+ 
+This grouping feature is very useful when at runtime the application needs to replace some modules by some others. For example, if we wanted to change the lighting of Light0 :
+ - look for the GLSLShaders of this pass that are part of "myGroupName"
+ - destroy the pass-state "myGrouName" (nvFX::IPass::destroy)
+ - create a new pass-state of type "FragmentProgram" with the same group-name "myGroupName"
+ - add in this state the GLSLShaders but now change the one for Light0 : \b Light0_as_spot, Light1_as_spot, Light2_as_point.
+ -- See nvFX::IPass::createState(IPassState::Type type, IShader **shd, int numShaders, const char *groupName=NULL)
+
+\section TECHPASSCPP Using Techniques and Passes in the C++ code
+
+Once an effect got parsed, techniques and passes are finally available for action.
+
+A technique doesn't offers much, out of grouping some Passes together. But one action that can be done at this level is to "validate" the technique : this action will walk through all the passes and check for possible errors in pass-states and shader program compilation.
+
+Note that validation could be done on per Pass basis.
+\code
+    bool failed = false;
+    for(int i=0; fxTech = pGLSLFx->findTechnique(i); i++)
+    {
+        bool bRes = fxTech->validate();
+        if(!bRes)
+        {
+            PRINTF(("Error>> couldn't validate the technique %d\n", i));
+            failed  = true;
+        }
+    }
+\endcode
+
+During the rendering loop, passes can be executed. You can either choose a specific one or loop through all the passes of a technique if your technique is meant to be multi-pass...
+\code
+    fxPass_current = fxTech->getPass(PASS_FLOOR);
+    fxPass_current->execute();
+\endcode
+The execution of a pass will execute the underlying pass-states : render-states (state-groups); GLSL program binding; parameter update...
+
+**/

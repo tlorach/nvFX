@@ -1,0 +1,196 @@
+GLSLShader 
+{
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance);
+}
+//
+// Default implementation of fragment output : the app will instanciate SDefaultFragOutput by default
+// just write the color
+//
+GLSLShader DefaultFragOutput
+{
+  layout(location=0) out vec4 colorOut;
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	  colorOut = color;
+  }
+}
+//
+// Output implementation for HBAO, for example :
+// normals and depth are sent to additional render targets
+//
+GLSLShader ColNormDepthFragOutput
+{
+  layout(location=0) out vec4 colorOut[3];
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	colorOut[0] = color;
+	colorOut[2].x = -Pv.z;
+	// Use face normals instead of interpolated normals to make sure that the tangent planes
+	// associated with the normals are actually tangent to the surface
+	vec3 N = normalize(cross(ddx(Pv), ddy(Pv)));
+	colorOut[1].xyz = 0.5*(N + 1.0);
+	colorOut[1].w = 1;
+  }
+}
+
+//
+// Output implementation for (World) Position and (World) Normal :
+// TODO: add an argument for world pos !!!!
+// Now using Pv
+//
+GLSLShader FragOutput_PN
+{
+  layout(location=0) out vec4 colorOut[2];
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	colorOut[0] = vec4(Pv, 0);
+	vec3 N = normalize(cross(ddx(Pv), ddy(Pv)));
+	colorOut[1].xyz = 0.5*(N + 1.0);
+	colorOut[1].w = 1;
+  }
+}
+
+//
+// Output implementation for Toon shading
+//
+// defines in nvFx not ready yet :-(
+//#define NEAR 0.0 //pNearFar.x
+//#define FAR 0.5 //pNearFar.y
+GLSLShader ToonCND_FragOutput
+{
+  layout(location=0) out vec4 colorOut[2];
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	// Normal in color0
+	vec3 Nc = 0.5 * (normalize(Nw) + ((1.0).xxx));
+	colorOut[0] = vec4(Nc,1);
+	float d = (abs(Pv.z)-/*NEAR*/0.0)/(/*FAR*/0.5-/*NEAR*/0.0);
+	colorOut[1] = vec4(d.xxx,1);
+	colorOut[2] = color;
+  }
+}
+
+//
+// Output implementation for DOF_Blur
+//
+uniform float gFocalDistance
+<
+  uimin = 0.1;
+  uimax = 10.0;
+> = 3.0f;
+uniform float gFocalRange
+<
+  uimin = 0.01;
+  uimax = 5.0;
+> = 1.42f;
+GLSLShader DOFBlur_FragOutput
+{
+  layout(location=0) out vec4 colorOut;
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	colorOut[0] = color;
+	float d = saturate(abs(-Pv.z - gFocalDistance) / gFocalRange);	
+	colorOut[1] = vec4(d.xxx,1);
+  }
+}
+
+// same but using Alpha as the output
+GLSLShader DOFBlurInAlpha_FragOutput
+{
+  layout(location=0) out vec4 colorOut;
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	//float d = saturate(abs(-Pv.z - gFocalDistance) / gFocalRange);	
+	float d = saturate(abs(-Pv.z - gFocalDistance) / gFocalRange);	
+	colorOut = vec4(color.xyz, d);
+  }
+}
+
+uniform float HDR_SCALE_Factor
+<
+  uimin = 0.0;
+  uimax = 2.0;
+> = 2.0f;
+GLSLShader DOFBlurInAlphaHDRScale_FragOutput
+{
+  layout(location=0) out vec4 colorOut;
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	float d = saturate(abs(-Pv.z - gFocalDistance) / gFocalRange);	
+	colorOut = vec4(color.xyz / HDR_SCALE_Factor, d);
+  }
+}
+
+// using Alpha in a RGBA8UI output
+GLSLShader DOFBlurInAlphaRGBA8UI_FragOutput
+{
+  layout(location=0) out vec4 colorOut;
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	//float d = saturate(abs(-Pv.z - gFocalDistance) / gFocalRange);	
+	float d = saturate(abs(-Pv.z - gFocalDistance) / gFocalRange);	
+	colorOut = 255 * vec4(color.xyz, d);
+  }
+}
+
+//
+// Output implementation for DOF_CoC
+//
+uniform float DOF_focalLen <
+	uimin = 0.01;
+	uimax = 1.0;
+> = 0.77;
+uniform float DOF_Dlens <
+	uimin = 0.1;
+	uimax = 10.0;
+> = 4.11;
+//0.26 (tail of object); 1.0 (bgnd)
+uniform float DOF_Zfocus <
+	uimin = 0.5;
+	uimax = 10.0;
+> = 1.85;
+
+uniform float DOF_scale <
+	uimin = 0.1;
+	uimax = 10.0;
+> = 6.0;
+/*	DOF_sceneRange can be used if you want to 'normalize' the interesting range before storing them
+	into the render target : if ever the RT doesn't have enough precision... no need if using 32F...
+uniform float DOF_sceneRange <
+	uimin = 0.01;
+	uimax = 1.0;
+> = 0.24;*/
+uniform float DOF_maxCoC <
+	uimin = 0.1;
+	uimax = 10.0;
+> = 6.4;
+
+GLSLShader DOF_CoC_FragOutput
+{
+  layout(location=0) out vec4 colorOut[2];
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	colorOut[0] = color;
+	float fragPos = -Pv.z;
+	float pixCoC = abs(DOF_Dlens * DOF_focalLen * (DOF_Zfocus - fragPos) /	(DOF_Zfocus * (fragPos - DOF_focalLen)));
+	float blur = saturate(pixCoC * DOF_scale / DOF_maxCoC);
+	// Depth/blurriness value 
+	// let's keep values as they are with no normalization : assuming we are using a proper render target
+	colorOut[1] = vec4(fragPos /* / DOF_sceneRange*/, blur, 0, 1.0);
+  }
+}
+
+//
+// Output implementation for OptiX
+//
+GLSLShader OPTIX_FragOutput
+{
+  layout(location=0) out vec4 colorOut[3];
+  void finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+  {
+	colorOut[0] = vec4(color.rgb, 1);
+	colorOut[1] = vec4(Pw, color.a); // pack transparency with world position
+	colorOut[2] = vec4(Nw, reflectance); // TODO: pass w component for reflectance
+  }
+}
+

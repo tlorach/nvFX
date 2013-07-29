@@ -1,0 +1,292 @@
+/**
+\mainpage Main "Effect container"
+
+Effect container layer.
+
+\section VersionInfo Version informations
+
+\code
+$Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/doxygen/MainPage.dxt#2 $
+$Date: 2013/06/20 $
+$Revision: #2 $
+$Author: tlorach $
+$Change: 16301413 $
+\endcode
+
+\section A What is nvFX
+
+Historically, this effect layer is pretty much the continuity of what we have under CgFX or GLSLFx. However the approach here is intended to be generic (despite the fact that the current version is more OpenGL-centric).
+
+nvFX is a \b generic \b effect \b container that allows you to encapsulate many pieces of code.
+For now, only GLSL is available. But soon it would be able to encapsulate CUDA, DirectX HLSL and even OptiX
+
+On top of encapsulating code, nvFX contains the typical effect mechanism of \b Techniques / \b Passes.
+It also contains ways to work with sampler states, texture resources, parameters introspection.
+
+The purpose of this tool is to allow the application to work with consistent and readable packages of data for specific shading.
+
+It is important to understand that nvFX is not a GLSL (or CUDA or anything else) parser ! The parsing of the effect will never parse the GLSL code that got encapsulated. The reasons are :
+ - There is no reasons to parse what the driver will already parse
+ - parsing complex grammar is complex and can lead to issues and heavy maintenance
+
+Therefore, you must consider this nvFX layer as another simple layer that will allow you to glue things together, hopefully in an elegant way.
+
+More details on various topics:
+ - \ref TextureSampler "Textures and Samplers"
+ - \ref StateGroups "Render-State Groups"
+ - \ref GLSLSHADER "GLSLShader section"
+ - \ref GLSLSR "Using GLSL Sub-routines"
+ - \ref TECHPASS "Techniques and Passes"
+ - \ref CSTBUFFERS "Constant Buffers"
+ - \ref UNIFORMS "Uniform Parameters"
+ - \ref INCLUDE "Including Effect Code"
+ - \ref LIGHTCASE "Example on how to do lighting" : how to perform a flexible lighting approach
+ - \ref Keywords "Keywords of nvFX"
+ - \ref Grammar "nvFX Grammar"
+ - \ref FutureWork "Future Work"
+
+\section cmdline How to check an effect from the console
+
+The project \b nvFXcc allows you to compile an effect and check if any errors.
+
+For now arguments only need the effect file name.
+
+\code
+nvFXcc <effect Filename>
+\endcode
+
+\todo Add options, such as "-I" for include path; Shader dump to spit out generated GLSL code etc.
+
+If any #include used, it will try to find them at the same location.
+
+This command allows you to :
+ - check the integrity of nvFX grammar : the whole will be parsed
+ - check the validity of each Pass : a pass can contain shaders and render states
+ - check for each pass the GLSL code that will have been generated (passes allow to concatenate pieces of code...)
+
+\section Samples How to run the samples
+
+There are few samples showing \b nvFX on Android, iPad and Windows :
+ - \b Bak3dView : Bak3dView.sln to start it... Windows example where lighting can be tweaked, as an example. This solution sln will also allow you to compile the libraries for the runtime of nvFX. Make sure that the exe executes from bin folder (add $(TargetDir) in the debug settings)
+ - \b Samples_ES2_MT : multi-threaded sample for Android, iPad and Windows.
+  - \b Samples_ES2_MT\Windows : Windows version. Make sure that the exe executes from bin folder (add $(TargetDir) in the debug settings)
+  - \b Samples_ES2_MT\iOS : iOS project
+  - \b Samples_ES2_MT\Android : Android project. a sub-folder Android has a XCode project to build the jni part. the whole Android project was tested through Eclipse (only tried the one under OSX)
+ - \b Samples_ES2 : same sample as ebove but without any multi-threading
+ - \b SkinnedMeshDX10 : DX10 example
+
+The libraries needed for nvFX are :
+ - \b FXParser : the parser that will build nvFX environment from the special grammar of nvFX files
+ - \b FXLib : the runtime part that has no connection with any graphic API
+ - \b FXLibGL : the runtime library for OpenGL and OpenGL ES
+ - \b FXLibD3D : the runtime library for DirectX 10 and 11... under construction...
+
+\todo I need to create libraries for iOS and Android. For now, none of the libraries are needed : I simply added the required files to the project.
+
+Possible build issues :
+\note \b Bison seems to have some 'hardcoded' paths that do access c:\program files\bison folder. Please copy "bison_copy_to_Program_files" (in FXParser) to Program Files as "bison"...
+
+\note some use of "isatty" could raise an error that for some reasons appeared in some computers, although YY_NEVER_INTERACTIVE is defined by the pre-processor... if it happens, please just define this in one way or another, so that lex.cpp is happy
+ 
+Manipulating under Windows :
+ - left mouse button : rotate
+ - right mouse button : zoom in and rotate horizontally
+ - middle mouse button : translate
+ - keyboard arrows : rotations
+ - page UP/Down : zoom in/out
+ - Ctrl+Page Up/Down : move the target forward/backward
+ - Ctrl+Keyboard arrows : translation of the camera
+ - space mouse would allow to move the object...
+ - In the Samples_ES2[_MT] : space bar will switch from one pass to the next one... as tapping on the screen of tab
+
+If you want to look directly in the source code how the nvFX runtime is being used :
+ - for OpenGL : check Bak3dView.cpp file
+ - for D3D10 : check SkinnedMesh.cpp file
+ - for OpenGLES : check coreRenderer.cpp
+ 
+\section API layout of nvFX
+
+nvFX is made of 2 distinct parts :
+ - the \e Front \e End : the nvFX parser
+ - the \e Back \e End : the runtime used to create effects, maintain them, query them and use them
+ 
+It is important to consider that the Front-End is no more than a \e user \e of \e the \e Back-End, as is the application : The parser \e invokes \e the \e same \e methods as the application does. If one application wanted to replace the parser with an XML parser, it could completely ignore the nvFX Front-end and create its own XML front-end.
+ 
+It also means that whatever is done in nvFX parser is possible to be done at runtime in C++ via the Back-End methods: the application could create an effect from scratch, using only C++ entry points of the back-end.
+
+\image html API.png
+ 
+\section B Typical skeleton of a nvFX effect
+
+Here is an example of a GLSL effect, containing some vertex shaders, fragment shaders, technique, passes, texture, sampler state and uniform declaration for introspection (reflexion).
+
+\code
+
+uniform vec3  eyePos : EYEPOS;
+uniform mat4 matWorld : WORLD;
+...
+UniformGroup user_data
+{
+    uniform float scaleObject : SCALEOBJECT
+    <
+        Toto = "TEST";
+        A = 0.1;
+        B = 4;
+    > = 0.1; // default data can be set and will be sent to GLSL at validation time
+}
+rasterization_state rasterState1
+{
+    GL_LINE_WIDTH = 1.0;
+    GL_POLYGON_MODE={GL_FRONT_AND_BACK, GL_FILL};
+}
+GLSLShader 
+{
+    #version 410 compatibility
+    ...
+}
+#include "some_nvFX_Code.glslfxh"
+sampler_state normalMapSampler
+{
+    GL_TEXTURE_MIN_FILTER = GL_LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = GL_LINEAR;
+}
+Texture diffuseTexture {
+    samplerState = defaultSamplerState;
+}
+GLSLShader ObjectVS
+{
+    void main() 
+    {
+    ...
+    }
+}
+GLSLShader ObjectPS
+{
+    void main() 
+    {
+    ...
+    }
+}
+GLSLShader Helpers
+{
+    float someFunctionHelper(vec4 a) {...}
+    ...
+}
+technique BasicTechnique
+{
+    pass myPass1
+    {
+        rasterization_state = rasterState1;
+        GL_DEPTH_WRITEMASK = true;
+        GL_DEPTH_FUNC = LEqual;
+        VertexProgram = ObjectVS;
+        FragmentProgram = {ObjectPS, Helpers};
+    }
+    pass myPass2
+    {
+        ...
+    }
+}
+\endcode
+
+\section C basic example of C++ code using nvFX
+
+Include the necessary files
+\code
+#include "FXParser.h" // FxLib.h is included by FXParser.h
+\endcode
+
+Declare some interface pointers
+\code
+nvFX::IContainer*    pGLSLFx = NULL; // The effect container
+nvFX::ITechnique*    fxTech = NULL;
+nvFX::IPass*         fxPass_current = NULL;
+nvFX::IUniform*      fxwvpMatrix = NULL;
+nvFX::IUniform*      fxscaleObject = NULL;
+//...etc.
+\endcode
+
+Instanciate a container:
+\code
+    pGLSLFx = nvFX::IContainer::create("Test");
+    if(!pGLSLFx) {...}
+\endcode
+Setup the callbacks for errors and '#include' handling (see \ref INCLUDE "Including Effect Code" for more):
+\code
+    pGLSLFx->setErrorCallback(myErrorCb);
+    pGLSLFx->setIncludeCallback(myIncludeCb);
+\endcode
+load and parse an effect in it:
+\code
+    if(!nvFX::loadEffectFromFile(pGLSLFx, "myEffect.glslfx"))
+    { ... }
+\endcode
+Eventually, validate all the techniques right now to make sure everything is good to go (\ref TECHPASS "Techniques and Passes"):
+\code
+    for(int i=0; fxTech = pGLSLFx->findTechnique(i); i++)
+    {
+        bool bRes = fxTech->validate();
+        if(!bRes)
+        {
+            PRINTF(("Error>> couldn't validate the technique %d\n", i));
+            failed  = true;
+        }
+    }
+\endcode
+
+setup \e uniform \e binding interfaces depending on what is exposed from the effect (\ref INTROSPECRUNTIME Introspection)
+\code
+    nvFX::IUniform *pUniform;
+    for(int i=0; pUniform = pGLSLFx->findUniform(i); i++)
+    {
+        LPCSTR sem = pUniform->getSemantic();
+        if(!strcmp(sem, "WORLD"))
+            fxworldMatrix = pUniform;
+        if(!strcmp(sem, "WORLDVIEWPROJECTION"))
+            fxwvpMatrix = pUniform;
+        ...
+    }
+\endcode
+
+Select a current technique and a current pass (\ref TECHPASS "Techniques and Passes"):
+\code
+    fxTech = pGLSLFx->findTechnique(0); // take the very first technique
+    fxPass_current = fxTech->getPass(0); // take the very first pass of this technique
+\endcode
+
+prepare some values of few uniforms at early time(see \ref UNIFORMS "Uniform Parameters" ). This will mirror the values into the fxscaleObject uniform binding point, for later use.
+\code
+    if(fxscaleObject) fxscaleObject->setValue1f(myScaleValue);
+\endcode
+
+Eventually, setup some textures (\ref TextureSampler "Textures and Samplers") if we have some. We can use a default texture name by querying annotations:
+\code
+    nvFX::ITexture *pTex = NULL;
+    for(int i=0; pTex = pGLSLFx->findTexture(i); i++)
+        if(pTex)
+        {
+            const char *fname = pTex->annotations()->getAnnotationString("defaultFile");
+            if(fname && g_ddsImage.load(fname))
+            {
+                // load the texture...
+                pTex->setGLTexture(GL_TEXTURE_2D, texID); // texture 2D as an example...
+            }
+        }            
+\endcode
+
+During the rendering loop, let's use the effect with the technique and pass we took earlier.
+See \ref TECHPASS "Techniques and Passes" for details
+\code
+    //rendering loop code:
+    //compute matrice etc.
+    // ...
+    // as an example, here we store the matrix values to fxworldMatrix
+    if(fxworldMatrix)   fxworldMatrix->setMatrix4f(myWorldMatrix);
+    fxPass_current->execute(); // executes the pass (pass-states executed and uniform parameters updated - like fxworldMatrix)
+    // example where we update directly the uniform attached to fxwvpMatrix. No mirroring of the data into fxwvpMatrix
+    if(fxwvpMatrix) fxwvpMatrix->updateMatrix4f(g_MWVP.mat_array, fxPass_current);
+    // Draw The mesh...
+    // ...
+    fxPass_current->unbindProgram();
+\endcode
+**/

@@ -1,0 +1,63 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<VisualStudioToolFile
+	Name="Bison"
+	Version="8.00"
+	>
+	<Rules>
+		<CustomBuildRule
+			Name="Bison"
+			DisplayName="Bison"
+			CommandLine="Bison.exe [warnings] [defines] [prefix] [graph] [Nolines] [TokenTable] [Debug] [verbose] -o $(InputDir)$(InputName).cpp [inputs]"
+			Outputs="$(InputDir)$(InputName).cpp"
+			FileExtensions="*.ypp"
+			>
+			<Properties>
+				<BooleanProperty
+					Name="Debug"
+					DisplayName="Debug"
+					Description="Debug"
+					Switch="-t"
+				/>
+				<BooleanProperty
+					Name="Nolines"
+					DisplayName="No lines"
+					Description="don&apos;t generate `#line&apos; directives"
+					Switch="-l"
+				/>
+				<BooleanProperty
+					Name="TokenTable"
+					DisplayName="token-table "
+					Description="include a table of token names"
+					Switch="-k"
+				/>
+				<BooleanProperty
+					Name="defines"
+					DisplayName="Produce Header"
+					Description="produce a header file"
+					Switch="--defines=$(InputDir)$(InputName).h"
+				/>
+				<BooleanProperty
+					Name="verbose"
+					DisplayName="verbose"
+					Description="verbose"
+					Switch="-v"
+				/>
+				<BooleanProperty
+					Name="graph"
+					DisplayName="graph"
+					Switch="-g$(InputDir)$(InputName).dot"
+				/>
+				<StringProperty
+					Name="prefix"
+					DisplayName="prefix"
+					Switch="--name-prefix=[value]"
+				/>
+				<BooleanProperty
+					Name="warnings"
+					DisplayName="warnings"
+					Switch="-W"
+				/>
+			</Properties>
+		</CustomBuildRule>
+	</Rules>
+</VisualStudioToolFile>

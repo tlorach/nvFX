@@ -1,0 +1,282 @@
+/**
+\page CSTBUFFERS Constant Buffers
+
+The old way of setting constant buffer is what OpenGL introduced for while : uniform parameters can be modified 1 by 1.
+
+OpenGL still alows this way of doing and is even the only way to proceed for OpenGL \b ES.
+
+However, D3D10 and 11 removed this approach by forcing the user to provide constant buffers to the shaders in which uniforms live. In other words, D3D doesn't support any uniform at all.
+
+The application has two ways to match constants of the shaders :
+ - be sure of the consistency between the C/C++ code that send the data and the Shaders that receive these values. We often see developers sharing some include files between C/C++ and HLSL in which they put the structures that map to buffers
+ - Use \b reflection interface to query the compiled binary code and gather uniform parameter offset within the constant bufffers
+ 
+In OpenGL, it is still possible to use either uniforms or buffers :
+ - Any global uniforms is a separate entity that OpenGL can address as a regular uniform
+ - Any uniform within "layout(std140) uniform <myBuffer> { ... }" is part of "myBuffer". myBuffer is a uniform buffer to which one would bind a \b UBO (uniform buffer object)
+
+In D3D, everything is part of a buffer :
+ - any parameter than is inside a "cbuffer <myBuffer> { ... }"
+ - even parameters than aren't inside any cbuffer : in this special case, they will be part of a default buffer called "$Globals". And the application will still be required to attach a buffer to it
+
+\section CSTBUFFDECL How to use buffers in nvFX
+
+nvFX proposes to expose these buffers through the declaration of a constant buffer, using \b CstBufer keyword :
+
+\code
+CstBuffer myConstants { // cbuffer keywork can also be used
+	uniform mat4 modelViewProjection;
+	uniform float someScale : SCALE < default = 0.1; max = 10.0; > = 2.3;
+	uniform vec3  someVec = {1.0, 2.0, 1.1};
+}
+GLSLShader myShader { // same for HLSL Shader sections
+ // modelViewProjection and someScale can be used in the code
+ ...
+}
+\endcode
+
+we used CstBuffer instead of cbuffer to avoid confusion : keep in mind that this CstBuffer is declared \e outside of the HLSL code and belongs to the nvFX parser. But \b cbuffer keyword is also accepted by the parser...
+
+As you can see in the example, semantics, annotations and default values still apply as described in \ref UNIFORMS "Uniform Parameters".
+
+When a CstBuffer got parsed by nvFX, the runtime will have created it and will expose it through nvFX::ICstBuffer. It will also generate the missing GLSL or HLSL code that is necessary for the shaders to compile with these constant buffers.
+
+The example above will lead to the following additional source code in the GLSL shaders :
+\code
+layout(std140) uniform myConstants {
+	uniform mat4 modelViewProjection;
+	uniform float someScale;
+	uniform vec3  someVec;
+};
+\endcode
+
+in D3D :
+\code
+cbuffer myConstants {
+	uniform float4x4 modelViewProjection;
+	uniform float someScale;
+	uniform float3  someVec;
+};
+\endcode
+
+in OpenGL-ES :
+\code
+uniform mat4 modelViewProjection;
+uniform float someScale;
+uniform vec3  someVec;
+\endcode
+(we will discuss more about the special case of OpenGL-ES)
+
+Therefore it is no need to write this in the GLSL/HLSL sections : the nvFX runtime will add it for you.
+
+If ever the shader came from an external file (See \ref SHADERFROMFILE "Shader From File"), it could be possible that these buffers are still in the shader code. To prevent redundancies, the Shaders should test the define \b INFX : if defined, the shader should ignore its own definition :
+\code
+// shader file myGLSL.glsl
+#ifndef INFX
+layout(std140) uniform myConstants {
+	uniform float4x4 modelViewProjection;
+	uniform float someScale;
+	uniform float3  someVec;
+};
+#endif
+// ... code using myConstants
+\endcode
+
+\section CSTBUFFINSIDEGL OpenGL uniform blocks
+A Constant Buffer in GLSL is a \e uniform \e block. This uniform block is accessible as an integer uniform. Which explains by the way why \ref UBO "we showed here" how to bind a \e UBO to the uniform Block by using nvFX::IUniform.
+
+Despite this fact, we decided to allow binding this \e uniform \e block with nvFX::ICstBuffer. The main reason is because D3D does make a big difference between a constant buffer and a uniform : a uniform doesn't exist and a \e cbuffer really doesn't look like a uniform parameter. Another reason : draw a line between uniforms constant buffers for the sake of clarity.
+
+The main points to keep in mind are :
+ - a nvFX::ICstBuffer relates to a GLSL uniform block. It is essentially used from the parsing of the \e CstBuffer structure in nvFX effect. This CstBuffer offers the possibility to host \e sub-uniforms. It also allows to help creating the buffer and setup what is insite
+ - a nvFX::IUniform can relate to a GLSL uniform block, too. But there is nothing else it can do but associate the \e UBO identifier to this uniform. This nvFX::Uniform object can either be created from a nvFX parsing or can be created from the application, as a possible binding point for the uniform block in some GLSL shaders.
+
+\subsection CSTBUFFERITEMSGL uniform blocks items
+
+layout(std140) tells about how the buffer is organized. And nothing in the OpenGL driver is allowed to change this layout. Despite few alignment differences, this approach is quite close to D3D constant buffers.
+
+When the runtime created an object nvFX::CstBuffer, some nvFX::Uniform can be attached to it as \e sub-uniforms : these are the uniforms that got defined within the block.
+
+But is is important to understand that theses sub-uniforms binding points aren't anymore targetting any GLSL uniforms : they are targetting the buffer, instead. The nvFX::Uniform object has in fact a different \e target when it belongs to a Constant Buffer : the target is the nvFX::CstBuffer object. It clearly means that such a uniform is not a key-player of how to setup OpenGL GLSL : it is \e just \e a \e helper that allows to setup the inside of a UBO attached to the constant buffer object.
+
+However, there is a special case : under OpenGL-ES. OpenGL-Es doesn't expose any uniform block. Therefore, the nvFX::CstBuffer has no meaning for OpenGL. Instead it will be just a simple container of uniforms. And the sub-uniforms of this buffer will \e directly \e target the OpenGL GLSL uniforms (This explains why the generated code I showed earlier didn't create the std140 layout...).
+
+The good thing here is that OpenGL or OpenGL-ES can both support effects with \e CstBuffer structures, even if after all OpenGL-ES may not take advantage of it.
+
+\subsection CSTBUFFEXAMPLE OpenGL Example
+
+After the effect got parsed, look for the constant buffer (or uniform block)
+\code
+nvFX::ICstBuffer* fxtransfblock = pGLSLFx->findCstBuffer("transfblock"); // will just find the existing one
+\endcode
+
+The simplest case : we can ask nvFX to build the \b UBO from the fact that nvFX parser knows about what is inside.
+\code
+GLuint g_transfBO = fxtransfblock->buildGLBuffer();
+\endcode
+
+Another possiblity : we could create ourselves the UBO and assign it
+\code
+struct transfblock
+{
+    mat4    g_Mworld;
+    mat4    g_MWV;
+    mat4    g_MWVP;
+    mat4    g_MworldIT;
+};
+transfblock g_transfblock;
+glGenBuffers(1, &g_transfBO);
+glBindBuffer(GL_UNIFORM_BUFFER, g_transfBO);
+glBufferData(GL_UNIFORM_BUFFER, sizeof(g_transfblock), &g_transfblock, GL_STREAM_DRAW);
+fxtransfblock->setGLBuffer(g_transfBO);
+\endcode
+But you have to be sure that g_transfblock matches the std140 uniform block in the shader !
+
+To update the buffer, two solutions :
+do it "by hand" : the application takes care of this resource and nothing else does :
+\code
+// change the data in g_transfblock...
+// ...
+glBindBuffer(GL_UNIFORM_BUFFER, g_transfBO);
+glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(g_transfblock), &g_transfblock);
+glBindBuffer(GL_UNIFORM_BUFFER, 0);
+\endcode
+
+or get the help of nvFX::IUniform that refer to the sub-uniforms of nvFX::CstBuffer
+\code
+fxMworld->setMatrix4f(...)
+// etc.
+\endcode
+Later the IPass::execute will take care of updating \e dirty buffers...
+
+However if you want to force the buffer update from the uniform 'set' actions :
+\code
+fxtransfblock->updateFromUniforms();
+\endcode
+
+\note default values from nvFX effect simply lead to have the parser invoke for you some 'set' methods on the nvFX::IUniform.
+
+Now, if you want to update a buffer mixing some default values or values set through nvFX::IUniform, while other fields would be filled by the application, you can map/unmap the buffer from nvFX::ICstBuffer :
+
+\code
+transfblock *pTransfblock;
+if(fxtransfblock->mapBuffer(&pTtransfblock))
+{
+	// some fields can have been updated before giving this pointer
+	pTransfblock->... = ...;
+	// ...
+    fxtransfblock->unmapBuffer();
+}
+\endcode
+In this example, mapBuffer will first update the buffer from possible values in sub-uniforms. The it will map the memory and return it for the application's usage.
+
+\note it is important to know that even if a nvFX::CstBuffer hosts many sub-uniforms, there won't be any unnecessary update if not needed. For example if no value got assigned to any sub-uniform, this buffer will never get updated by the runtime, unless the application requested it.
+
+\section CSTBUFFINSIDED3D D3D Constant buffer
+
+In D3D 10 and 11, constant buffers are mandatory. This means that the only object that makes sense for the D3D runtime is nvFX::CstBuffer, while nvFX::Uniform is only used as a helper to access some sub-uniforms of the constant buffer.
+In other words, nvFX::IUniform only helps to update a constant buffer and is very much optional : some application may know how to do it on their own.
+
+\subsection D3DCSTBUFFEXAMPLE D3D Example
+
+D3D use is pretty similar to OpenGL example...
+
+Once the buffer was found or created (like previous example), we can eventually ask nvFX to create the D3D Buffer :
+\code
+	ID3D10Buffer* d3dBuffer = (ID3D10Buffer*)nvFXBuffer->buildD3DBuffer();
+\endcode
+
+or we could create it by ourselves :
+\code
+        D3D10_BUFFER_DESC cbDesc;
+        cbDesc.ByteWidth = sz;
+        cbDesc.Usage = D3D10_USAGE_DYNAMIC;
+        cbDesc.BindFlags = D3D10_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D10_CPU_ACCESS_WRITE;
+        cbDesc.MiscFlags = 0;
+        hr = pd3dDevice->CreateBuffer( &cbDesc, NULL, &d3dBuffer);
+        if(FAILED(hr)) return hr;
+        nvFXBuffer->setD3DBuffer(d3dBuffer);
+\endcode
+
+Then we can either change the data of the buffer in the regular way :
+\code
+    Schangingeveryframe* cb;
+    HRESULT hr = d3dBuffer->Map(D3D10_MAP_WRITE_DISCARD, 0, (void**)&cb);
+	D3DXMatrixTranspose(&cb->worldViewProj, &mWorldViewProj);
+	// ...
+    d3dBuffer->Unmap();
+\endcode
+
+For the case where we may have some data updated by nvFX runtime (some sub-uniforms updated by the runtime), we should use :
+\code
+	// let's imagine we did setup a value of skinning constant buffer like this :
+	nvFXBuffer->findUniform("num_weights")->setValue1i(n);
+	// ...
+	Sskinning* cskin;
+	if(nvFXBuffer->mapBuffer((void**)&cskin))
+	{
+		// num_weights is already setup
+		// copy some data to a part of this buffer
+		memcpy(cskin->bones, matrices, sizeof(float)*16*nt);
+		nvFXBuffer->unmapBuffer();
+	}
+\endcode
+
+\section NOCSTBUFFER Default Constant Buffers
+
+We showed above that we need to initialize buffers, ask nvFX help for UBO/ID3D10Buffer creation; or create them and associate them to nvFX::CstBuffer.
+
+What if we didn't do this work ? Obviously if a buffer is missing, the shader won't be able to get the proper values.
+
+In the event of missing buffer, nvFX runtime will check missing buffer and will create them with default values specified in the nvFX effect.
+This allows fast prototyping : one could define parameters with default values and never worry of the buffer creation. This feature is particularly good for D3D10/11 and OpenGL-ES where there is really no alternate solution (uniform definition with default values are only available in OpenGL).
+
+\note one would notice that HLSL allows you to write default values to parameters. But these values will be only available through the "reflection" interface : when one would query the parameter. nvFX cannot rely on reflection.
+
+\section GLOBALCSTBUF Global Parameters for D3D
+
+We explained earlier that any parameter that got defined outside of a \e cbuffer will be automatically put in a special cbuffer called \b $Globals.
+
+It is important to understand how nvFX takes care of this special case.
+
+First of all, it is crucial to make a difference between \e Global parameters declared as \e globals \e in \e the \e effect 
+\code
+// both put in $nvfx_globals cbuffer
+uniform float someScale = 1.2;
+uniform float3  someVec;
+
+HLSL10Shader myShader {
+	...
+}
+\endcode
+and parameters declared as globals \e in \e the \e HLSL \e Shader.
+\code
+HLSL10Shader myShader {
+	// both put in $Globals cbuffer
+	float someScale = 1.2; // those will lead to a warning
+	float3  someVec;
+	...
+}
+\endcode
+
+ -# when params are globals to the effect, nvFX will encapsulate them automatically into a \e custom cbuffer called \e nvfx_globals
+ -# when params are globals to the Shader module, nvFX won't do anything : and the parameters will land to the \e $Globals special cbuffer
+
+case #1 will lead to clean results : nvFX runtime will be able to create the constant buffer and set default values.
+
+case #2 will lead to a \e warning from the validation of techniques/passes : there is indeed no straighforward ways to gather all of these parameters and their default values; make a constant buffer and bind it (remember: the nvFX parser doesn't parse the shader code of HLSL and GLSL).
+
+\remark it is still possible that the application decided to take care of the \e $Globals cbuffer by creating itself the proper constant buffer and binding it to $Globals...
+
+\remark case #2 could be done in nvFX : Reflection interfaces contains all what is needed for that purpose. For now, I decided to not do it, in order to encourage clean code, by not having global parameters hanging around HLSL code and by only tolerating globals at the effect level (case #1). In other words, this issue doesn't prevent us to work with D3D and restricts the boundaries on how to do clean things...
+ 
+\section MISSINGCSTBUFFER Missing features
+
+Missing features that could be added later on:
+
+ - No support of Structures in \b CstBuffer. This could be a problem if one wanted to create an array of struct...
+ - OpenGL only supports std140 layout.
+
+
+**/

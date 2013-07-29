@@ -1,0 +1,407 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+//
+// This data part is general and doesn't belong to any namespace.
+// You'll see that the shader code inside DefaultLighting is using them
+// now, if one created another implementation of lighting in another namespace
+// it would have to comply to this access of data that the application will update
+//
+ConstantBuffer light_data
+{
+    uniform vec3 lightData_LightPos[3] =         {{ 1.0, 1.0, 0.0}, { 0.0, 0.8, 0.0}, { 0.0, 5.0, 2.5}};
+    uniform vec3 lightData_LightDir[3] =         {{ 0.707, 0.707, 0  }, { 0.0, 1.0, 0.3}, { 0.0, 0.0, 1.0}};
+    uniform vec3 lightData_LightColor[3] =       {{ 0.8, 0.8, 0.8}, { 0.9, 0.9, 0.9}, { 0.1, 0.1, 1.0}};
+    uniform vec3 lightData_LightColorSpec[3] =   {{ 0.8, 0.8, 0.8}, { 0.8, 0.8, 0.8}, { 0.4, 0.4, 1.0}};
+    uniform vec3 lightData_lightI_SCos_SExp[3] = {{ 1.0, 0.9, 5.0}, { 1.0, 0.9, 5.0}, { 1.0, 0.9, 5.0}};
+    uniform vec3 lightData_LightAmbient[3] =     {{ 0.1, 0.1, 0.1}, { 0.0, 0.0, 0.0}, { 0.0, 0.0, 0.0}};
+}
+uniform int numLights : NUMLIGHTS = 3;
+
+//
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader
+{
+	//
+	// LIGHT STUFF : should be in an outside file and included here
+	//
+	/*struct LightProps
+     {
+     vec3 pos;
+     vec3 dir;
+     vec3 color;
+     vec3 colorSpec;
+     vec3 I_SCos_SExp;
+     };*/
+    struct LIGHTRES
+    {
+        vec3 ambientContrib;
+        vec3 diffContrib;
+        vec3 specContrib;
+        vec3 R;	// reflection vector : returned by the reflection computation
+        vec4 reflectionHi; // result from a high res env.map
+        vec4 reflectionLow; // result from a Low res env.map
+        
+        // TO REMOVE:
+        //float reflectance;
+        //vec3 reflContrib;
+    };
+    
+    struct LIGHTINFOS
+    {
+        vec3 Pw;	// fragment world pos to give to the lighting computation
+        vec3 Vn;	// view direction to give to the lighting computation
+        vec3 Nb;	// Normal to give to the lighting computation
+        float SpecExpon; // specular exponent to give to light computation
+        //float occlusion; // occlusion factor : in some cases we may want to modify the lighting according to a pre-computed map
+    };
+    
+    //
+    // Entry point for the lighting functions
+    //
+    void lighting_compute(LIGHTINFOS infos, inout LIGHTRES res);
+	vec4 lighting_reflectionHi(const LIGHTINFOS infos, inout LIGHTRES res);
+	vec4 lighting_reflectionLow(const LIGHTINFOS infos, inout LIGHTRES res);
+	void lighting_reflectionHiAndLow(const LIGHTINFOS infos, inout LIGHTRES res);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Empty lighting
+//
+namespace NoLighting <programTarget="lightmodel";>
+{
+    GLSLShader global lightmodel
+    {
+        void lighting_compute(LIGHTINFOS infos, inout LIGHTRES res)
+        {
+        }
+	    vec4 lighting_reflectionHi(const LIGHTINFOS infos, inout LIGHTRES res)
+	    {
+		    return vec4(0.0);
+	    }
+	    vec4 lighting_reflectionLow(const LIGHTINFOS infos, inout LIGHTRES res)
+	    {
+		    return res.reflectionLow;
+	    }
+	    void lighting_reflectionHiAndLow(const LIGHTINFOS infos, inout LIGHTRES res)
+	    {
+	    }
+    }
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// default OpenGL lighting style : loop into some lights
+// the semantic lightingsetup is a hint to tell that what is inside is for the shader group "lightingsetup"
+//
+namespace DefaultLighting <programTarget="lightmodel";>
+{
+    GLSLShader global lightmodel
+    {
+        //
+        // Lighting Models
+        //
+        void lighting_compute_Dir(const int i, LIGHTINFOS infos, inout LIGHTRES res)
+        {
+            vec3 Ln = normalize(lightData_LightDir[i]); // we could do normalize outside...
+            vec3 Hn = (infos.Vn + Ln)/2.0;
+            float NdotL = max(dot(Ln,infos.Nb), 0.0);
+            float HdotN = NdotL > 0.0 ? pow(max(0.0, dot(Hn,infos.Nb)),infos.SpecExpon) : 0.0;
+            res.diffContrib += (NdotL /** lightI_SCos_SExp.x*/) * lightData_LightColor[i];
+            res.specContrib += HdotN;//(HdotN /** res.diffContrib*/) * lightData_LightColorSpec[i];
+            res.ambientContrib += lightData_LightAmbient[i];
+        }
+        void lighting_compute_Point(const int i, LIGHTINFOS infos, inout LIGHTRES res)
+        {
+            vec3 Ln = normalize(lightData_LightPos[i] - infos.Pw);
+            vec3 Hn = normalize(infos.Vn + Ln);
+            float NdotL = max(dot(Ln,infos.Nb), 0.0);
+            float HdotN = NdotL > 0.0 ? pow(max(0.0, dot(Hn,infos.Nb)),infos.SpecExpon) : 0.0;
+            res.diffContrib += (NdotL /** lightI_SCos_SExp.x*/) * lightData_LightColor[i];
+            res.specContrib += (HdotN * res.diffContrib) * lightData_LightColorSpec[i];
+            res.ambientContrib += lightData_LightAmbient[i];
+        }
+        void lighting_compute_Spot(const int i, LIGHTINFOS infos, inout LIGHTRES res)
+        {
+            vec3 Ln = normalize(lightData_LightPos[i] - infos.Pw);
+            vec3 Hn = normalize(infos.Vn + Ln);
+            vec3 LDn = normalize(lightData_LightDir[i]);
+            float Ca = dot(Ln, LDn);
+            Ca -= lightData_lightI_SCos_SExp[i].y;
+            if(Ca < 0.0) Ca = 0.0;
+            Ca /= 1.0 - lightData_lightI_SCos_SExp[i].y;
+            Ca = 1.0-pow(1.0-Ca, lightData_lightI_SCos_SExp[i].z);
+            float NdotL = max(dot(Ln,infos.Nb), 0.0);
+            float HdotN = NdotL > 0.0 ? pow(max(0.0, dot(Hn,infos.Nb)),infos.SpecExpon) : 0.0;
+            res.diffContrib += Ca * (NdotL /** lightI_SCos_SExp.x*/) * lightData_LightColor[i];
+            res.specContrib += Ca * (HdotN /** res.diffContrib*/) * lightData_LightColorSpec[i];
+            res.ambientContrib += lightData_LightAmbient[i];
+        }
+        //
+        // TODO... 
+        //
+        vec3 get_LightDirection_Dir(int i, vec3 Pw)
+        {
+            return vec3(0.0); 
+            return normalize(lightData_LightDir[i]); 
+        }
+        vec3 get_LightDirection_Spot(int i, vec3 Pw)
+        {
+            return vec3(0.0); 
+            return normalize(lightData_LightDir[i]); 
+        }
+        vec3 get_LightDirection_Pos(int i, vec3 Pw)
+        {
+            return vec3(0.0); 
+            return normalize(lightData_LightPos[i] - Pw); 
+        }
+        vec3 get_LightDirection_Point(int i, vec3 Pw)
+        {
+            return vec3(0.0); 
+        }
+        
+        void compute_Light0(LIGHTINFOS infos, inout LIGHTRES res);
+        void compute_Light1(LIGHTINFOS infos, inout LIGHTRES res);
+        void compute_Light2(LIGHTINFOS infos, inout LIGHTRES res);
+        //
+        // Main entry point for lighting
+        //
+        void lighting_compute(LIGHTINFOS infos, inout LIGHTRES res)
+        {
+            // unrolled loop : because we must call a different function for each light
+            if(numLights > 0)
+                compute_Light0(infos, res/*, occlusion*/);
+            if(numLights > 1)
+                compute_Light1(infos, res/*, occlusion*/);
+            if(numLights > 2)
+                compute_Light2(infos, res/*, occlusion*/);
+        }
+	    // This part returns the reflection of the environment in 2 rgba vectors
+	    // This is when some effects need some fake fuzzy reflection, to fake rough surface
+	    uniform samplerCube ldrEnvSamplerLow;
+	    uniform samplerCube ldrEnvSampler;
+    	
+	    vec4 lighting_reflectionHi(const LIGHTINFOS infos, inout LIGHTRES res)
+	    {
+		    res.R = -reflect(infos.Vn,infos.Nb);
+		    res.reflectionHi = textureCube(ldrEnvSampler, res.R).rgba;
+		    return res.reflectionHi;
+	    }
+	    vec4 lighting_reflectionLow(const LIGHTINFOS infos, inout LIGHTRES res)
+	    {
+		    res.R = -reflect(infos.Vn,infos.Nb);
+		    res.reflectionLow = textureCube(ldrEnvSamplerLow, res.R).rgba;
+		    return res.reflectionLow;
+	    }
+	    void lighting_reflectionHiAndLow(const LIGHTINFOS infos, inout LIGHTRES res)
+	    {
+		    res.R = -reflect(infos.Vn,infos.Nb);
+		    res.reflectionHi = textureCube(ldrEnvSampler, res.R);
+		    res.reflectionLow = textureCube(ldrEnvSamplerLow, res.R).rgba;
+	    }
+    }
+} // namespace DefaultLighting
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// This namespace is for the code for lighting setup : how to call functions to do specific lighting
+// on each light.
+// the semantic lightingsetup is a hint to tell that what is inside is for the shader group "lightingsetup"
+//
+namespace DefaultLights <programTarget="lightingsetup";>
+{
+    //
+    // Implementations of lighting for each light level for the case of directional lights
+    //
+    GLSLShader global Dir0 {
+        void lighting_compute_Dir(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Dir(int i, vec3 Pw);
+        void compute_Light0(LIGHTINFOS infos, inout LIGHTRES res) {
+            lighting_compute_Dir(0, infos, res); }
+        vec3 get_LightDirection0(vec3 Pw) {
+            return get_LightDirection_Dir(0, Pw); }
+    }
+    GLSLShader global Dir1 {
+        void lighting_compute_Dir(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Dir(int i, vec3 Pw);
+        void compute_Light1(LIGHTINFOS infos, inout LIGHTRES res) {
+            lighting_compute_Dir(1, infos, res); }
+        vec3 get_LightDirection1(vec3 Pw) {
+            return get_LightDirection_Dir(1, Pw); }
+    }
+    GLSLShader global Dir2 {
+        void lighting_compute_Dir(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Dir(int i, vec3 Pw);
+        void compute_Light2(LIGHTINFOS infos, inout LIGHTRES res) {
+            lighting_compute_Dir(2, infos, res); }
+        vec3 get_LightDirection2(vec3 Pw) {
+            return get_LightDirection_Dir(2, Pw); }
+    }
+    //
+    // Implementations of lighting for each light level for the case of directional lights
+    //
+    GLSLShader global Point0 {
+        void lighting_compute_Point(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Point(int i, vec3 Pw);
+        void compute_Light0(LIGHTINFOS infos, inout LIGHTRES res)
+        { lighting_compute_Point(0, infos, res); }
+        vec3 get_LightDirection0(vec3 Pw)
+        { return get_LightDirection_Point(0, Pw); }
+    }
+    GLSLShader global Point1 {
+        void lighting_compute_Point(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Point(int i, vec3 Pw);
+        void compute_Light1(LIGHTINFOS infos, inout LIGHTRES res)
+        { lighting_compute_Point(1, infos, res); }
+        vec3 get_LightDirection1(vec3 Pw)
+        { return get_LightDirection_Point(1, Pw); }
+    }
+    GLSLShader global Point2 {
+        void lighting_compute_Point(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Point(int i, vec3 Pw);
+        void compute_Light2(LIGHTINFOS infos, inout LIGHTRES res)
+        { lighting_compute_Point(2, infos, res); }
+        vec3 get_LightDirection2(vec3 Pw)
+        { return get_LightDirection_Point(2, Pw); }
+    }
+    //
+    // Implementations of lighting for each light level for the case of directional lights
+    //
+    GLSLShader global Spot0 {
+        void lighting_compute_Spot(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Spot(int i, vec3 Pw);
+        void compute_Light0(LIGHTINFOS infos, inout LIGHTRES res)
+        { lighting_compute_Spot(0, infos, res); }
+        vec3 get_LightDirection0(vec3 Pw)
+        { return get_LightDirection_Spot(0, Pw); }
+    }
+    GLSLShader global Spot1 {
+        void lighting_compute_Spot(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Spot(int i, vec3 Pw);
+        void compute_Light1(LIGHTINFOS infos, inout LIGHTRES res)
+        { lighting_compute_Spot(1, infos, res); }
+        vec3 get_LightDirection1(vec3 Pw)
+        { return get_LightDirection_Spot(1, Pw); }
+    }
+    GLSLShader global Spot2 {
+        void lighting_compute_Spot(const int i, LIGHTINFOS infos, inout LIGHTRES res);
+        vec3 get_LightDirection_Spot(int i, vec3 Pw);
+        void compute_Light2(LIGHTINFOS infos, inout LIGHTRES res)
+        { lighting_compute_Spot(2, infos, res); }
+        vec3 get_LightDirection2(vec3 Pw)
+        { return get_LightDirection_Spot(2, Pw); }
+    }
+    //
+    // Implementations of empty lighting
+    //
+    GLSLShader global None0 {
+        void compute_Light0(LIGHTINFOS infos, inout LIGHTRES res)
+        { }
+        vec3 get_LightDirection0(vec3 Pw)
+        { return vec3(0); }
+    }
+    GLSLShader global None1 {
+        void compute_Light1(LIGHTINFOS infos, inout LIGHTRES res)
+        { }
+        vec3 get_LightDirection1(vec3 Pw)
+        { return vec3(0); }
+    }
+    GLSLShader global None2 {
+        void compute_Light2(LIGHTINFOS infos, inout LIGHTRES res)
+        { }
+        vec3 get_LightDirection2(vec3 Pw)
+        { return vec3(0); }
+    }
+} // namespace DefaultLights <lightingsetup>
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// IBL lighting
+// the programTarget="lightmodel" is a hint for when things get modified at runtime:
+// the application would be able to make sure that shaders inside this namespace is meant to be used
+// for the shader group called "lightmodel"
+//
+namespace IBL <programTarget="lightmodel";>
+{
+    uniform samplerCube diffuseEnvSampler;
+    uniform samplerCube specularEnvSampler;
+    uniform samplerCube envSampler;
+    SamplerState envMapSampler
+    {
+	    TEXTURE_MIN_FILTER = LINEAR;
+	    TEXTURE_MAG_FILTER = LINEAR;
+    }
+    //
+    // Texture objects
+    //
+    TextureResourceCube diffuseEnvTexture <
+        defaultFile = "CM_Forest_diffuse.dds";
+    > {
+        // this is a possible alternate way to setup sampler-states...
+        // in OpenGL, sampler-states are defined for each texture
+        // sampler-states specified in the Pass override this one
+        SamplerState = IBL::envMapSampler;
+    }
+
+    TextureResourceCube specularEnvTexture <
+        defaultFile = "CM_forest_specular.dds";
+    > {
+        SamplerState = IBL::envMapSampler;
+    }
+
+    TextureResourceCube envTexture <
+        defaultFile = "CM_forest.dds";
+    > {
+        SamplerState = IBL::envMapSampler;
+    }
+
+    GLSLShader global lightmodel
+    {
+        void lighting_compute(LIGHTINFOS infos, inout LIGHTRES res)
+        {
+            vec3 Rn = reflect(infos.Vn, infos.Nb);
+            vec3 Cdiff = texture(IBL::diffuseEnvSampler, infos.Nb).rgb;
+
+            vec3 Cspec = 0.5*pow(texture(IBL::specularEnvSampler, -Rn).rgb, vec3(5.0));
+            //vec3 Cspec = pow(texture(specularEnvSampler, -Rn).rgb, 30.0);
+
+            res.diffContrib = Cdiff;
+            res.specContrib = Cspec;
+        }
+        vec4 lighting_reflectionHi(const LIGHTINFOS infos, inout LIGHTRES res)
+        {
+            res.R = reflect(infos.Vn,infos.Nb);
+            res.reflectionHi = textureCube(IBL::envSampler, res.R).rgba;
+            return res.reflectionHi;
+        }
+        vec4 lighting_reflectionLow(const LIGHTINFOS infos, inout LIGHTRES res)
+        {
+            return res.reflectionLow;
+        }
+        void lighting_reflectionHiAndLow(const LIGHTINFOS infos, inout LIGHTRES res)
+        {
+        }
+    }
+}

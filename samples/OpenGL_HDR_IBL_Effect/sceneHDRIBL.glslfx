@@ -1,0 +1,444 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+#extension GL_ARB_separate_shader_objects : enable
+
+// transformation blocks and material block...etc if needed
+#include "shared_globals.glslfxh"
+
+//--------------------------------------------------------------------------------------
+// sampler states are outside of GLSL.
+//--------------------------------------------------------------------------------------
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+SamplerState linearSampler
+{
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+
+//--------------------------------------------------------------------------------------
+//    texture resources
+//--------------------------------------------------------------------------------------
+TextureResourceCube hdEnvTexture <
+    defaultFile = "ennis_lo.hdr";
+> {
+    SamplerState = linearSampler;
+}
+
+// create the texture resource as a render-target
+RenderTexture textureRGBA32F
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA32F;
+}
+//--------------------------------------------------------------------------------------
+//    Render Buffer resources
+//--------------------------------------------------------------------------------------
+RenderBuffer renderBufferDSTNoAA
+{
+    MSAA = {0,0};
+    Size = ApplicationDefined;
+    Format = DEPTH24STENCIL8;
+};
+
+RenderBuffer renderBufferRGBA32F
+{
+    MSAA = {0,0};//AA;
+    Size = ApplicationDefined;
+    Format = RGBA32F;
+    // this hint tells that we will resolve renderbuffers to the texture referenced here
+    // Allows us in non-AA mode to directly work in referenced texture
+    // Warning: Things must be consistent. If not, unpredictable results
+    //int        ResolveTarget = textureRGBA32F;
+};
+RenderBuffer renderBufferDST
+{
+    MSAA = {0,0};//AA;
+    Size = ApplicationDefined;
+    Format = DEPTH24STENCIL8;
+};
+//--------------------------------------------------------------------------------------
+//    FBO's
+//--------------------------------------------------------------------------------------
+FBO FBOtextureRGBA32F
+{
+    Color = textureRGBA32F;
+    DepthStencil    = renderBufferDSTNoAA;
+};
+FBO FBOrenderBufferRGBA32F
+{
+    Color = renderBufferRGBA32F;
+    DepthStencil = renderBufferDST;
+};
+
+//
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader
+{
+    #version 420 compatibility
+    // forward declaration of potentially shared functions
+    float   vignette(vec2 pos, float inner, float outer);
+    vec4    radial(sampler2D tex,vec2 texcoord,int samples,float startScale = 1.0,float scaleMul = 0.9);
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Functions that we will use to output fragments in various ways
+//
+#include "fragOutput.glslfxh"
+//--------------------------------------------------------------------------------------
+//    Fullscreen quad Vertex shader
+//--------------------------------------------------------------------------------------
+GLSLShader global fullscreenquadVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 TexCoord;
+    layout(location=0) out vec3 tc;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    void main()
+    {
+        tc = TexCoord;
+        gl_Position = Position;
+    }
+}
+//--------------------------------------------------------------------------------------
+//    Simple texture fetch
+//--------------------------------------------------------------------------------------
+GLSLShader global fullscreenquadPS
+{
+    // we can keep local some uniforms. So they aren't visible outside from others
+    uniform sampler2D quadSampler;
+    layout(location=0) in vec3 tc;
+    layout(location=0) out vec4 color;
+    void main()
+    {
+        color = /*vec4(0,0,0.2,0.0) + */texture(quadSampler, tc.xy);
+    }
+}
+
+//--------------------------------------------------------------------------------------
+//    Sky Box
+//--------------------------------------------------------------------------------------
+GLSLShader SkyboxVS {
+    layout(location=0) in  vec4 Position;
+    layout(location=1) in  vec4 UV;
+    layout(location=0) out vec3 TexCoord;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    void main()
+    {
+        gl_Position = vec4( Position.xy, 1.0, 1.0 );
+        TexCoord = normalize( (m4_ViewProjI * vec4( Position.xy, 1.0, 1.0 )).xyz);
+    }
+}
+
+uniform float cubeMapScale 
+<
+  uimin = 0.01;
+  uimax = 100.0;
+> = 1.0f;
+
+GLSLShader SkyboxPS {
+    uniform samplerCube hdrEnvSampler;
+    layout(location=0) in  vec3 TexCoord;
+    void main()
+    {
+        vec4 Color = cubeMapScale * texture( hdrEnvSampler, TexCoord );//vec4(TexCoord.xyz * 0.5 + 0.5, 1);
+        //finalColor(vec4 color, vec3 Pw, vec3 Pv, vec3 Nw, float reflectance)
+        finalColor(Color, vec3(0), vec3(0,0,-10.0), vec3(1,0,0),0);
+    }
+}
+
+//--------------------------------------------------------------------------------------
+//    Glow code
+//--------------------------------------------------------------------------------------
+// Glow.fxh declared some resources :
+// textureGlowRGBA32F2 FBOtextureGlowRGBA32F2
+// textureGlowRGBA32F1 FBOtextureGlowRGBA32F1
+// textureHalfRGBA32F  FBOtextureHalfRGBA32F
+// tweakable : gGlowSpan
+// 
+#include "Glow.glslfxh"
+
+ConstantBuffer glowBlock < uigroup="glow"; >
+{
+    uniform float gGlowness <
+        uimin = 0.0f;
+        uimax = 1.0f;
+    > = 0.4f;
+    uniform float gHdrScale
+    <
+      uimin = 0.01;
+      uimax = 8.0;
+    > = 0.80;
+
+    uniform float gRadialAmount <
+        uimin = 0.0f;
+        uimax = 2.0f;
+    > = 0.2f;
+}
+// NOTE: we still use separate GLSLShader groups so that we can later
+// easily assign various implementations on various passes
+// But we could have put all together in one GLSLShader...
+//
+// vignetting effect (makes corners of image darker)
+//
+GLSLShader vignette {
+    float vignette(vec2 pos, float inner, float outer)
+    {
+      float r = length(pos);
+      r = 1.0 - smoothstep(inner, outer, r);
+      return r;
+    }
+}
+//
+// radial blur
+//
+GLSLShader radialBlur
+{
+    vec4 radial(sampler2D tex,
+                  vec2 texcoord,
+                  int samples,
+                  float startScale = 1.0,
+                  float scaleMul = 0.9)
+    {
+        vec4 c = vec4(0);
+        float scale = startScale;
+        for(int i=0; i<samples; i++) {
+            vec2 uv = ((texcoord-0.5)*scale)+0.5;
+            vec4 s = texture(tex, uv);
+            c += s;
+            scale *= scaleMul;
+        }
+        c /= samples;
+        return c;
+    }
+}
+//
+// tone mapping
+//
+GLSLShader toneMappingPS {
+    uniform sampler2D ScnSampler;
+    uniform sampler2D GlowSampler;
+
+    layout(location=0) in vec2 UV;
+
+    layout(location=0) out vec4 color;
+    void main()
+    {   
+        vec4 scene = texture(ScnSampler, UV);
+        vec4 blurred = texture(GlowSampler, UV);
+
+        vec4 c = mix(scene, blurred, gGlowness);
+        if(gRadialAmount > 0.0)
+        {
+            vec4 effect = radial(GlowSampler, UV, 30, 1.0, 0.95);
+            c += effect * gRadialAmount;
+        }
+        // exposure
+        c = c * gHdrScale;
+        // vignette effect
+        c *= vignette(UV*2-1, 0.7, 1.5);
+        // gamma correction
+        c.rgb = pow(c.rgb, vec3(0.5));//gamma);
+        color = c;
+    }  
+}
+//
+// tone mapping
+//
+GLSLShader toneMappingPS2 {
+    uniform sampler2D ScnSampler;
+    uniform sampler2D GlowSampler;
+
+    layout(location=0) in vec2 UV;
+
+    layout(location=0) out vec4 color;
+    void main()
+    {   
+        vec4 c = texture(ScnSampler, UV);
+        // exposure
+        c = c * gHdrScale;
+        // gamma correction
+        c.rgb = pow(c.rgb, vec3(0.5));//gamma);
+        color = c;
+    }  
+}
+//**************************************************************************************
+//**************************************************************************************
+//****
+//**** EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS      ****
+//****
+//**************************************************************************************
+//**************************************************************************************
+Technique HDR_IBL
+{
+    Pass skybox
+    {
+        DEPTH_TEST = FALSE;
+        ClearMode = all;
+
+        // assign to a custom state the handle of a state object ready to be used
+        //rasterizationState = myStateRast;
+        //colorSampleState = myStateColorSample
+
+        RenderMode = fullscreen_quad;
+        VertexProgram = SkyboxVS;
+        SamplerResource(hdrEnvSampler) = hdEnvTexture;
+        FragmentProgram = { SkyboxPS, DefaultFragOutput};
+
+        currentTarget = FBOrenderBufferRGBA32F;
+    }
+    Pass scene
+    {
+        DEPTH_TEST = TRUE;
+
+        CULL_FACE_MODE = Back;
+        CULL_FACE = TRUE;
+
+        RenderMode = SceneShading;
+
+        currentTarget = FBOrenderBufferRGBA32F;
+    }
+    Pass resolve_to_texture
+    {
+        currentTarget = FBOtextureRGBA32F;
+        blitFBOToActiveTarget = FBOrenderBufferRGBA32F;
+    }
+    Pass downsample2x
+    {
+        currentTarget = FBOtextureHalfRGBA32F;
+        blitFBOToActiveTarget = FBOtextureRGBA32F;
+    }
+    Pass downsample4x
+    {
+        currentTarget = FBOtextureGlowRGBA32F2;
+        blitFBOToActiveTarget = FBOtextureHalfRGBA32F;
+    }
+    Pass BlurGlowBuffer_Hor
+    {
+        DEPTH_TEST = FALSE;
+        renderMode = fullscreen_quad;
+        currentTarget = FBOtextureGlowRGBA32F1;
+        VertexProgram = horiz9BlurVS;
+        CULL_FACE = false;
+        SamplerResource(SrcSamp) = textureGlowRGBA32F2;
+        FragmentProgram = blur9PS;
+    }
+    Pass BlurGlowBuffer_Vert
+    {
+        DEPTH_TEST = FALSE;
+        renderMode = fullscreen_quad;
+        currentTarget = FBOtextureGlowRGBA32F2;
+        VertexProgram = vert9BlurVS;
+        CULL_FACE = false;
+        SamplerResource(SrcSamp) = textureGlowRGBA32F1;
+        FragmentProgram = blur9PS;
+    }
+    Pass resolve_to_backbuffer
+    {
+        ClearColor = {1.0f, 1.0f, 1.f, 1.f};
+        DEPTH_TEST = FALSE;
+        ClearMode = color;
+        currentTarget = backbuffer;
+
+        renderMode = fullscreen_quad;
+        VertexProgram = fullscreenquadVS;
+        SamplerResource(ScnSampler) = textureRGBA32F;
+        SamplerResource(GlowSampler) = textureGlowRGBA32F2;
+        FragmentProgram = { toneMappingPS, radialBlur, vignette};
+    }
+    // Debug display the render targets...
+    /*Pass debugQuad
+    {
+        BLEND = FALSE;
+        DEPTH_TEST = FALSE;
+        currentTarget = backbuffer;
+        RenderMode = DebugQuad0;
+        VertexProgram = fullscreenquadVS;
+        SamplerResource(quadSampler) = textureGlowRGBA32F2;
+        FragmentProgram = fullscreenquadPS;
+    }*/
+}
+
+Technique Simple
+{
+    Pass skybox
+    {
+        DEPTH_TEST = FALSE;
+        ClearMode = all;
+
+        // assign to a custom state the handle of a state object ready to be used
+        //rasterizationState = myStateRast;
+        //colorSampleState = myStateColorSample
+
+        RenderMode = fullscreen_quad;
+        VertexProgram = SkyboxVS;
+        SamplerResource(hdrEnvSampler) = hdEnvTexture;
+        FragmentProgram = { SkyboxPS, DefaultFragOutput};
+
+        currentTarget = FBOrenderBufferRGBA32F;
+    }
+    Pass scene
+    {
+        DEPTH_TEST = TRUE;
+
+        CULL_FACE_MODE = Back;
+        CULL_FACE = TRUE;
+
+        RenderMode = SceneShading;
+
+        currentTarget = FBOrenderBufferRGBA32F;
+        //FragmentProgramOverride<"globlighting"> = SIBLLighting; // defined in common.fxh
+    }
+    Pass resolve_to_texture
+    {
+        currentTarget = FBOtextureRGBA32F;
+        blitFBOToActiveTarget = FBOrenderBufferRGBA32F;
+    }
+    Pass resolve_to_backbuffer
+    {
+        ClearColor = {1.0f, 1.0f, 1.f, 1.f};
+        DEPTH_TEST = FALSE;
+        ClearMode = color;
+        currentTarget = backbuffer;
+
+        renderMode = fullscreen_quad;
+        VertexProgram = fullscreenquadVS;
+        SamplerResource(ScnSampler) = textureRGBA32F;
+        FragmentProgram = toneMappingPS2;
+    }
+}

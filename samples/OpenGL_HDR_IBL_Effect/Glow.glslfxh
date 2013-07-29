@@ -1,0 +1,207 @@
+//--------------------------------------------------------------------------------------
+// Author: Tristan Lorach
+// Email: tlorach@nvidia.com
+//
+// Copyright (c) NVIDIA Corporation 2013
+//
+// TO  THE MAXIMUM  EXTENT PERMITTED  BY APPLICABLE  LAW, THIS SOFTWARE  IS PROVIDED
+// *AS IS*  AND NVIDIA AND  ITS SUPPLIERS DISCLAIM  ALL WARRANTIES,  EITHER  EXPRESS
+// OR IMPLIED, INCLUDING, BUT NOT LIMITED  TO, IMPLIED WARRANTIES OF MERCHANTABILITY
+// AND FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL  NVIDIA OR ITS SUPPLIERS
+// BE  LIABLE  FOR  ANY  SPECIAL,  INCIDENTAL,  INDIRECT,  OR  CONSEQUENTIAL DAMAGES
+// WHATSOEVER (INCLUDING, WITHOUT LIMITATION,  DAMAGES FOR LOSS OF BUSINESS PROFITS,
+// BUSINESS INTERRUPTION, LOSS OF BUSINESS INFORMATION, OR ANY OTHER PECUNIARY LOSS)
+// ARISING OUT OF THE  USE OF OR INABILITY  TO USE THIS SOFTWARE, EVEN IF NVIDIA HAS
+// BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+//
+//--------------------------------------------------------------------------------------
+
+SamplerState SSClamToEdge
+{
+    TEXTURE_MIN_FILTER = LINEAR;//_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    TEXTURE_WRAP_S = CLAMP_TO_EDGE;
+    TEXTURE_WRAP_T = CLAMP_TO_EDGE;
+    TEXTURE_WRAP_R = CLAMP_TO_EDGE;
+};
+//---------------------------------------------
+RenderTexture textureGlowRGBA32F1
+{
+    MSAA = {0,0};
+    Size = ApplicationDefined;
+    SizeFactor = 0.25;
+    Format = RGBA32F;
+    SamplerState = SSClamToEdge;
+}
+FBO FBOtextureGlowRGBA32F1
+{
+    Color    = textureGlowRGBA32F1;
+}
+
+//---------------------------------------------
+RenderTexture textureGlowRGBA32F2
+{
+    MSAA = {0,0};
+    Size = ApplicationDefined;
+    SizeFactor = 0.25;
+    Format = RGBA32F;
+    SamplerState = SSClamToEdge;
+}
+FBO FBOtextureGlowRGBA32F2
+{
+    Color    = textureGlowRGBA32F2;
+}
+//---------------------------------------------
+RenderTexture textureHalfRGBA32F
+{
+    MSAA = {0,0};
+    Size = ApplicationDefined;
+    SizeFactor = 0.5;
+    Format = RGBA32F;
+    SamplerState = SSClamToEdge;
+}
+FBO FBOtextureHalfRGBA32F
+{
+    Color    = textureHalfRGBA32F;
+}
+
+///////////////////////////////////////////////////////////
+/////////////////////////////////////// Tweakables ////////
+///////////////////////////////////////////////////////////
+uniform float gGlowSpan <
+    uigroup="glow";
+    uimin = 1.0f;
+    uimax = 4.0f;
+> = 1.0f;
+
+uniform vec2 gViewportSizeI : VIEWPORTSIZEI;
+
+///////////////////////////////////////////////////////////
+/////////////////////////////////// Vertex Shaders ////////
+///////////////////////////////////////////////////////////
+GLSLShader vert9BlurVS
+{
+    // vertex shader to align blur samples vertically
+    // nine texcoords, to sample nine in-line texels
+    layout(location=0) in vec3 Position;
+    layout(location=1) in vec2 Coord;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    layout(location=0) out vec4 UV;
+    layout(location=1) out vec4 UV1;
+    layout(location=2) out vec4 UV2;
+    layout(location=3) out vec4 UV3;
+    layout(location=4) out vec4 UV4;
+
+    void main() {
+        gl_Position = vec4(Position, 1);
+
+        UV  = Coord.xyxy + gGlowSpan * vec4(0.0, -8.332231 *gViewportSizeI.y, 0.0, 9.000000 *gViewportSizeI.y);
+        UV1 = Coord.xyxy + gGlowSpan * vec4(0.0, -6.369619 *gViewportSizeI.y, 0.0, 7.350696 *gViewportSizeI.y);
+        UV2 = Coord.xyxy + gGlowSpan * vec4(0.0, -4.408640 *gViewportSizeI.y, 0.0, 5.388951 *gViewportSizeI.y);
+        UV3 = Coord.xyxy + gGlowSpan * vec4(0.0, -2.448848 *gViewportSizeI.y, 0.0, 3.428626 *gViewportSizeI.y);
+        UV4 = Coord.xyxy + gGlowSpan * vec4(0.0, -0.489735 *gViewportSizeI.y, 0.0, 1.469240 *gViewportSizeI.y);
+    }
+}
+
+GLSLShader horiz9BlurVS
+{
+    layout(location=0) in vec3 Position;
+    layout(location=1) in vec2 Coord;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    layout(location=0) out vec4 UV;
+    layout(location=1) out vec4 UV1;
+    layout(location=2) out vec4 UV2;
+    layout(location=3) out vec4 UV3;
+    layout(location=4) out vec4 UV4;
+    // vertex shader to align blur samples horizontally
+    void main()
+    {
+        gl_Position = vec4(Position, 1);
+
+        UV  = vec4(Coord.xyxy) + gGlowSpan * vec4(-8.332231 *gViewportSizeI.x, 0.0, 9.000000 *gViewportSizeI.x, 0.0);
+        UV1 = vec4(Coord.xyxy) + gGlowSpan * vec4(-6.369619 *gViewportSizeI.x, 0.0, 7.350696 *gViewportSizeI.x, 0.0);
+        UV2 = vec4(Coord.xyxy) + gGlowSpan * vec4(-4.408640 *gViewportSizeI.x, 0.0, 5.388951 *gViewportSizeI.x, 0.0);
+        UV3 = vec4(Coord.xyxy) + gGlowSpan * vec4(-2.448848 *gViewportSizeI.x, 0.0, 3.428626 *gViewportSizeI.x, 0.0);
+        UV4 = vec4(Coord.xyxy) + gGlowSpan * vec4(-0.489735 *gViewportSizeI.x, 0.0, 1.469240 *gViewportSizeI.x, 0.0);
+    }
+}
+
+GLSLShader ScreenQuadVS2
+{
+    uniform vec2 TexelOffset;
+    layout(location=0) in vec2 Position;
+    layout(location=1) in vec2 UVIn;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    layout(location=0) out vec2 UV;
+    void main()
+    {
+        gl_Position = vec4(Position, 1);
+        UV = UVIn;
+    }
+}
+///////////////////////////////////////////////////////////
+/////////////////////////////////// Pixel Shaders /////////
+///////////////////////////////////////////////////////////
+/*
+float startGlow  <
+    float uimin = 0.0f;
+    float uimax = 1.0f;
+> = 0.29f; 
+float preGlowScale  <
+    float uimin = 0.0f;
+    float uimax = 10.0f;
+> = 1.69f; 
+*/
+GLSLShader blur9PS
+{
+    #define SAT //saturate
+    #define PREGLOWSCALE 1.0 //preGlowScale
+    #define STARTGLOW 0.0 //startGlow
+
+    // Relative filter weights indexed by distance (in texels) from "home" texel
+    //   (WT_0 is the "home" or center of the filter, WT_4 is four texels away)
+    // Try changing these around for different filter patterns....
+    #define KW_0 0.012441
+    #define KW_1 0.041616
+    #define KW_2 0.100856
+    #define KW_3 0.177132
+    #define KW_4 0.225482
+    #define KW_5 0.208053
+    #define KW_6 0.139148
+    #define KW_7 0.067448
+    #define KW_8 0.023690
+    #define KW_9 0.004133
+
+    layout(location=0) in vec4 UV;
+    layout(location=1) in vec4 UV1;
+    layout(location=2) in vec4 UV2;
+    layout(location=3) in vec4 UV3;
+    layout(location=4) in vec4 UV4;
+
+    layout(location=0) out vec4 OutCol;
+
+    uniform sampler2D SrcSamp;
+
+    void main()
+    {   
+        OutCol  = (SAT(PREGLOWSCALE * texture(SrcSamp, UV.xy )) - STARTGLOW) * KW_0;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV1.xy)) - STARTGLOW) * KW_1;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV2.xy)) - STARTGLOW) * KW_2;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV3.xy)) - STARTGLOW) * KW_3;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV4.xy)) - STARTGLOW) * KW_4;
+
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV4.zw)) - STARTGLOW) * KW_5;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV3.zw)) - STARTGLOW) * KW_6;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV2.zw)) - STARTGLOW) * KW_7;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV1.zw)) - STARTGLOW) * KW_8;
+        OutCol += (SAT(PREGLOWSCALE * texture(SrcSamp, UV.zw )) - STARTGLOW) * KW_9;
+    } 
+}

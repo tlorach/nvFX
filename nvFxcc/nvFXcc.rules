@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<VisualStudioToolFile
+	Name="nvFXcc"
+	Version="8.00"
+	>
+	<Rules>
+		<CustomBuildRule
+			Name="nvFXcc"
+			DisplayName="nvFXcc"
+			CommandLine="$(InputDir)\..\nvFXcc\nvFXcc.exe [inputs]"
+			Outputs="out.txt"
+			FileExtensions="*.hlslfx"
+			>
+			<Properties>
+			</Properties>
+		</CustomBuildRule>
+	</Rules>
+</VisualStudioToolFile>

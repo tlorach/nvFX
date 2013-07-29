@@ -1,0 +1,419 @@
+//
+// reference : http://alex.vlachos.com/graphics/CurvedPNTriangles.pdf
+//
+
+#extension GL_ARB_separate_shader_objects : enable
+ConstantBuffer transfblock //< will be a UBO (IUniform UBO ?)
+{
+    uniform mat4 matW;
+    uniform mat4 matWV;
+    uniform mat4 matWVP;
+    uniform mat4 matWIT;
+}; // The total at least gives the total amount of bytes for transfblock.
+ConstantBuffer user_data
+{
+    uniform float scaleObject : SCALEOBJECT
+    <
+        Toto = "TEST";
+        A = 0.1;
+        B = 4;
+    > = 0.1; // default data can be set and will be sent to GLSL at validation time
+    uniform float attenuation;
+    uniform vec4 surfColor = {0.8, 0.8, 0.99, 1};
+    uniform int   bUseBS : USEBS;
+    uniform vec3 lDir = {-1,0,0};// rather not doing the constructor way : vec3(-1.0,0.0,0.0);
+    uniform float innerTessFactor =  1.0;
+    uniform float outerTessFactor =  1.0;
+}
+
+uniform vec3  eyePos : EYEPOS;
+
+// State groups can then later be invoked from passes with :
+//
+//[SET]DepthStencil[_][STATE] = mygroup;
+//[SET]RASTERIZATION[_][STATE] = mygroup;
+//[SET]COLOR[_]SAMPLE[_][STATE] = mygroup;
+RasterizationState rasterState1
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+RasterizationState rasterStateWire
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, LINE};
+}
+RasterizationState rasterStateFloor
+{
+    LINE_WIDTH = 2;
+    POLYGON_MODE={FRONT_AND_BACK, LINE};
+}
+DepthStencilState dstStateFloor
+{
+    DEPTH_TEST = true;
+    DEPTH_WRITEMASK = true;
+    DEPTH_FUNC = LEQUAL;
+}
+//
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 400 compatibility
+	#ifdef SEPARATE_SHADER_OBJECTS // set by nvFX if separable Shader used in the nvFX runtime
+    #extension GL_ARB_separate_shader_objects : enable
+	#endif
+    #extension GL_ARB_tessellation_shader : enable
+
+    struct TessControlStruct
+    {
+      vec3 position[3];
+      vec3 normal[2];
+      //vec3 color;
+    };
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// ABSTRACTION
+/// Let's imagine this module as providing ways to gather input attributes and provide them to 
+/// shaderes whenever they need them
+///
+////////////////////////////////////////////////////////////////////////////////////////////////////
+GLSLShader
+{
+  // getting attributes from the Input Assembly
+  vec4 VS_getAttrPosition();
+  vec3 VS_getAttrNormal();
+  // setting interpolators for after vertex shader
+  void initInterpolators();
+  vec4 VS_setClipPosition(vec4 p);
+  vec3 VS_setPosition(vec3 p);
+  vec4 VS_setPosition(vec4 p);
+  vec3 VS_setWorldPosition(vec3 p);
+  vec4 VS_setWorldPosition(vec4 p);
+  vec4 VS_setColor(vec4 c);
+  vec3 VS_setColor(vec3 c);
+  vec3 VS_setNormal(vec3 n);
+  vec3 VS_setWorldNormal(vec3 n);
+
+  // IO_FragShd
+  vec3 FS_getPosition();
+  vec3 FS_getWorldPosition();
+  vec3 FS_getNormal();
+  vec3 FS_getWorldNormal();
+  vec4 FS_getColor();
+
+  // IO_TCS
+  vec3 TCS_getPosition(unsigned int i);
+  vec3 TCS_getWorldPosition(unsigned int i);
+  vec3 TCS_getNormal(unsigned int i);
+  vec3 TCS_getWorldNormal(unsigned int i);
+  vec3 TCS_getColor(unsigned int i);
+
+  vec4 TCS_setColor(vec4 c);
+  vec3 TCS_setColor(vec3 c);
+}
+
+//////////////////////////////////////////////////
+// Code for some tessellation
+//
+#include "PNTriangles.glslfxh"
+
+//////////////////////////////////////////////////////////////////////////////////
+// Default functions for IO between various pipeline stages.
+// This is an example : only some I/O are expressed. On might need more or in a different way
+// the idea here is just to show that the IO are separated from the shader bodies
+//
+namespace DefaultPipeline
+{
+  GLSLShader IO_VtxShd
+  {
+    // input
+    layout(location=0) in vec4 vertexPosition;
+    layout(location=2) in vec3 vertexNormal;
+    vec4 VS_getAttrPosition() { return vertexPosition; }
+    vec3 VS_getAttrNormal()   { return vertexNormal;   }
+    // output
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    layout(location=0) out vec3 color;
+    layout(location=1) out vec3 Nw;
+    layout(location=2) out vec3 Pw;
+    void initInterpolators()
+    {
+      color = vec3(0);
+      Nw = vec3(0);
+      Pw = vec3(0);
+    }
+    vec4 VS_setClipPosition(vec4 p) { gl_Position = p; return p; }
+    vec3 VS_setPosition(vec3 p)     { return p; }
+    vec4 VS_setPosition(vec4 p)     { return p; }
+    vec3 VS_setWorldPosition(vec3 p){ Pw = p; return p; }
+    vec4 VS_setWorldPosition(vec4 p){ Pw = p.xyz; return p; }
+    vec4 VS_setColor(vec4 c)        { color = c.rgb; return c; }
+    vec3 VS_setColor(vec3 c)        { color = c; return c; }
+    vec3 VS_setNormal(vec3 n)       { return n; }
+    vec3 VS_setWorldNormal(vec3 n)  { Nw = n; return n; }
+  }
+  GLSLShader IO_FragShd
+  {
+    layout(location=0) in vec3 color;
+    layout(location=1) in vec3 Nw;
+    layout(location=2) in vec3 Pw;
+    vec3 FS_getPosition()     { return vec3(0.0); }
+    vec3 FS_getWorldPosition(){ return Pw; }
+    vec3 FS_getNormal()       { return vec3(0); }
+    vec3 FS_getWorldNormal()  { return Nw; }
+    vec4 FS_getColor()        { return vec4(color,1.0); }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+// Another implementation for tessellation case so the same vertex shader can be used
+// The external implementation for tessellation will invoke some of these functions
+// to get what it needs to work.
+//
+namespace PNTriangles
+{
+  GLSLShader IO_VtxShd
+  {
+    // input
+    layout(location=0) in vec4 vertexPosition;
+    layout(location=2) in vec3 vertexNormal;
+    vec4 VS_getAttrPosition() { return vertexPosition; }
+    vec3 VS_getAttrNormal()   { return vertexNormal;   }
+    // output
+    layout(location=0) out vec4 P;
+    layout(location=1) out vec3 N;
+    layout(location=2) out vec3 color;
+    void initInterpolators()
+    {
+      N = vec3(0);
+      P = vec4(0);
+    }
+    vec4 VS_setClipPosition(vec4 p) { return p; }
+    vec3 VS_setPosition(vec3 p)     { P = vec4(p,1.0); return p; }
+    vec4 VS_setPosition(vec4 p)     { P = p; return p; }
+    vec3 VS_setWorldPosition(vec3 p){ return p; }
+    vec4 VS_setWorldPosition(vec4 p){ return p; }
+    vec4 VS_setColor(vec4 c)        { color = c.rgb; return c; }
+    vec3 VS_setColor(vec3 c)        { color = c; return c; }
+    vec3 VS_setNormal(vec3 n)       { N = n; return n; }
+    vec3 VS_setWorldNormal(vec3 n)  { return n; }
+  }
+  GLSLShader IO_FragShd
+  {
+    layout(location=0) in vec3 color;
+    layout(location=1) in vec3 Nw;
+    layout(location=2) in vec3 Pw;
+    vec3 FS_getPosition()     { return vec3(0.0); }
+    vec3 FS_getWorldPosition(){ return Pw; }
+    vec3 FS_getNormal()       { return vec3(0); }
+    vec3 FS_getWorldNormal()  { return Nw; }
+    vec4 FS_getColor()        { return vec4(color,1.0); }
+  }
+  GLSLShader IO_TCS
+  {
+    layout(location=0) in vec4 cpPosition[];
+    layout(location=1) in vec3 cpNormal[];
+    layout(location=2) in vec3 cpColor[];
+    // this is an example of an additional attribute to send down to the frag. shader
+    layout(location=0) out vec3 color[3];
+    vec3 TCS_getPosition(unsigned int i)      { return vec3(0); }
+    vec3 TCS_getWorldPosition(unsigned int i) { return cpPosition[i].xyz; }
+    vec3 TCS_getNormal(unsigned int i)        { return vec3(0); }
+    vec3 TCS_getWorldNormal(unsigned int i)   { return cpNormal[i]; }
+    vec3 TCS_getColor(unsigned int i)         { return color[i]; }
+
+    vec4 TCS_setColor(vec4 c)       { color[gl_InvocationID] = c.rgb; return c; }
+    vec3 TCS_setColor(vec3 c)       { color[gl_InvocationID] = c.rgb; return c; }
+  }
+  GLSLShader IO_TES
+  {
+    layout(location=0) in vec3 color[3];
+
+    vec3 TES_getColor(const int i) { return color[i]; }
+
+    layout(location=0) out vec4 colorOut;
+    layout(location=1) out vec3 normalOut;
+    layout(location=2) out vec3 Pw;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    // basically the same as in IO_VtxShd
+    void TES_initInterpolators()
+    {
+        colorOut    = vec4(0);
+        normalOut   = vec3(0);
+        Pw          = vec3(0);
+    }
+    vec4 TES_setClipPosition(vec4 p) { gl_Position = p; return p; }
+    vec3 TES_setPosition(vec3 p)     { P = vec4(p,1.0); return p; }
+    vec4 TES_setPosition(vec4 p)     { P = p; return p; }
+    vec3 TES_setWorldPosition(vec3 p){ pW = p; return p; }
+    vec4 TES_setWorldPosition(vec4 p){ pW = p.xyz; return p; }
+    vec4 TES_setColor(vec4 c)        { colorOut = c.rgb; return c; }
+    vec3 TES_setColor(vec3 c)        { colorOut = c; return c; }
+    vec3 TES_setNormal(vec3 n)       { return n; }
+    vec3 TES_setWorldNormal(vec3 n)  { normalOut = n; return n; }
+  }
+}
+
+////////////////////////////////////////////////////////////////////
+/// VERTEX PROGRAM /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectVS
+{
+    void main(void)
+    {
+        initInterpolators();
+        vec3 N	= (matWIT * vec4(
+          VS_setNormal(
+            normalize(
+              VS_getAttrNormal())),0)).xyz;
+        vec4 Po	= VS_getAttrPosition();
+        Po.xyz *= scaleObject;
+        VS_setPosition(Po);
+        vec3 Pw = (matW*Po).xyz;
+        VS_setWorldPosition(Pw);
+        VS_setClipPosition(matWVP * Po);
+        VS_setWorldNormal(N);
+        VS_setColor(N);//vec3(0.0,0.9,0));
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectTCS
+{
+    void computeMainTCS();
+    void main() 
+    {
+      // These are custom values we want to pass through the tessellation shaders
+      TCS_setColor(TCS_getColor(gl_InvocationID));
+      computeMainTCS();
+    }
+}
+
+GLSLShader ObjectTES
+{
+    void main()
+    {
+        TES_initInterpolators();
+        computeMainTES();
+        TES_setColor(TES_interpolate(TES_getColor(0), TES_getColor(1), TES_getColor(2)) );
+        //TES_setXXX(TES_interpolate(TES_XXX(0), TES_getColor(1), TES_getColor(2)) );
+        //...
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectPS
+{
+    layout(location=0) out vec4 colorOut;
+    void main() 
+	{
+        vec3 Nn = normalize(FS_getWorldNormal());
+        vec3 Ln = normalize(vec3(0.1, 0.4, 0.3));
+        vec3 Vn = normalize(eyePos - FS_getWorldPosition());
+        vec3 Hn = (Vn + Ln)/2.0;
+        float NdotL = max(dot(Ln,Nn), 0.0);
+        float HdotN = NdotL > 0.0 ? pow(max(0.0, dot(Hn,Nn)),30.0) : 0.0;
+        vec3 diffContrib = /*surfColor.rgb*/FS_getColor().rgb * NdotL * 0.6;
+        vec3 specContrib = vec3(1,1,1) * HdotN * 0.6;
+        colorOut = vec4(diffContrib + specContrib, 1.0);
+	}
+}
+////////////////////////////////////////////////////////////////////
+/// FLOOR's VERTEX PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader FloorVS
+{
+    layout(location=0) in vec4 Position;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    void main(void)
+	{
+        gl_Position = matWVP * Position;
+	}
+}
+////////////////////////////////////////////////////////////////////
+/// FLOOR's FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader FloorPS
+{
+    layout(location=0) out vec4 color;
+    void main() 
+	{
+		color = vec4(0.3, 0.5, 0.7, 1.0);
+	}
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Material Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+Technique FloorTech
+{
+    Pass p0
+    {
+        RasterizationState = rasterStateFloor;
+        DepthStencilState = dstStateFloor;
+        // Or we can do directly :
+        //LINE_WIDTH = 2.0;
+        //DEPTH_TEST = true;
+        //DEPTH_WRITEMASK = true;
+        //DEPTH_FUNC = LEQUAL;
+        //POLYGON_MODE={FRONT_AND_BACK, LINE};
+
+        VertexProgram = FloorVS;
+        FragmentProgram = FloorPS;
+    }
+}
+Technique BasicTech
+{
+    Pass p0
+    {
+        RasterizationState = rasterState1;
+        VertexProgram = {DefaultPipeline::IO_VtxShd, ObjectVS};
+        FragmentProgram = {DefaultPipeline::IO_FragShd, ObjectPS};
+    }
+}
+Technique PNTrianglesTech
+{
+    Pass p0
+    {
+        RasterizationState = rasterState1;
+        //POLYGON_MODE={FRONT_AND_BACK, FILL};
+
+        VertexProgram = {PNTriangles::IO_VtxShd, ObjectVS};
+        TCSProgram = {PNTriangles::IO_TCS, ExternalTess, ObjectTCS};
+        TESProgram = ObjectTES;
+        FragmentProgram = {PNTriangles::IO_FragShd, ObjectPS};
+    }
+}
+Technique BasicTechWire
+{
+    Pass p0
+    {
+        RasterizationState = rasterStateWire;
+        VertexProgram = {DefaultPipeline::IO_VtxShd, ObjectVS};
+        FragmentProgram = {DefaultPipeline::IO_FragShd, ObjectPS};
+    }
+}
+Technique PNTrianglesTechWire
+{
+    Pass p0
+    {
+        RasterizationState = rasterStateWire;
+        VertexProgram = {PNTriangles::IO_VtxShd, ObjectVS};
+        TCSProgram = {PNTriangles::IO_TCS, ExternalTess, ObjectTCS};
+        TESProgram = ObjectTES;
+        FragmentProgram = {PNTriangles::IO_FragShd, ObjectPS};
+    }
+}
+

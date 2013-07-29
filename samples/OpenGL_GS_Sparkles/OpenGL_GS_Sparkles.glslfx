@@ -1,0 +1,583 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+#extension GL_ARB_separate_shader_objects : enable
+#include "randomtable.fxh"
+
+uniform global vec4 scaleBias = {0,0,0,1.0}; // x,y,z bias and w==scale
+
+ConstantBuffer almostNeverChange
+{
+    uniform vec4 near_far_scrratio : NEAR_FAR_SCRRATIO;
+    uniform vec2 DepthRTSz : DEPTHRTSZ;
+};
+ConstantBuffer tweakables < uigroup="sparkles"; >
+{
+    uniform float   minSZ < uimin = 0.0; uimax = 1.0; >         = 0.0;
+    uniform float   maxSZ < uimin = 0.0; uimax = 1.0; >         = 0.1;
+    uniform float   LODScale < uimin = 0.0; uimax = 200.0; >     = 100.0;
+    uniform int     maxSprites < uimin = 0.0; uimax = 35.0; > = 5;
+    uniform float   sparkleAlpha < uimin = 0.0; uimax = 1.0; >   = 0.7;
+    uniform bool    bNoPersp = true;
+}
+
+uniform vec2 CSTable[/*SLICES*/30] : CSTABLE = {{1.000000,0.000000},{1.000000,0.000000},{0.642788,0.766044},
+{0.500000,0.866025},{0.642788,0.766044},{0.766044,0.642788},{0.374607,0.927184},{0.766044,0.642788},
+{1.000000,0.000000},{0.999848,0.017452},{0.996195,0.087156},{0.567844,0.823136},{0.996195,0.087156},
+{0.999848,0.017452},{0.939693,0.342020},{0.766044,0.642788},{0.866025,0.500000},{0.999391,0.034899},
+{1.000000,0.000000},{1.000000,0.000000},{0.939693,0.342020},{1.000000,0.000000},{0.984808,0.173648},
+{0.939693,0.342020},{0.984808,0.173648},{0.996195,0.087156},{0.939693,0.342020},{0.996195,0.087156},
+{1.000000,0.000000},{1.000000,0.000000}};
+
+//////////////////////////////////////////////////////////
+
+RasterizationState rasterState1
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+RasterizationState rasterStateWire
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, LINE};
+}
+DepthStencilState dstStateFloor
+{
+    DEPTH_TEST = true;
+    DEPTH_WRITEMASK = true;
+    DEPTH_FUNC = LEQUAL;
+}
+DepthStencilState dstSparkles
+{
+    DEPTH_TEST = false;
+}
+ColorSampleState csSparkles
+{
+    BLEND = true;
+    BLEND_SRC = ONE;//SRC_ALPHA;
+    BLEND_DST = ONE;//_MINUS_SRC_ALPHA;
+    // BLEND_EQUATION = FUNC_ADD; bug to solve... ?
+}
+//////////////////////////////////////////////////////////////
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 420 compatibility
+    vec4 getDiffuse(vec3 inTc);
+}
+#include "shared_globals.glslfxh"
+
+//////////////////////////////////////////////////////////
+// when declaring a sampler outside of any module : sampler can be known by nvFx (instrospection)
+// and shared between various pieces of code (replicated for every single program)
+uniform sampler2D specSampler;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// sampler states are outside of GLSL.
+// names allows to make them match with the texture/sampler of GLSL (HLSL, too)
+// or maybe we would require the runtime to connect them explicitly...
+//
+SamplerState defaultSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+SamplerState linearSampler
+{
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+//--------------------------------------------------------------------------------------
+//    texture resources
+//--------------------------------------------------------------------------------------
+TextureResource2D texture_star <
+    defaultFile = "star1.dds";
+> {
+    SamplerState = defaultSamplerState;
+}
+
+// TextureResourceCube envTexture <
+//     defaultFile = "industrial_env.hdr";
+// > {
+//     SamplerState = linearSampler;
+// }
+
+// create the texture resource as a render-target
+RenderTexture textureRGBA8
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+RenderTexture textureR32F
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = R32F;
+}
+//--------------------------------------------------------------------------------------
+//    Render Buffer resources
+//--------------------------------------------------------------------------------------
+RenderTexture texDSTNoAA
+{
+    MSAA = {0,0};
+    Size = ApplicationDefined;
+    Format = DEPTH24STENCIL8;
+};
+
+//--------------------------------------------------------------------------------------
+//    FBO's
+//--------------------------------------------------------------------------------------
+FBO FBOColDepthDST
+{
+    Color = {textureRGBA8, textureR32F};
+    DepthStencil    = texDSTNoAA;
+};
+FBO FBOtextureRGBAOnly
+{
+    Color = textureRGBA8;
+};
+
+//////////////////////////////////////////////////////////////////////////////////
+// MISC FUNCTIONS USED IN GS
+//////////////////////////////////////////////////////////////////////////////////
+GLSLShader GSSparles
+{
+    // http://www.opengl.org/registry/specs/ARB/shader_image_load_store.txt
+    //layout(binding=0,r32f) uniform image2D image_depth;
+    uniform sampler2D sampler_depth;
+
+    layout(triangle_strip, max_vertices=4) out;
+    layout(triangles) in;
+
+    layout(location=0) in vec3 normal[3];
+    layout(location=1) in int instanceID[3];
+
+    in gl_PerVertex {
+      vec4 gl_Position; 
+      //float gl_PointSize; 
+      //float gl_ClipDistance[]; 
+    } gl_in[];
+    in int gl_PrimitiveIDIn;
+
+    out gl_PerVertex {
+      vec4 gl_Position;
+      //float gl_PointSize;
+      //float gl_ClipDistance[];
+    };
+
+    layout(location=0) out float   outAlpha;
+    layout(location=1) out vec2    outTc;
+    //layout(location=2) out vec4    outColor;
+
+    struct Vert
+    {
+        vec4 position;
+        vec3 normal;
+        //int instanceID;
+    };
+    Vert barycentricWeights(const Vert a, const Vert b, const Vert c, vec3 nw)
+    {
+        Vert V;
+        V.position = (nw.x * a.position + nw.y * b.position + nw.z * c.position );
+        V.normal = normalize((nw.x * a.normal + nw.y * b.normal + nw.z * c.normal));
+        return V;
+    }
+
+    vec4 computeSpriteCorner(vec2 dir2d, vec4 position, float scale, vec4 offset)
+    {
+        vec2 s;
+        vec4 P;
+        // we want the sparkles be 2d scaled. Size not changed by perspective.
+        // But you can try with perspective bNoPersp=false (and increasing maxSZ parameter to ~2.5)
+        if(bNoPersp)
+        {
+            position /= position.w;
+        }
+        s = vec2(1,near_far_scrratio.z)*((scale * offset.y) + offset.x);
+        P.xy = dir2d*s + position.xy;
+        s = vec2(1,near_far_scrratio.z)*((scale * offset.w) + offset.z);
+        P.x = ( dir2d.y * s.x) + P.x;
+        P.y = (-dir2d.x * s.y) + P.y;
+        P.zw = position.zw;
+        return P;
+    }
+    #define EPSILONZ 0.01
+    float OcclusionTest(vec3 Pproj, vec4 P)
+    {
+        //ivec2 iPos = ivec2(DepthRTSz*(Pproj.xy*vec2(0.5,-0.5) + 0.5));
+        //float d = imageLoad(image_depth, iPos).r;
+        float d = texture(sampler_depth, Pproj.xy*vec2(0.5,0.5) + 0.5).r;
+        return (P.z-EPSILONZ) <= d ? 1.0 : 0.0;
+    }
+    void drawSprite(Vert V, float alpha)
+    {
+        if(alpha == 0.0)
+          return;
+        vec4 Po = V.position;
+        vec4 Pw = m4_World * Po;
+        vec3 Nw = normalize((m4_WorldIT * vec4(V.normal,0)).xyz);
+
+        vec3 lightDir = normalize(lightPos - Pw.xyz);
+        vec3 eyeDir = normalize(eyePos - Pw.xyz);//normalize(m4_ViewI[3] - Pw); // D3D order
+        //
+        // get the second point
+        //
+        vec4 P2wv;
+        P2wv.xyz = cross(lightDir, Nw) + Pw.xyz;
+        P2wv.w = 0;
+        //
+        // specular vector
+        //
+        vec3 Hn = normalize(lightDir + eyeDir);
+        //
+        // compute the crystal reflection
+        //
+        vec2 NLCosSin;
+        int index;
+        float NDotL;
+        float NDotH;
+
+        // Note : we don't use diffuse part...
+        /*NLCosSin.x =    dot(Nw, lightDir);
+        NLCosSin.y =    sqrt(1-(NLCosSin.x * NLCosSin.x));
+        index =         max(NLCosSin.x * SLICES, 4);
+        NLCosSin =      NLCosSin * CSTable[index];
+        NDotL =         NLCosSin.x + NLCosSin.y;*/
+#if 0
+        NDotL = dot(lightDir, Nw);
+        NDotH = NDotL > 0.0 ? pow(max(0.0, dot(Hn, Nw)), Shininess) : 0.0;
+        float scale = 1.0;//*NDotH;
+#else
+        NLCosSin.x =    max(dot(Nw, Hn), 0);
+        NLCosSin.y =    sqrt(1-(NLCosSin.x * NLCosSin.x));
+        index =         int(max(NLCosSin.x * /*SLICES*/30.0, 4));
+        NLCosSin =      NLCosSin * CSTable[index];
+        NDotH =         NLCosSin.x + NLCosSin.y;
+        float scale =   pow(max(NDotH, 0), Shininess);
+#endif
+        //
+        // Projections
+        //
+        vec4 projpos1 = (m4_ViewProj * Pw);
+        vec4 projpos2 = (m4_ViewProj * P2wv);
+        vec3 pos2d1 = projpos1.xyz / projpos1.www;
+        vec3 pos2d2 = projpos2.xyz / projpos2.www;
+        
+        float occ = OcclusionTest(pos2d1, projpos1);
+        scale *= occ;
+        if(scale > 0.0)
+        {
+            vec2 dir2d  = normalize(pos2d2.xy - pos2d1.xy);
+//outColor = vec4(pos2d1.z,0,0,1);//texture(sampler_depth, pos2d1*vec2(0.5,0.5) + 0.5);
+            outAlpha = alpha;
+            gl_Position = computeSpriteCorner(dir2d, projpos1, scale, vec4(-minSZ, -maxSZ, minSZ, maxSZ));
+            outTc = vec2(0,1);
+            EmitVertex();
+            vec4 P11 = computeSpriteCorner(dir2d, projpos1, scale, vec4(minSZ, maxSZ, minSZ, maxSZ)); //P - vec4(Sz.x, Sz.y, 0, 0);
+            gl_Position = P11;
+            outTc = vec2(1,1);
+            EmitVertex();
+            vec4 P00 = computeSpriteCorner(dir2d, projpos1, scale, vec4(-minSZ, -maxSZ, -minSZ, -maxSZ)); //P - vec4(Sz.z, Sz.w, 0, 0);
+            gl_Position = P00;
+            outTc = vec2(0,0);
+            EmitVertex();
+            gl_Position = computeSpriteCorner(dir2d, projpos1, scale, vec4(minSZ, maxSZ, -minSZ, -maxSZ)); //P - vec4(Sz.x, Sz.w, 0, 0);
+            outTc = vec2(1,0);
+            EmitVertex();
+            EndPrimitive();
+
+        }
+    }
+    //////////////////////////////////////////////////////////////////////////////////
+    // GEOM. SHADERS GEOM. SHADERS GEOM. SHADERS GEOM. SHADERS GEOM. SHADERS
+    // A Sprite (quad) will have 4 x (4+3) = 28 floats
+    // Let's set the Max amount of sprites to 2. You can ask for more but beware that this has a cost (!)
+    void main()
+    {
+        int instanceID = instanceID[0]; // take one vertex for instanceID...
+        vec4 projP[3];
+        vec2 pos2d[3];
+        for(int i=0; i<3; i++)
+        {
+            projP[i] = (m4_WorldViewProj * gl_in[i].gl_Position);
+            pos2d[i] = projP[i].xy / projP[i].ww;
+        }
+        vec2 v1 = (pos2d[2]-pos2d[1]);
+        vec2 v2 = (pos2d[0]-pos2d[1]);
+        float projSurf = (v1.x*v2.y - v2.x*v1.y)* LODScale;
+#if 0
+        outAlpha = 0.5;
+        outTc = vec2(0,0);
+        gl_Position = vec4(pos2d[0],0.0,1.0);//m4_WorldViewProj * gl_in[0].gl_Position;
+        EmitVertex();
+        outAlpha = 0.5;
+        outTc = vec2(0,1);
+        gl_Position = vec4(pos2d[1],0.0,1.0);//m4_WorldViewProj * gl_in[1].gl_Position;
+        EmitVertex();
+        outAlpha = 0.5;
+        outTc = vec2(1,1);
+        gl_Position = vec4(pos2d[2],0.0,1.0);//m4_WorldViewProj * gl_in[2].gl_Position;
+        EmitVertex();
+        EndPrimitive();
+
+#else
+
+        int nsprites = int(min((projSurf), maxSprites));
+        //
+        if(instanceID > nsprites) // This instance has nothering to do here
+            return;
+
+        // use gl_PrimitiveIDIn to add some 'noise' on the way to fetch barycentric coords
+        int offset = gl_PrimitiveIDIn % (256 - maxSprites);
+
+        // TODO: optimize
+        Vert input[3];
+        input[0].normal = normal[0] ;
+        input[0].position = gl_in[0].gl_Position;
+        input[1].normal = normal[1] ;
+        input[1].position = gl_in[1].gl_Position;
+        input[2].normal = normal[2] ;
+        input[2].position = gl_in[2].gl_Position;
+        if(nsprites >= 1)
+        {
+            nsprites = instanceID + offset;
+            Vert Vtx = barycentricWeights(input[0], input[1], input[2], BCCoords[nsprites]);
+            drawSprite(Vtx, sparkleAlpha);
+        } 
+        else if(0 == (gl_PrimitiveIDIn % int(round(1.0/projSurf))))// here when we want to bypass some of the triangles
+        {
+            Vert Vtx = barycentricWeights(input[0], input[1], input[2], BCCoords[offset]);
+            drawSprite(Vtx, sparkleAlpha);
+        }
+#endif
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// VERTEX PROGRAM /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 Normal;
+
+    layout(location=0) out vec3 outNw;
+    layout(location=1) out int outInstanceID;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    void main(void)
+    {
+        vec4 Po    = Position;
+        Po.xyz += scaleBias.xyz;
+        Po.xyz *= scaleBias.w;
+
+        gl_Position     = /*m4_WorldViewProj **/ Po;
+        outNw           = Normal;
+        outInstanceID   = gl_InstanceID;
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectPS
+{
+    layout(location=0) in float  inAlpha;
+    layout(location=1) in vec2   inTc;
+    //layout(location=2) in vec4   inColor;
+
+    layout(location=0) out vec4 color;
+
+    uniform sampler2D sampler_star;
+
+    void main() 
+    {
+        color = inAlpha * (texture(sampler_star, inTc).rrrr);//vec4(0,0.5,0.8,1);
+    }
+}
+
+//--------------------------------------------------------------------------------------
+//    Fullscreen quad Vertex shader
+//--------------------------------------------------------------------------------------
+GLSLShader global fullscreenquadVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 TexCoord;
+    layout(location=1) out vec3 tc;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    void main()
+    {
+        tc = TexCoord;
+        gl_Position = Position;
+    }
+}
+//--------------------------------------------------------------------------------------
+//    Simple texture fetch
+//--------------------------------------------------------------------------------------
+GLSLShader global fullscreenquadPS
+{
+    // we can keep local some uniforms. So they aren't visible outside from others
+    uniform sampler2D quadSampler;
+    layout(location=1) in vec3 tc;
+    layout(location=0) out vec4 color;
+    void main()
+    {
+        color = /*vec4(0,0,0.2,0.0) + */texture(quadSampler, tc.xy);
+    }
+}
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Material Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+Technique RenderSparkles
+{
+    // Pass skybox
+    // {
+    //     DEPTH_TEST = FALSE;
+    //     ClearMode = all;
+    //     // assign to a custom state the handle of a state object ready to be used
+    //     //rasterizationState = myStateRast;
+    //     //colorSampleState = myStateColorSample
+    //     RenderMode = fullscreen_quad;
+    //     VertexProgram = SkyboxVS;
+    //     SamplerResource(hdrEnvSampler) = hdEnvTexture;
+    //     FragmentProgram = { SkyboxPS, DefaultFragOutput};
+    //     currentTarget = FBOrenderBufferRGBA32F;
+    // }
+    Pass scene
+    {
+        ClearMode = all;
+        DEPTH_TEST = TRUE;
+        BLEND = false;
+
+        CULL_FACE_MODE = Back;
+        CULL_FACE = TRUE;
+
+        RenderMode = SceneShading;
+        RenderGroup = 0; // will trigger normal 
+
+        currentTarget = FBOColDepthDST;
+        FragmentProgramOverride<"FragOut"> = fragmentOutputColorAndDepth;
+    }
+    Pass tobackbuffer
+    {
+        currentTarget = backbuffer;
+        blitFBOToActiveTarget = FBOtextureRGBAOnly;
+    }
+    Pass p0
+    {
+        DepthStencilState = dstSparkles;
+        ColorSampleState = csSparkles;
+        SamplerResource(sampler_star) = texture_star;
+        SamplerState(sampler_star) = defaultSamplerState;
+
+        SamplerResource(sampler_depth) = textureR32F;
+        SamplerState(sampler_depth) = nearestSampler;
+        //ImageResource(image_depth) = textureR32F;
+        //ImageUnit(image_depth) = 0;
+
+        VertexProgram = ObjectVS;
+        GeometryProgram = GSSparles;
+        FragmentProgram = ObjectPS;
+        RenderGroup = 1; // let's say it will trigger instancing
+
+        currentTarget = backbuffer;
+        RenderMode = SceneNoShading;
+    }
+}
+Technique SparklesDebug
+{
+    Technique RenderSparkles;
+    // Example of a quad rendering
+    Pass copy_to_texture
+    {
+        // Copy via a Fullscreen quad and texture fetch in a shader
+        DEPTH_TEST = false;
+        CULL_FACE = false;
+        BLEND = true;
+        BLEND_SRC = ONE_MINUS_CONSTANT_COLOR;
+        BLEND_DST = CONSTANT_COLOR;
+        BLEND_COLOR = {0.0,0.0,0.0,0.0};
+        RenderMode = DebugQuad3;//render_fullscreen_quad; // Only draws a quad... Won't change any renderstate. So Depth test/Cullface would be needed
+        VertexProgram = fullscreenquadVS;
+        SamplerResource(quadSampler) = textureR32F;
+        SamplerState(quadSampler) = nearestSampler;
+        FragmentProgram = fullscreenquadPS;
+        CurrentTarget = backbuffer;
+    }
+    //Pass copy_to_texture2
+    //{
+    //    // Copy via a Fullscreen quad and texture fetch in a shader
+    //    DEPTH_TEST = false;
+    //    CULL_FACE = false;
+    //    BLEND = true;
+    //    BLEND_SRC = ONE_MINUS_CONSTANT_COLOR;
+    //    BLEND_DST = CONSTANT_COLOR;
+    //    BLEND_COLOR = {0.0,0.0,0.0,0.0};
+    //    RenderMode = DebugQuad2;//render_fullscreen_quad; // Only draws a quad... Won't change any renderstate. So Depth test/Cullface would be needed
+    //    VertexProgram = fullscreenquadVS;
+    //    SamplerResource(quadSampler) = textureRGBA8;
+    //    SamplerState(quadSampler) = nearestSampler;
+    //    FragmentProgram = fullscreenquadPS;
+    //    CurrentTarget = backbuffer;
+    //}
+}
+
+Technique NormalRendering
+{
+    Pass scene
+    {
+        ClearMode = all;
+        DEPTH_TEST = TRUE;
+        BLEND = false;
+
+        CULL_FACE_MODE = Back;
+        CULL_FACE = TRUE;
+
+        RenderMode = SceneShading;
+        RenderGroup = 0; // will trigger normal 
+
+        currentTarget = backbuffer;
+    }
+}
+
+

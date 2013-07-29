@@ -1,0 +1,3111 @@
+/***********************************************************************************************
+ **
+ ** Samplerstates
+ **
+ ***********************************************************************************************/
+SamplerState SState1
+{
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    TEXTURE_WRAP_S = CLAMP_TO_EDGE;
+    TEXTURE_WRAP_T = CLAMP_TO_EDGE;
+}
+/***********************************************************************************************
+ **
+ ** Resources to create for the effect
+ **
+ ***********************************************************************************************/
+RenderTexture TexVolumeTarget
+{
+    MSAA = {0,0};
+    Size = {128*3, 128*3};
+    //Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+// Texture render targets as Rectangle textures
+/*
+    PROBLEM: the size is complex : comes from this setup
+   for( rows=(int)floorf(sqrtf((float)dim[2])); dim[2]%rows!=0; rows-- );
+   cols = dim[2] / rows;
+   texDim[0] = cols * dim[0];
+   texDim[1] = rows * dim[1];
+
+ */
+// TODO: we should be able to create some uniforms so we can compute the size with them
+// Size = { uniformW * 128, uniformH * 128 };
+// But this implies that we parse again the expression when values of uniforms changed !!!
+// unless we store the expression evaluation as a sub-string to parse
+// This is a problem in our case because the 16 and 8 value depends on internal app setup
+// We should also generate the equivalent of Fluid :: createOffsetTable( void ) in the effect...
+RenderTextureRectangle TexRect_Velocity
+{
+    Size = {16*128, 8*128};
+    Format = RGBA16F;
+    SamplerState = SState1;
+}
+RenderTextureRectangle TexRect_Color
+{
+    Size = {16*128, 8*128};
+    Format = RGBA16F;
+    SamplerState = SState1;
+}
+RenderTextureRectangle TexRect_Pressure
+{
+    Size = {16*128, 8*128};
+    Format = RGBA16F;
+    SamplerState = SState1;
+}
+RenderTextureRectangle TexRect_Vorticity
+{
+    Size = {16*128, 8*128};
+    Format = RGBA16F;
+    SamplerState = SState1;
+}
+RenderTextureRectangle TexRect_VelocityDivergence
+{
+    Size = {16*128, 8*128};
+    Format = RGBA16F;
+    SamplerState = SState1;
+}
+RenderTextureRectangle TexRect_SwapBuffer
+{
+    Size = {16*128, 8*128};
+    Format = RGBA16F;
+    SamplerState = SState1;
+}
+RenderTextureRectangle TexRect_OffsetTable
+{
+    Size = {128, 1};
+    Format = FLOAT_RGBA16_NV;
+    SamplerState = SState1;
+}
+//
+// FBO's
+//
+FBO FBO_Velocity            { Color = TexRect_Velocity; }
+FBO FBO_Color               { Color = TexRect_Color; }
+FBO FBO_Pressure            { Color = TexRect_Pressure; }
+FBO FBO_Vorticity           { Color = TexRect_Vorticity; }
+FBO FBO_VelocityDivergence  { Color = TexRect_VelocityDivergence; }
+FBO FBO_SwapBuffer          { Color = TexRect_SwapBuffer; }
+/***********************************************************************************************
+ **
+ ** Constant Buffers
+ **
+ ***********************************************************************************************/
+
+ConstantBuffer transfblock
+{
+    uniform mat4 MV;
+    uniform mat4 MVP;
+    uniform mat4 Proj;
+}
+
+ConstantBuffer groundBlock
+{
+    //uniform float dummy;
+    uniform vec4 bgndColor;
+}
+
+ConstantBuffer rayCastBlock
+{
+    uniform float       maxGridRes;
+    uniform float       stepSize;
+    uniform vec4      smokeColor;
+    uniform vec3      eye;
+    uniform float   mode;
+    uniform vec4 fact;
+    uniform vec4 fact2;
+    uniform vec3 gridSz;
+}
+
+// stable settings
+ConstantBuffer fluidParamsStatic
+{
+    uniform vec4 splatColor = { 500.0, 1.0, 1.0, 1.0 };
+    uniform float timestep;
+    uniform float ambientTemperature = 20.0;
+    uniform float rBeta = (1.0f/6.0f);
+    uniform float size = 0.05;//impulseSize
+    uniform float sizeZ = 0.05;//mpulseSizeZ
+    uniform float radius;
+    uniform vec3 up = {0.0f, 1.0f, 0.0f};
+    uniform vec3 center = {0.5*128.0, 0.1*128.0, 0.5*128.0};//{impulseX,impulseY,impulseZ}; // //0.5f * (float)(grid->dim[0])...
+    uniform vec3 gridSize;
+    uniform vec3          gridSizeMinusOne;
+    uniform vec3          floatVolumeDim;
+    uniform vec3 gravity;
+}
+// changing settings (in Passes)
+ConstantBuffer fluidParamsChanging
+{
+    uniform float alpha = 0.00007;
+    uniform float epsilon = 0.1;//confinementScale;
+    uniform float clamp = 1.0f;
+    uniform float k = 0.0;
+    uniform float forward = 1.0;
+    uniform float modulate = -1.0;//decay;
+}
+// table of pre-computed values
+ConstantBuffer shaderSamples
+{
+    uniform float AAAAAAA[4] = { {0.59626}, {0.38460}, {0.96221}, {0.87945} };
+    uniform float BBBBBBB[4] = {  0.59626 ,  0.38460 ,  0.96221 ,  0.87945  };
+    uniform float sampleX[32] = { 0.59626, 0.38460, 0.96221, 0.87945, 0.81890, 0.43606, 0.19028, 0.92937, 0.44166, 0.19828, 0.27817, 0.32950, 0.22767, 0.99864, 0.79077, 0.40725, 0.24475, 0.75332, 0.63801, 0.51188, 0.49749, 0.84052, 0.68663, 0.80686, 0.72180, 0.14722, 0.87361, 0.72212, 0.47100, 0.57764, 0.23257, 0.95510 };
+    uniform float sampleY[32] = { 0.94046, 0.83660, 0.84741, 0.94090, 0.58100, 0.46033, 0.58850, 0.34899, 0.55990, 0.10707, 0.82521, 0.54503, 0.42825, 0.24400, 0.59593, 0.54757, 0.52987, 0.93988, 0.17701, 0.92735, 0.20752, 0.69736, 0.13811, 0.30254, 0.31816, 0.64986, 0.19929, 0.87486, 0.97277, 0.73013, 0.67989, 0.35874 };
+    uniform float sampleZ[32] = { 0.25227, 0.47647, 0.10006, 0.35790, 0.43786, 0.21559, 0.73778, 0.57580, 0.81846, 0.90187, 0.20900, 0.62026, 0.84188, 0.90024, 0.11167, 0.36611, 0.25850, 0.28196, 0.47654, 0.14060, 0.77300, 0.98284, 0.57564, 0.81826, 0.99509, 0.36040, 0.74810, 0.99829, 0.20522, 0.62130, 0.22491, 0.62232 };
+}
+ConstantBuffer velvetSettings
+{
+    uniform float Ka = 0.05;
+    uniform float Kd = 0.2;
+    uniform float Ks = 0.1;
+    uniform float backscatter = 0.1;
+    uniform float edginess = 10;
+    uniform vec3 sheen = {0.8, 0.8, 0.8};
+    uniform float roughness = 0.1;
+    uniform float frequency = 8.0;
+    uniform float magnitude = 0.4;
+}
+ConstantBuffer phongSettings
+{
+    uniform vec3 diffusePhong = { 1.0, 0.8, 0.4 };
+    uniform float KdPhong = 0.55;
+    uniform float KsPhong = 0.9;
+    uniform float roughnessPhong = 10.0;
+}
+
+ConstantBuffer glassBlock
+{
+    uniform float refract = -1.0;
+    uniform float AA;
+}
+/***********************************************************************************************
+ **
+ ** Sampler-states
+ **
+ ***********************************************************************************************/
+SamplerState defaultSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+SamplerState envMapSampler
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+
+/***********************************************************************************************
+ **
+ ** Global settings for all
+ **
+ ***********************************************************************************************/
+GLSLShader
+{
+    #version 330 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+    
+    // Helpers prototypes
+    /*float*/vec4 h4texRECTtrilerp( sampler2DRect tex, sampler2DRect zOffset, vec3 s );
+    vec3 phong( vec3 N, vec3 L, vec3 E );
+    vec4 texRECT3D( sampler2DRect tex, sampler2DRect zOffset, vec3 p );
+
+}
+/***********************************************************************************************
+ **
+ ** Helpers
+ **
+ ***********************************************************************************************/
+GLSLShader helpers
+{
+    vec3 phong( vec3 N, vec3 L, vec3 E )
+    {
+       vec3 R = 2.0*dot( L, N )*N - L;
+
+       return KdPhong * max( 0, dot( N, L )) * diffusePhong +
+              KsPhong * pow( max( 0, dot( R, E )), roughnessPhong );
+    }
+    vec4 texRECT3D( sampler2DRect tex,
+                      sampler2DRect zOffset,
+                      vec3 p )
+    {
+       float z1, z2, t;
+       vec4 offset;
+
+       //do a bunch of extra math to get trilinear interpolation...
+       z1 = floor( p.z );
+       z2 = p.z+1;
+       t = p.z-z1;
+       offset = texture( zOffset, vec2( z1, 0 ));
+       return texture( tex, offset.xy + p.xy ) * (1.0-t) +
+              texture( tex, offset.zw + p.xy ) * t;
+    }
+
+
+    /*float*/vec4 h4texRECTtrilerp( sampler2DRect tex, sampler2DRect zOffset, vec3 s )
+    {
+      //find the "bounding box" of the eight samples closest to s -----
+
+      vec3 s1, s2;  
+      s1 = floor( s - 0.5 ) + 0.5;
+      s2 = s1 + 1;
+
+      vec3 t = s - s1;  //distance between s and one of the box corners
+
+      // find (x,y) offsets for the tiles corresponding to the --------
+      // two z values of the samples ----------------------------------
+
+      vec4 z = texture( zOffset, vec2( s1.z, 0 ) );
+
+      // take 8 samples closest to s ----------------------------------
+
+      /*float*/vec4 tex111 = texture( tex, vec2( s1.x+z.x, s1.y+z.y ) );
+      /*float*/vec4 tex211 = texture( tex, vec2( s2.x+z.x, s1.y+z.y ) );
+                                                            
+      /*float*/vec4 tex121 = texture( tex, vec2( s1.x+z.x, s2.y+z.y ) );
+      /*float*/vec4 tex221 = texture( tex, vec2( s2.x+z.x, s2.y+z.y ) );
+                                                            
+                                                            
+      /*float*/vec4 tex112 = texture( tex, vec2( s1.x+z.z, s1.y+z.w ) );
+      /*float*/vec4 tex212 = texture( tex, vec2( s2.x+z.z, s1.y+z.w ) );
+                                                            
+      /*float*/vec4 tex122 = texture( tex, vec2( s1.x+z.z, s2.y+z.w ) );
+      /*float*/vec4 tex222 = texture( tex, vec2( s2.x+z.z, s2.y+z.w ) );
+
+      // interpolate sample values ------------------------------------
+      return mix(
+
+               mix(
+                 mix( tex111, tex211, t.x ),
+                 mix( tex121, tex221, t.x ),
+                 t.y
+               ),
+
+               mix(
+                 mix( tex112, tex212, t.x ),
+                 mix( tex122, tex222, t.x ),
+                 t.y
+               ),
+
+               t.z
+             );
+
+      //XXX why can't we do this w/ several bilinearly interpolated samples?
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** Advection shaders
+ **
+ ***********************************************************************************************/
+GLSLShader advectparticles_v
+{
+    layout(location=0) in vec4 position;
+    layout(location=8) in vec3 textureCoords0;
+    
+    layout(location=0) out vec3 texCoords0;
+
+    void main()
+    {
+       gl_Position = MVP * position;
+       texCoords0 = textureCoords0;
+    }
+}
+
+//ConstantBuffer advectData
+//{
+//    uniform float       timestep;
+//    uniform float       modulate = 1.0;
+//    uniform float       forward = 1.0;
+//    uniform float       k = 0.0;
+//
+//    uniform vec3          gridSizeMinusOne;
+//    uniform vec3          floatVolumeDim;
+//    uniform float       clamp = 65536.0;
+//}
+GLSLShader advect_f
+{
+    //uniform float       timestep;
+    //uniform float       modulate = 1.0;
+    //uniform float       forward = 1.0;
+    //uniform float       k = 0.0;
+
+    //uniform vec3          gridSizeMinusOne;
+    //uniform vec3          floatVolumeDim;
+    //uniform float       clamp = 65536.0;
+
+    layout(location=0) in vec3 cell0_;
+    layout(location=7) in vec3 cell7_;
+
+    layout(location=0) out vec4 result;
+
+    uniform sampler2DRect velocity;
+    uniform sampler2DRect advected;
+    uniform sampler2DRect zOffset;
+    void main()
+    {
+        vec3 cell0 = cell0_;
+        vec3 cell7 = cell7_;
+       cell0.z = int(cell7.z)+0.5;  //make sure z coordinates are at -EXACT- texel locations (for some
+       cell7.z = int(cell7.z)+0.5;  //reason, interpolated texture coordinates are BAD)
+
+       vec3 pos = cell7 - timestep * forward * texture( velocity, cell0.xy ).xyz;  //we already know that cell0.xy corresponds to the right Z slice
+       // XXX make sure we don't advect from the wrong slice
+       pos.x = max( 1, min( gridSizeMinusOne.x, pos.x ));
+       pos.y = max( 1, min( gridSizeMinusOne.y,  pos.y ));
+       result = h4texRECTtrilerp( advected, zOffset, pos )*modulate;
+       result.g -= timestep*k; // evolve time (for fire only)
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** Technique for Advection
+ **
+ ***********************************************************************************************/
+GLSLShader advectBFECC_f
+{
+    //uniform float       timestep;
+    //uniform float       modulate = 1.0;
+    //uniform float       forward = 1.0;
+    //uniform float       k = 0.0;
+
+    //uniform vec3          gridSizeMinusOne;
+    //uniform vec3          floatVolumeDim;
+    //uniform float       clamp = 65536.0;
+
+    layout(location=0) in vec3 cell0_;
+    layout(location=7) in vec3 cell7_;
+    
+    uniform sampler2DRect velocity;
+    uniform sampler2DRect phi;
+    uniform sampler2DRect phiStar;
+    uniform sampler2DRect phiBar;
+    uniform sampler2DRect zOffset;
+
+    layout(location=0) out vec4 result;
+    
+    void main()
+    {
+        vec3 cell0 = cell0_;
+        vec3 cell7 = cell7_;
+      cell0.z = floor(cell7.z)+0.5;  //make sure z coordinates are at -EXACT- texel locations (for some
+      cell7.z = floor(cell7.z)+0.5;  //reason, interpolated texture coordinates are BAD)
+
+      vec3 pos = cell7 - timestep * forward * texture( velocity, cell0.xy ).xyz;  //we already know that cell0.xy corresponds to the right Z slice
+      pos.x = max( 1, min( gridSizeMinusOne.x, pos.x ));
+      pos.y = max( 1, min( gridSizeMinusOne.y, pos.y ));
+      
+      vec3 diff = abs( floatVolumeDim - cell7 );
+      vec4 r;
+      float lsVal = texture( phi, cell0.xy ).a;
+
+      // must use regular semi-Lagrangian advection instead of
+      // BFECC at the volume boundaries
+      if( //abs( lsVal ) < 1.0 || //[[and free surface boundary]]
+          diff.x > floatVolumeDim.x-2 ||
+          diff.y > floatVolumeDim.y-4 ||
+          diff.z > floatVolumeDim.z-2 )
+      {
+         r = h4texRECTtrilerp( phi, zOffset, pos );
+      }
+      else
+      {
+         // faster BFECC ---------------------------------------
+            // get limits
+            vec4 limits[8], phiMin, phiMax;
+            vec3 nodes[8];
+            vec4 offset;
+            const vec2 hlf = vec2( 0.5, 0.5 );
+
+            pos.xy = floor(pos.xy+hlf); // find the texel corner closest to the semi-Lagrangian "particle"
+
+            offset = texture( zOffset, vec2( floor(pos.z), 0 )); // get the slice offsets
+            limits[0] = texture( phi, offset.xy + (pos.xy+vec2(-0.5,-0.5)) );
+            limits[1] = texture( phi, offset.xy + (pos.xy+vec2(-0.5, 0.5)) );
+            limits[2] = texture( phi, offset.xy + (pos.xy+vec2( 0.5,-0.5)) );
+            limits[3] = texture( phi, offset.xy + (pos.xy+vec2( 0.5, 0.5)) );
+            limits[4] = texture( phi, offset.zw + (pos.xy+vec2(-0.5,-0.5)) );
+            limits[5] = texture( phi, offset.zw + (pos.xy+vec2(-0.5, 0.5)) );
+            limits[6] = texture( phi, offset.zw + (pos.xy+vec2( 0.5,-0.5)) );
+            limits[7] = texture( phi, offset.zw + (pos.xy+vec2( 0.5, 0.5)) );
+
+            phiMin = min( min( min( min( min( min( min( limits[0],
+                                                        limits[1] ),
+                                                        limits[2] ),
+                                                        limits[3] ),
+                                                        limits[4] ),
+                                                        limits[5] ),
+                                                        limits[6] ),
+                                                        limits[7] );
+
+            phiMax = max( max( max( max( max( max( max( limits[0],
+                                                        limits[1] ),
+                                                        limits[2] ),
+                                                        limits[3] ),
+                                                        limits[4] ),
+                                                        limits[5] ),
+                                                        limits[6] ),
+                                                        limits[7] );
+
+            // compute final advection
+            r = texture( phiStar, cell0.xy ) +
+                0.5 * ( texture( phi,    cell0.xy) - 
+                        texture( phiBar, cell0.xy) );
+
+            // apply limiter
+            r = max( min( r, phiMax ), phiMin );
+
+         // // BFECC -------------------------------------------------------
+         // r = ( 1.5f * h4texRECTtrilerp( phi,    zOffset, pos ) -
+         //       0.5f * h4texRECTtrilerp( phiBar, zOffset, pos ) );
+      }
+
+      // only use this for color
+      //r = min( vec4( clamp ), max( r, vec4( -clamp )));
+      // XXX clamps especially for fire!
+    // USING REAL LIMITER NOW...? //  r.r = min( vec4( 500 ), max( r.r, vec4( 0 )));
+    // USING REAL LIMITER NOW...? //  r.g = min( vec4( 1 ), max( r.g, vec4( 0 )));
+
+      r.g -= timestep*k;  // evolve time (for fire only)
+      
+      result = r*modulate;
+    }
+}
+/***********************************************************************************************
+ **
+ ** advectparticles_f
+ **
+ ***********************************************************************************************/
+GLSLShader advectparticles_f
+{
+    layout(location=0) in vec2 particleIndex; //TEXCOORD0
+    uniform sampler2DRect particlePosition;
+    uniform sampler2DRect fluidVelocity;
+    uniform sampler2DRect levelSet;
+    uniform sampler2DRect zOffset;
+
+    layout(location=0) out vec4 advected;
+    layout(location=1) out vec4 escaped;
+
+   void main()
+    {
+      vec4 particle = texture( particlePosition, particleIndex );
+      vec3 gridPos = particle.rgb + vec3( 0.5, 0.5, 0.5 ); //offset so that a particle at (I, J, K) gets the value of cell [I][J][K]
+      vec3 velocity = h4texRECTtrilerp( fluidVelocity, zOffset, gridPos ).xyz;
+      float phi = h4texRECTtrilerp( levelSet, zOffset, gridPos ).a;
+
+      //integrate w/ forward Euler
+      particle.xyz += velocity * timestep;
+
+      //advected is the updated particle position and the original radius
+      advected = particle;
+
+      //escaped is the texture-space particle position and original radius iff
+      //particle escaped, otherwise a point at infinity and radius zero
+
+      if( phi * particle.a < 0 && abs(particle.a) < abs(phi) ) //ESCAPED
+      {
+         ////////////////////////////////////////////////////////////////////
+         // Compute the location of the particle w.r.t. the flat 3D texture.
+         // Note that we compute Z for the slice with the *smallest* coordinate -
+         // the other one can be computed as
+         //
+         //   ((x+sliceWidth)%texWidth, y+floor((x+sliceWidth)/texWidth))
+         //
+         // in the vertex shader.
+         ////////////////////////////////////////////////////////////////////
+         
+         vec2 particleTexCoord = gridPos.xy + texture( zOffset, vec2( floor(gridPos.z), 0 )).xy; //XXX computing the offset redundantly...
+
+         escaped = vec4( particleTexCoord, 0.0, particle.a );
+
+         //escaped = particle;
+      }
+      else                                                //DIDN'T ESCAPE
+      {
+         escaped = vec4( 999999.0, 999999.0, 999999.0, 0 );
+      }
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** Blur
+ **
+ ***********************************************************************************************/
+GLSLShader blur_v
+{
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec2 texCoords; /*TEXCOORD0*/
+              
+    layout(location=0) out vec2 uv; /*TEXCOORD0*/
+    void main()
+    {
+       gl_Position = MVP * position;
+       uv = texCoords;
+    }
+}
+GLSLShader blurh_f
+{
+    uniform sampler2DRect input;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+        vec2 uv = gl_FragCoord.xy;
+        result = ( texture( input, uv + vec2( -4,  0.5 ) ) +
+                texture( input, uv + vec2( -2, -0.5 ) ) +
+                texture( input, uv + vec2( -0,  0.5 ) ) +
+                texture( input, uv + vec2(  2, -0.5 ) ) +
+                texture( input, uv + vec2(  4,  0.5 ) )
+                ) / 5.0 - 0.020;
+    }
+}
+GLSLShader blurv_f
+{
+    uniform sampler2DRect input;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+        vec2 uv = gl_FragCoord.xy; /*WPOS*/
+        result = ( texture( input, uv + vec2( -0.5, -4.0 ) ) +
+                texture( input, uv + vec2(  0.5, -2.0 ) ) +
+                texture( input, uv + vec2( -0.5, -0.0 ) ) +
+                texture( input, uv + vec2(  0.5,  2.0 ) ) +
+                texture( input, uv + vec2( -0.5,  4.0 ) )
+                ) / 5.0 - 0.020;
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** Air
+ **
+ ***********************************************************************************************/
+GLSLShader air_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect levelSet;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       if( texture( levelSet, uv ).a < 10.0 )
+          result = vec4( 0, 0, 0, 0 );
+       else
+          result = vec4( 0, 0, 0, 1 );
+    }
+}
+GLSLShader airvelocity_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect levelSet;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       if( texture( levelSet, uv ).a < 10.0 )
+          result = vec4( 0, 0, 0, 0 );
+       else
+          result = vec4( 0, 0, 0, 1 );
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** Blood
+ **
+ ***********************************************************************************************/
+GLSLShader blood_f
+{
+    #define h0 r
+    #define h1 g
+    #define g0 b
+    #define g1 a
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect hitPos;
+    uniform sampler2DRect levelSet;
+    uniform sampler2DRect zOffset;
+    uniform sampler1D splineTable;
+    uniform samplerCube cubeMap;
+    uniform sampler2DRect background;
+    //uniform vec3 eye;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+        vec2 pixel = gl_FragCoord.xy; /*WPOS*/
+       //vec4 p = texture( hitPos, uv );
+       //result = p;
+
+       //result = texture( background, screenPos );
+
+       vec4 color;
+       vec4 p = texture( hitPos, uv );
+
+       if( p.a > 0.5 )
+       {
+          const float opacity = 0.15;
+          float fresnel;
+          vec4 tX = texture( splineTable, p.x );
+          vec4 tY = texture( splineTable, p.y );
+          vec4 tZ = texture( splineTable, p.z );
+          vec3 P = vec3( floor( p.x ), floor( p.y ), floor( p.z ) );
+       
+          //XXX change h0 so we can get rid of these negations...
+          vec3 N = tZ.g0 * ( tY.g0 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h0, tZ.h0 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h0, tZ.h0 )).xyz)  +
+                               tY.g1 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h1, tZ.h0 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h1, tZ.h0 )).xyz)) +
+                     tZ.g1 * ( tY.g0 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h0, tZ.h1 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h0, tZ.h1 )).xyz)  +
+                               tY.g1 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h1, tZ.h1 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h1, tZ.h1 )).xyz)) ;
+       
+          N = normalize( N );
+          const vec3 light = vec3( 200, 500, 200 );
+          vec3 L = normalize( light - p.xyz );
+          vec3 E = normalize( eye - p.xyz );
+          vec3 R = 2.0*dot(L,N)*N - L;
+          color.rgb = max( 0, dot( N, L )) * vec3( 0.6, 0.1, 0.1 );
+          color.a = p.a;
+
+          const vec3 up = vec3( 0, 1, 0 );
+          vec3 B1, B2;
+          vec2 Nproj, pix1, pix2, pix3, pix4, pix5, pix6, pix7, pix8, pix9;
+
+          B1 = normalize( up - dot( up, E )*E );
+          B2 = cross( -E, B1 );
+          Nproj.yx = vec2( dot( N, B1 ), dot( N, B2 ) );
+          const float dispersion = 6.0;
+          const float baseOffset = 50.0;
+          pix1 = pixel - Nproj*(baseOffset-dispersion*4);
+          pix2 = pixel - Nproj*(baseOffset-dispersion*3);
+          pix3 = pixel - Nproj*(baseOffset-dispersion*2);
+          pix4 = pixel - Nproj*(baseOffset-dispersion*1);
+          pix5 = pixel - Nproj*(baseOffset-dispersion*0);
+          pix6 = pixel - Nproj*(baseOffset-dispersion*1);
+          pix7 = pixel - Nproj*(baseOffset-dispersion*2);
+          pix8 = pixel - Nproj*(baseOffset-dispersion*3);
+          pix9 = pixel - Nproj*(baseOffset-dispersion*4);
+
+          vec3 spec1, spec2, spec3, spec4, spec5, spec6, spec7, spec8, spec9;
+          vec3 specBack;
+          spec1 = texture( background, pix1 ).rgb;
+          spec2 = texture( background, pix2 ).rgb;
+          spec3 = texture( background, pix3 ).rgb;
+          spec4 = texture( background, pix4 ).rgb;
+          spec5 = texture( background, pix5 ).rgb;
+          spec6 = texture( background, pix6 ).rgb;
+          spec7 = texture( background, pix7 ).rgb;
+          spec8 = texture( background, pix8 ).rgb;
+          spec9 = texture( background, pix9 ).rgb;
+          specBack = (vec3( 1.60, 0.00, 0.00 ) * spec1 +
+                      vec3( 1.20, 0.25, 0.00 ) * spec2 +
+                      vec3( 0.80, 0.50, 0.00 ) * spec3 +
+                      vec3( 0.40, 0.75, 0.00 ) * spec4 +
+                      vec3( 0.00, 1.00, 0.00 ) * spec5 +
+                      vec3( 0.00, 0.75, 0.40 ) * spec6 +
+                      vec3( 0.00, 0.50, 0.80 ) * spec7 +
+                      vec3( 0.00, 0.25, 1.20 ) * spec8 +
+                      vec3( 0.00, 0.00, 1.60 ) * spec9)/4.0 ;
+                     
+          // color.rgb = opacity * color.rgb +
+          //             (1.0-opacity) * specBack;
+
+           fresnel = 0.75+0.25*max(0, dot(E,N));
+
+           color.rgb = mix( texture( cubeMap, 2.0*dot(E,N)*N-E ).rgb, color.rgb, fresnel );
+
+           color.rgb += 0.5*pow( max( 0, dot( E, R )), 150 );
+
+          // color.rgb *= p.a;
+                 
+       }
+       else
+       {
+          color = vec4(0);
+       }
+
+       result = color;
+
+    ////   vec4 p = texture( hitPos, uv );
+    ////   vec2 oPrev, oCur, oNext;
+    ////   vec3 N;
+    ////
+    ////   oPrev = texture( zOffset, vec2( p.z-1.0, 0 )).rg;
+    ////   oCur  = texture( zOffset, vec2( p.z    , 0 )).rg;
+    ////   oNext = texture( zOffset, vec2( p.z+1.0, 0 )).rg;
+    ////
+    ////   N = vec3(
+    ////
+    ////         texture( levelSet, p.xy + oNext ).a -
+    ////         texture( levelSet, p.xy + oPrev ).a ,
+    ////
+    ////         texture( levelSet, p.xy + oCur + vec2( 1, 0 )).a -
+    ////         texture( levelSet, p.xy + oCur - vec2( 1, 0 )).a ,
+    ////
+    ////         texture( levelSet, p.xy + oCur + vec2( 0, 1 )).a -
+    ////         texture( levelSet, p.xy + oCur - vec2( 0, 1 )).a
+    ////
+    ////         );
+    ////
+    ////   N = normalize( N );
+    ////
+    ////   result = vec4( N, 1 );
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader drawparticles_v
+{
+    layout(location=0) in vec3 particleIndex; /*: POSITION*/
+    layout(location=3) in vec4 color;/*COLOR*/
+               
+    layout(location=0) out vec4 c;/*COLOR*/
+
+    uniform sampler2DRect particlePosition;
+    void main()
+    {
+      vec4 p;
+      p.w = 1.0;
+      p.xyz = texture( particlePosition, particleIndex.xy ).xyz * 0.5;
+
+      gl_Position = MVP * p  - 0.5;
+      c   = color;
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader boundary_f
+{
+    layout(location=0) in vec2 cell; /*TEXCOORD0*/
+    layout(location=4) in vec2 direction;/*TEXCOORD4*/
+    uniform sampler2DRect value;
+    uniform float        flag;
+    layout(location=0) out vec4 result;/*COLOR*/
+    void main()
+    {
+       result = texture( value, cell ) * flag;
+       //result = texture( value, cell + direction ) * flag;
+       //result = vec4( 0, 0, 0, 0 );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader buoyant_f
+{
+    layout(location=0) in vec3 cell0; /*TEXCOORD0*/
+    uniform sampler2DRect temperature;
+    //uniform float ambientTemperature;
+    //uniform vec3 up;
+    //uniform float       timestep;
+    //uniform float alpha = 0.00007;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       //const float alpha = 0.00007;
+       float T = texture( temperature, cell0.xy ).r;
+       vec3 a = timestep * ( alpha * ( T - ambientTemperature ) - 0.00001 ) * up;
+       result = vec4( a, 0 );
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader clear_f
+{
+    uniform vec4 color;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       result = color;
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader confinement_f
+{
+    //uniform float       timestep;
+
+    layout(location=0) in vec2 cell0; /*TEXCOORD0*/
+    layout(location=1) in vec4 cell1; /*TEXCOORD1,  // +/- dx*/
+    layout(location=2) in vec4 cell2; /*TEXCOORD2,  // +/- dy*/
+    layout(location=3) in vec4 cell3; /*TEXCOORD3  // +/- dz*/
+    uniform sampler2DRect vorticity;
+    //uniform float        epsilon;
+    layout(location=0) out vec4 force;/*COLOR*/
+    void main()
+    {
+      vec4 omega = texture( vorticity, cell0 );
+
+      // TODO: don't find length multiple times - do once for the entire texture
+      float omegaL = length( texture( vorticity, cell1.xy ).xyz );// + 0.001;
+      float omegaR = length( texture( vorticity, cell1.zw ).xyz );// + 0.001;
+      float omegaB = length( texture( vorticity, cell2.xy ).xyz );// + 0.001;
+      float omegaT = length( texture( vorticity, cell2.zw ).xyz );// + 0.001;
+      float omegaU = length( texture( vorticity, cell3.xy ).xyz );// + 0.001;
+      float omegaD = length( texture( vorticity, cell3.zw ).xyz );// + 0.001;
+
+      vec3 eta = 0.5 * vec3( omegaR - omegaL,
+                                omegaT - omegaB,
+                                omegaU - omegaD );
+
+      eta = normalize( eta + 0.001 );// + 0.001;
+
+      force.xyz = timestep * epsilon * vec3( eta.y * omega.z - eta.z * omega.y,
+                                              eta.z * omega.x - eta.x * omega.z,
+                                              eta.x * omega.y - eta.y * omega.x );
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader decal_f
+{
+    layout(location=0) in vec2 coords; /*TEXCOORD0*/
+    uniform sampler2DRect tex;
+    layout(location=0) out vec4 result;/*COLOR*/
+    void main()
+    {
+      result = texture( tex, coords )*1.2;
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+//GLSLShader deepclear_f
+//{
+//    uniform vec4 clearColor;
+//    uniform float  clearDepth;
+//    layout(location=0) out vec4 color;/*COLOR*/
+//    void main()
+//    {
+//       color = clearColor;
+//       gl_FragDepth     = clearDepth;
+//    }
+//}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader detectinterface_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    layout(location=7) in vec4 pos; /*TEXCOORD7*/
+    uniform sampler2DRect phi;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       //XXX might need a better way to check if we're on the interface
+       if( abs(texture( phi, uv ).a) < 0.5 )
+       {
+          result = pos;
+       }
+       else
+       {
+          result = vec4( 999999.0, 999999.0, 999999.0, 1 );
+       }
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader distance_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    layout(location=7) in vec3 pos; /*TEXCOORD7*/
+    uniform sampler2DRect nearestPoints;
+    uniform sampler2DRect levelSet;
+    uniform float maxDist;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       const float minUpdateDist = 3.0; //keep the original values within this distance from the surface
+       float newDist;  //updated distance
+       float phi = texture( levelSet, uv ).a; //old distance
+
+       //only update the distance if we're sufficiently far from the surface (to maintain smoothness)
+       if( abs( phi ) > minUpdateDist )
+       newDist = sign( phi ) *
+                       max( -maxDist,
+                       min(  maxDist,
+                             length( texture( nearestPoints, uv ).xyz - pos )));
+       else
+          newDist = phi;
+
+       result = vec4(newDist);
+
+       //XXX better visual for debugging (scaled and unsigned):
+       //result = length( texture( nearestPoints, uv ).xyz - pos )/30.0;
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader divergence_f
+{
+    layout(location=0) in vec3 cell0;/*TEXCOORD0*/
+    layout(location=1) in vec4 cell1;/*TEXCOORD1*/
+    layout(location=2) in vec4 cell2;/*TEXCOORD2*/
+    layout(location=3) in vec4 cell3;/*TEXCOORD3*/
+    uniform sampler2DRect field;
+    layout(location=0) out vec4 divergence;/*COLOR*/
+    void main()
+    {
+      vec4 fieldL = texture( field, cell1.xy );
+      vec4 fieldR = texture( field, cell1.zw );
+      vec4 fieldB = texture( field, cell2.xy );
+      vec4 fieldT = texture( field, cell2.zw );
+      vec4 fieldU = texture( field, cell3.xy );
+      vec4 fieldD = texture( field, cell3.zw );
+
+      divergence = vec4(0.5 * ( ( fieldR.x - fieldL.x ) +
+                           ( fieldT.y - fieldB.y ) +
+                           ( fieldU.z - fieldD.z ) ));
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader dotmul_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect v1;
+    uniform sampler2DRect v2;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       result = vec4(1,1,1,1);
+       //result = fmod( floor(uv.x/16)+floor(uv.y/16), 2 );
+       //result = texture( v1, uv ) * texture( v2, uv );
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader dotreduce_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect tex;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       result = texture( tex, uv ) +
+              texture( tex, uv + vec2( 0, 0 )) +
+              texture( tex, uv + vec2( 0, 1 )) +
+              texture( tex, uv + vec2( 1, 1 )) ;
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader drawparticles_f
+{
+    layout(location=0) in  vec4 color;/*COLOR*/
+    layout(location=0) out vec4 result;
+    void main()
+    {
+      result = color;
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader glass_v
+{
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec3 textureCoords0; /*TEXCOORD0*/
+    layout(location=3) in vec4 color; /*COLOR*/
+    layout(location=2) in vec3 normal; /*NORMAL*/
+              
+    layout(location=1) out vec3 N;/*TEXCOORD1*/
+    layout(location=0) out vec3 Pos; /*TEXCOORD0*/
+    void main()
+    {
+       gl_Position = MVP * position;
+       Pos.xyz = position.xyz;
+       N = normal;
+    }
+}
+GLSLShader glass_f
+{
+    layout(location=0) in vec3 P; /*TEXCOORD0*/
+    layout(location=1) in vec3 N_; /*TEXCOORD1*/
+    //uniform vec3 eye;
+    uniform samplerCube environment;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+        vec3 N = N_;
+        //result = vec4( 1.0, 1.0, 0.0, 0.4 );
+        //result = vec4( abs(normalize( P - eye )), 0.9 );
+        //result = vec4( abs(N), 0.9 );
+
+        const vec3 diffuse = vec3( 1.0, 1.0, 1.0 );
+        const vec3 light = vec3( 100.0, 200.0, 300.0 );
+        vec4 color;
+        vec3 E = normalize( eye - P );
+        vec3 L = normalize( light - P );
+        if( dot( E, N ) < 0 )
+            N = -N;
+        N = normalize( N + 0.02*sin( P*10 ));
+        vec3 R = 2.0*dot( N, E )*N - E;
+        float fresnel = 1.0-max(0, dot(E,N));
+
+        color.rgb = diffuse * max( 0, dot( N, L ));
+        color.rgb += fresnel*vec3(0.9,0.4,0.4)*0.5;//texture( environment, R ).rgb;
+        color.a = fresnel*0.5;
+        //color.rgb *= vec3( 0.9, 0.9, 1.0 );
+
+        result = color;
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader gold_v
+{
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec3 textureCoords0; /*TEXCOORD0*/
+    layout(location=3) in vec4 color; /*COLOR*/
+    layout(location=2) in vec3 normal; /*NORMAL*/
+              
+    layout(location=1) out vec3 N;//   : TEXCOORD1
+    layout(location=0) out vec3 P;//   : TEXCOORD0
+    void main()
+    {
+       gl_Position = MVP * position ;
+       P.xyz = position.xyz;
+       N = normal;
+    }
+}
+GLSLShader gold_f
+{
+    layout(location=0) in vec3 P;/*TEXCOORD0*/
+    layout(location=1) in vec3 N;/*TEXCOORD1*/
+    //uniform vec3 eye;
+    uniform samplerCube environment;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       const vec3 light1 = vec3( 100.0, 200.0, 300.0 );
+       const vec3 light2 = vec3( -80.0, 200.0, -300.0 );
+       vec4 color = vec4(0);
+       vec3 E = normalize( eye - P );
+       vec3 L1 = normalize( light1 - P );
+       vec3 L2 = normalize( light2 - P );
+       vec3 R = 2.0*dot( N, E )*N - E;
+
+       color.rgb += phong( N, L1, E );
+       color.rgb += phong( N, L2, E );
+       color.rgb += 0.5*texture( environment, R ).rgb;
+       color.rgb *= vec3( 0.8, 0.8, 1.0 );
+
+       result = color;
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader gradient_f
+{
+    layout(location=0) in vec3               cell0;/*TEXCOORD0*/
+    layout(location=1) in vec4               cell1;/*TEXCOORD1*/
+    layout(location=2) in vec4               cell2;/*TEXCOORD2*/
+    layout(location=3) in vec4               cell3;/*TEXCOORD3*/
+    uniform sampler2DRect levelSet;
+    layout(location=0) out vec4           gradient; /*COLOR*/
+    void main()
+    {
+      vec4 fieldL = texture( levelSet, cell1.xy );
+      vec4 fieldR = texture( levelSet, cell1.zw );
+      vec4 fieldB = texture( levelSet, cell2.xy );
+      vec4 fieldT = texture( levelSet, cell2.zw );
+      vec4 fieldU = texture( levelSet, cell3.xy );
+      vec4 fieldD = texture( levelSet, cell3.zw );
+
+      gradient.xyz = vec3( fieldR.a - fieldL.a,
+                             fieldT.a - fieldB.a,
+                             fieldU.a - fieldD.a );
+      gradient.xyz = normalize( gradient.xyz );
+
+      gradient.a = texture( levelSet, cell0.xy ).a;
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader gravity_f
+{
+    layout(location=0) in vec3 cell0;/*TEXCOORD0*/
+    //uniform vec3 gravity;
+    uniform sampler2DRect phi;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       vec4 r;
+
+       if( texture( phi, cell0.xy ).a < 1.0 )
+          r = vec4( gravity, 1.0 );
+       else
+          r = vec4( 0.0, 0.0, 0.0, 0.0 );
+
+       result = r;
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader grid_v
+{
+    layout(location=0)  in vec4 position; /*: POSITION*/
+    layout(location=3)  in vec4 color;              /*COLOR*/
+    layout(location=8)  in vec3 textureCoords0;     /*TEXCOORD0*/
+    layout(location=9)  in vec4 textureCoords1;     /*TEXCOORD1*/
+    layout(location=10) in vec4 textureCoords2;     /*TEXCOORD2*/
+    layout(location=11) in vec4 textureCoords3;     /*TEXCOORD3*/
+    layout(location=12) in vec3 boundaryDirection;  /*TEXCOORD4*/
+    //layout(location=13) in ...;                   /*TEXCOORD5*/
+    //layout(location=14) in ...;                   /*TEXCOORD6*/
+    layout(location=15) in vec3 textureCoords7;     /*TEXCOORD7*/
+              
+    layout(location=0) out vec3 texCoords0;  /*TEXCOORD0*/
+    layout(location=1) out vec4 texCoords1;  /*TEXCOORD1*/
+    layout(location=2) out vec4 texCoords2;  /*TEXCOORD2*/
+    layout(location=3) out vec4 texCoords3;  /*TEXCOORD3*/
+    layout(location=4) out vec3 direction;   /*TEXCOORD4*/
+    layout(location=6) out vec4 c;           /*COLOR*/
+    layout(location=7) out vec3 texCoords7;  /*TEXCOORD7*/
+    void main()
+    {
+       gl_Position = MVP * position ;
+
+       texCoords0 = textureCoords0;
+       texCoords1 = textureCoords1;
+       texCoords2 = textureCoords2;
+       texCoords3 = textureCoords3;
+       texCoords7 = textureCoords7;
+       direction = boundaryDirection;
+
+       c = color;
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader inject_blend_f
+{
+    layout(location=0) in vec2        cell0;/*TEXCOORD0*/
+    layout(location=7) in vec3        cell; /*TEXCOORD7 cell coordinates*/
+    uniform sampler2DRect phi;
+    //uniform vec3 center;
+    //uniform float  radius;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+    #ifdef POUR_LIQUID
+       float dist = length( cell - center ) - radius;
+
+       if( dist > 2 )
+          dist = 0;
+      result = dist.xxxx;
+    #else
+
+       // this is a magical hack which prevents the water
+       // from "falling through the floor" when using enormous
+       // timesteps.  basically, add a little bit of the original
+       // (flat water) level set function *only inside the water*
+       // every frame
+
+       const float amount = 0.005;
+       const float waterHeight = 120.0;
+       const float collar = -60.0; //distance *above* the water to reinitialize
+
+       float p = texture( phi, cell0.xy ).a;
+       float d = cell.y - waterHeight;
+
+       if( d < collar )
+       {
+          p = p*(1.0-amount) + d*amount;
+       }
+
+       result = vec4(p);
+
+       //if( d > collar ) d = 0.0;
+       //result = amount * d;
+    #endif
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader inject_f
+{
+    layout(location=7) in vec3        cell;//TEXCOORD7 cell coordinates
+    //uniform vec3 center;
+    //uniform float  radius;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+    #ifdef POUR_LIQUID
+       float dist = length( cell - center ) - radius;
+
+       if( dist > 2 )
+          dist = 0;
+      result = dist;
+    #else
+
+       // this is a magical hack which prevents the water
+       // from "falling through the floor" when using enormous
+       // timesteps.  basically, add a little bit of the original
+       // (flat water) level set function *only inside the water*
+       // every frame
+
+       const float amount = 0.2;
+       const float waterHeight = 25.0;
+       const float collar = 1.0; //distance *above* the water to reinitialize
+
+       float d = cell.y - waterHeight;
+       if( d > collar ) d = 0.0;
+        result = vec4(amount * d);
+    #endif
+    }
+
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader jacobi_f
+{
+    layout(location=0) in vec3               cell0; //TEXCOORD0
+    layout(location=1) in vec4               cell1; //TEXCOORD1
+    layout(location=2) in vec4               cell2; //TEXCOORD2
+    layout(location=3) in vec4               cell3; //TEXCOORD3
+    //uniform float        alpha;
+    //uniform float        rBeta;
+    uniform sampler2DRect x;
+    uniform sampler2DRect b;
+    layout(location=0) out vec4           result;/*COLOR*/
+    void main()
+    {
+      float xL = texture( x, cell1.xy ).r;
+      float xR = texture( x, cell1.zw ).r;
+      float xB = texture( x, cell2.xy ).r;
+      float xT = texture( x, cell2.zw ).r;
+      float xU = texture( x, cell3.xy ).r;
+      float xD = texture( x, cell3.zw ).r;
+
+      float bC = texture( b, cell0.xy ).r;
+
+      result = vec4(( xL + xR + xB + xT + xU + xD + /*alpha*/-1.0 * bC ) * 1.0/6.0/*rBeta*/);
+    }
+}
+
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader laplacian_f
+{
+    //assuming grid spacing is 1
+
+    layout(location=0) in vec3 cell0; /*TEXCOORD0*/
+    layout(location=1) in vec4 cell1; /*TEXCOORD1*/
+    layout(location=2) in vec4 cell2; /*TEXCOORD2*/
+    layout(location=3) in vec4 cell3; /*TEXCOORD3*/
+    uniform sampler2DRect x;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       result = 6.0 * texture( x, cell0.xy ) -
+                    texture( x, cell1.xy ) -
+                    texture( x, cell1.zw ) -
+                    texture( x, cell2.xy ) -
+                    texture( x, cell2.zw ) -
+                    texture( x, cell3.xy ) -
+                    texture( x, cell3.zw ) ;
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader lighting_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect tex;
+    uniform float       kappa;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+      vec2 uv2 = gl_FragCoord.xy; /*WPOS*/
+      vec4 t1 = texture( tex, uv );
+      vec4 t2 = texture( tex, uv2 );
+
+      float densityScale = 0.1;
+
+      // don't make the smoke too dense:
+      float rho = densityScale * t2.r;
+      float tRayLast = t1.b;
+
+      rho = min( max( 0, rho ), 1 );
+
+      // this line looks neat for self-shadowing
+      float tVox = 1 - rho;
+
+      // this line looks neater
+      //float tVox = 1.0 - exp(-densityScale/(rho + 0.0001));
+
+      float tRay = tRayLast * tVox;
+      float lVox = tVox * tRayLast;
+
+      result = vec4( 0, lVox, tRay, 0 );
+
+     // vec4 t = texture( tex, uv );
+     // float rho = t.r;
+     // float K   = t.g;
+
+     // result = vec4( 0, rho * kappa + K, 0, 0 );
+     // //result = t.rrrr;
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader lscombine_f
+{
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect phi;
+    uniform sampler2DRect phiMin;
+    uniform sampler2DRect phiMax;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       float r = texture( phi, uv ).a;
+       float min =  texture( phiMin, uv ).a;
+       float max =  texture( phiMax, uv ).a;
+
+       if( abs( min ) < abs( r ) )
+       {
+          if( abs( min ) < abs( max ) )
+             r = min;
+          else
+             r = max;
+       }
+
+       result = vec4(r);
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader lsraycast_f
+{
+    #define USING_G80
+
+    layout(location=0) in vec3 pos;/*TEXCOORD0*/
+    uniform sampler2DRect tex;
+    uniform sampler2DRect depth;
+    uniform sampler2DRect zOffset;
+    //uniform vec3      eye;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       const float rho = 0.0; //isosurface value
+       int nSamples = int(abs(texture(depth, gl_FragCoord.xy/*wpos*/).r));
+       vec3 O = pos;
+       vec3 D = normalize( pos - eye );
+       vec4 color = vec4( 0, 0, 1, 0 );
+       float sample;
+       vec3 xFar, xNear, xNew;
+       float fNear, fFar, fNew;
+       float dist = 0.0;
+       float hit;
+
+       for( int i=0; i<nSamples; i++ )
+       //while( dist < nSamples )
+       {
+          sample = texRECT3D( tex, zOffset, O ).a;
+
+          if( sample < rho )
+          {
+             xNear = O - D;
+             xFar = O;
+
+             fNear = texRECT3D( tex, zOffset, xNear ).a;
+             fFar = sample;
+             break;
+          }
+
+          //if( sample - rho < 0.1 )
+          //{
+          //   O += D/8.0;
+          //   dist += 1.0/8.0;
+          //}
+          //else
+          //{
+             O += D;
+             //dist += 1.0;
+          //}
+       }
+
+       for( int i=0; i<3; i++ )
+       {
+       xNew = xNear + (xFar-xNear)*(rho-fNear)/(fFar-fNear);
+       fNew = texRECT3D( tex, zOffset, xNew ).a;
+       if( fNew > rho )
+          xNear = xNew;
+       else
+          xFar = xNew;
+       }
+       xNew = xNear + (xFar-xNear)*(rho-fNear)/(fFar-fNear);
+
+       //XXX unnecessary hack to get the background to not flash
+       //XXX STILL SHADING BACKGROUND PIXELS!
+       //fNew = texRECT3D( tex, zOffset, xNew ).a;
+    #ifdef USING_G80
+       if( abs(fNew) < 32.0 )// && ( D.x < 0 || xNew.x < 125) )
+    #else
+       if( abs(fNew) < 32.0 )
+    #endif
+          hit = 1;
+       else
+          hit = 0;
+
+       result = vec4( xNew, hit );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader march_f
+{
+    layout(location=0) in vec3               cell0;// : TEXCOORD0,
+    layout(location=1) in vec4               cell1;// : TEXCOORD1,
+    layout(location=2) in vec4               cell2;// : TEXCOORD2,
+    layout(location=3) in vec4               cell3;// : TEXCOORD3,
+    layout(location=7) in vec3               pos;//   : TEXCOORD7,
+    uniform sampler2DRect nearestPoints;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       vec3 D, point, closest;
+       float dist, minDist;
+
+       //get closest points to each cell in the immediate neighborhood
+       //and keep the nearest one
+
+       //XXX can pack D and dist into a single vec4, significantly
+       //XXX reducing # of instructions
+
+       point = texture( nearestPoints, cell0.xy ).rgb;
+       D = pos - point;
+       minDist = dot( D, D );
+       closest = point;
+
+       point = texture( nearestPoints, cell1.xy ).rgb;
+       D = pos - point;
+       dist = dot( D, D );
+       if( dist < minDist )
+       {
+          minDist = dist;
+          closest = point;
+       }
+
+       point = texture( nearestPoints, cell1.zw ).rgb;
+       D = pos - point;
+       dist = dot( D, D );
+       if( dist < minDist )
+       {
+          minDist = dist;
+          closest = point;
+       }
+
+       point = texture( nearestPoints, cell2.xy ).rgb;
+       D = pos - point;
+       dist = dot( D, D );
+       if( dist < minDist )
+       {
+          minDist = dist;
+          closest = point;
+       }
+
+       point = texture( nearestPoints, cell2.zw ).rgb;
+       D = pos - point;
+       dist = dot( D, D );
+       if( dist < minDist )
+       {
+          minDist = dist;
+          closest = point;
+       }
+
+       point = texture( nearestPoints, cell3.xy ).rgb;
+       D = pos - point;
+       dist = dot( D, D );
+       if( dist < minDist )
+       {
+          minDist = dist;
+          closest = point;
+       }
+
+       point = texture( nearestPoints, cell3.zw ).rgb;
+       D = pos - point;
+       dist = dot( D, D );
+       if( dist < minDist )
+       {
+          minDist = dist;
+          closest = point;
+       }
+
+       result = vec4( closest, 1 );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader passthrough_v
+{
+    layout(location=0) in vec4 position;/*POSITION*/
+    layout(location=8) in vec3 textureCoords0;/*TEXCOORD0*/
+    layout(location=3) in vec4 color;/*COLOR*/
+
+    layout(location=0) out vec3 texCoords0;// : TEXCOORD0
+    layout(location=1) out vec4 col;//        : COLOR
+    void main()
+    {
+       gl_Position = MVP * position ;
+       texCoords0 = textureCoords0;
+       col = color;
+    }
+}
+GLSLShader passthrough_f
+{
+    layout(location=0) in vec2              coords;// : TEXCOORD0
+    uniform sampler2DRect tex;
+    layout(location=0) out vec4          result;// : COLOR
+    void main()
+    {
+      result = texture( tex, coords );
+    }
+}
+GLSLShader passthroughabs_f
+{
+    layout(location=0) in vec4               coords;// : TEXCOORD0
+    uniform sampler2DRect tex;
+    layout(location=0) out vec4           result;// : COLOR
+    void main()
+    {
+      result = texture( tex, coords.xy );
+
+      /// float phi = texture( tex, coords.xy ).a/64.0;
+
+      /// if( phi < 0 )
+      ///    result = -phi*vec4( 0, 0, 1, 1 );
+      /// else
+      ///    result = phi*vec4( 1, 0, 0, 1 );
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader pointtexture_v
+{
+    layout(location=0) in vec4 position;/*POSITION*/
+    layout(location=8) in  vec2 textureCoords;/*TEXCOORD0*/
+              
+    layout(location=0) out vec4 color;/*COLOR*/
+
+    uniform sampler2DRect colorSampler;
+    void main()
+    {
+       gl_Position = MVP * position ;
+       color = texture( colorSampler, textureCoords );
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader project_f
+{
+    //uniform float       modulate = 1.0;
+    uniform sampler2DRect intermediateVelocity;
+    uniform sampler2DRect pressure;
+
+    layout(location=0) in vec4               cell0;// : TEXCOORD0,
+    layout(location=1) in vec4               cell1;// : TEXCOORD1,
+    layout(location=2) in vec4               cell2;// : TEXCOORD2,
+    layout(location=3) in vec4               cell3;// : TEXCOORD3,
+    layout(location=0) out vec4           velocity;// : COLOR
+    void main()
+    {
+      float pL = texture( pressure, cell1.xy ).r;
+      float pR = texture( pressure, cell1.zw ).r;
+      float pB = texture( pressure, cell2.xy ).r;
+      float pT = texture( pressure, cell2.zw ).r;
+      float pU = texture( pressure, cell3.xy ).r;
+      float pD = texture( pressure, cell3.zw ).r;
+
+      velocity.xyz = texture( intermediateVelocity, cell0.xy ).xyz -
+                     0.5*modulate*vec3( pR - pL, pT - pB, pU - pD );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader raycast_v
+{
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec3 texCoords;// : TEXCOORD0
+
+    layout(location=0) out vec3 pos3d; /*TEXCOORD0*/
+    void main()
+    {
+       gl_Position = MVP * position ;
+       pos3d = texCoords;
+    }
+}
+GLSLShader raycast_f
+{
+    layout(location=0) in vec3              pos;//  : TEXCOORD0
+    uniform sampler3D   tex;
+    uniform sampler2DRect depth;
+    //uniform vec3      eye;
+    //uniform float       maxGridRes;
+    //uniform float       stepSize;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+      int nSamples = int(abs(texture(depth, gl_FragCoord.xy/*wpos*/).r) * maxGridRes);
+
+      vec3 O = pos;
+      vec3 D = normalize( pos - eye ) * stepSize;
+      vec4 color = vec4(0.0);
+      vec4 sample;
+      float alpha;
+
+      O += nSamples * D;
+
+      for( int i=0; i<nSamples; i++ )
+      {
+        sample = texture( tex, O );
+        //alpha = sample.r;
+        //color = (1 - alpha ) * color + alpha * ( sample.gggg );
+
+        alpha = (sample.r + sample.g + sample.b) * 0.3333;
+        color = (1 - alpha ) * color + alpha * sample;
+
+
+        O -= D;
+      }
+
+      result = color;
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+ GLSLShader refract_v
+ {
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec3 textureCoords0; /*TEXCOORD0*/
+    layout(location=3) in vec4 color;//          : COLOR
+    layout(location=2) in vec3 normal; /*NORMAL*/
+              
+    layout(location=1) out vec3 N;//   : TEXCOORD1
+    layout(location=0) out vec3 P;//   : TEXCOORD0
+    void main()
+    {
+       gl_Position = MVP * position ;
+       P.xyz = position.xyz;
+       N = normal;
+    }
+}
+GLSLShader refract_f
+{
+    layout(location=0) in vec3 P;// : TEXCOORD0,
+    layout(location=1) in vec3 N_;// : TEXCOORD1,
+    //uniform vec3 eye;
+    uniform samplerCube environment;
+    uniform sampler2DRect background;
+    //uniform float refract = -1.0;
+    //uniform float AA;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+        vec3 N = N_;
+        vec2 pixel = gl_FragCoord.xy; /*WPOS*/
+        float y = 0.5 - abs( P.y );
+        float refractivity = min( 1, 9000000*pow( y, 15 ));
+
+        const vec3 diffuse = vec3( 0.1, 0.5, 0.1 );
+        const vec3 light = vec3( -100.0, 200.0, -300.0 );
+        vec4 color;
+        vec3 E = normalize( eye - P );
+        vec3 L = normalize( light - P );
+        if( dot( E, N ) < 0 )
+            N = -N;
+        //N = normalize( N + 0.13*sin( P*200 ));
+        N += 0.2*sin(length(P)*400) * refractivity;
+        N = normalize( N );
+        vec3 R = 2.0*dot( N, E )*N - E;
+
+        color.rgb = phong( N, L, E );
+        color.rgb += 0.5*texture( environment, R ).rgb;
+        color.a = 0.2;
+        color.rgb *= vec3( 0.8, 0.8, 1.0 );
+
+        if( refract > 0 )
+        {
+          color.rgb = color.a        * color.rgb +
+                      (1.0f-color.a) * texture( background, pixel*AA + dot(E,N)*N.xy*40 ).rgb;
+        }
+
+       result = color;
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader rotate_f
+{
+    layout(location=7) in vec3 pos;// : TEXCOORD7
+    //uniform vec3 center;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       vec2 r = ( pos.xy - center.xy );
+       result = vec4( -r.y, r.x, 0, 1 );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader settle_f
+{
+    layout(location=7) in  vec3 cell;// : TEXCOORD7
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       vec4 color;
+
+       color = vec4(cell.y - 32.0);
+
+       result = color;
+
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader shadow_v
+{
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec3 texCoords;// : TEXCOORD0,
+    layout(location=3) in vec4 color;//     : COLOR,
+    layout(location=2) in vec3 normal;//    : NORMAL,
+
+    layout(location=0) out vec3 P;//   : TEXCOORD0
+    layout(location=1) out vec3 N;//   : TEXCOORD1
+    layout(location=2) out vec2 uv;//  : TEXCOORD2
+    void main()
+    {
+       gl_Position = MVP * position ;
+       P.xyz = position.xyz;
+       N = normal;
+       uv = texCoords.xy;
+    }
+}
+GLSLShader shadow_f
+{
+    layout(location=0) in vec3 P;// : TEXCOORD0,
+    layout(location=1) in vec3 N;// : TEXCOORD1,
+    layout(location=2) in vec2 uv;// : TEXCOORD2,
+    uniform sampler2D shadow;
+    uniform sampler2DRect fire;
+    uniform sampler1D firecolors;
+    uniform sampler2DRect zOffset;
+    uniform sampler2D noise;
+    //uniform vec3 eye;
+    //uniform vec3 gridSize;
+    //uniform vec4 bgndColor;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       vec2 zOff;
+       vec3 lightPos;
+       vec4 lightColor;
+       vec3 diffuse = vec3(0.2,0.2,0.2);
+       float f = 0;
+       vec3 L;
+       float m;
+       vec2 texCoord;
+
+       for( int i=0; i<32; i++ )
+       {
+          zOff = texture( zOffset, vec2( sampleZ[i]*gridSize.z, 0.5 ) ).xy;  // e.g., +z.x, +z.y
+          lightPos = vec3( sampleX[i]-0.5, sampleY[i]-0.5, sampleZ[i]-0.5 )*0.5;
+          texCoord = vec2( sampleX[i]*gridSize.x, sampleY[i]*gridSize.y )+zOff;
+          lightColor = texture( fire, texCoord );
+          lightColor += texture( fire, texCoord + vec2( 4, 4 ) );
+          lightColor += texture( fire, texCoord + vec2(-4, 4 ) );
+          lightColor += texture( fire, texCoord + vec2(-4,-4 ) );
+          lightColor += texture( fire, texCoord + vec2( 4,-4 ) );
+          lightColor += texture( fire, texCoord + vec2( 3, 0 ) );
+          lightColor += texture( fire, texCoord + vec2(-3, 0 ) );
+          lightColor += texture( fire, texCoord + vec2( 0, 3 ) );
+          lightColor += texture( fire, texCoord + vec2( 0,-3 ) );
+          lightColor *= 0.11;
+          lightColor = texture( firecolors, lightColor.g );
+          lightColor.rgb *= 1.0-lightColor.a;
+          L = lightPos - P;
+          m = length( L );
+          L = L/m;
+          float ndl = max(0,dot( N, L ));/// (m*m);
+          diffuse += (lightColor.rgb * ndl);
+          f += ndl;
+       }
+       diffuse *= 0.425;
+       f /= 8.0;
+       vec4 ambient = bgndColor;
+
+       //result = texture( fire, uv * gridSize.xy);
+       //result = texture( firecolors, uv.x );
+       result = (1.0-f)*ambient + vec4( diffuse.rgb * texture( noise, P.xz*0.7).r*vec3( 0.13, 0.15, 0.13 )*3.0, 1 );
+
+    // ---- original ----
+       //result = max( 0, 3.0 - length( P.xz )) * tex2D( noise, P.xz*0.7).r*vec4( 0.13, 0.15, 0.13, 0.0 )*1.5;
+    /////   result = tex2D( shadow, uv ) * 0.15 * max( 0, 3.0 - length( P.xz )) -
+    /////          tex2D( noise, P.xz ).r*vec4( 0.2, 0.2, 0.2, 0.0 );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader slicecast_f
+{
+    layout(location=0) in vec3              pos;//  : TEXCOORD0
+    uniform sampler2DRect tex;
+    uniform sampler2DRect depth;
+    uniform sampler2DRect zOffset;
+    uniform vec3      eye;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       int nSamples = int(abs(texture(depth, gl_FragCoord.xy/*wpos*/).r));
+
+       vec3 O = pos;
+       vec3 D = normalize( pos - eye );
+       vec4 color = vec4(0);
+       vec4 sample;
+       //float alpha = 0.0;
+       float a = 0.0;
+       float z1, z2, t;
+       vec4 offset;
+
+       //render back to front for proper blending
+       O += nSamples * D;
+
+       for( int i=0; i<nSamples; i++ )
+       {
+        //  //look up 3D ray origin in 2D slice texture -------
+        //  //XXX if we arranged slices linearly we could compute
+        //  //XXX the slice offset with a single divide instead of a
+        //  //XXX texture fetch, but wouldn't be able to use a grid
+        //  //XXX larger than 64^3 since 64^2 = 4096 is the max
+        //  //XXX texture width.
+
+          //for axis-aligned rendering, don't do trilinear interpolation
+          //(uncomment this, and comment out the block below)
+        //  offset1 = texture( zOffset, vec2( O.z, 0 )).rg;
+        //  sample = texture( tex, offset1 + O.xy );
+
+          //do a bunch of extra math to get trilinear interpolation...
+          z1 = floor( O.z );
+          z2 = O.z+1;
+          t = O.z-z1;
+          offset = texture( zOffset, vec2( z1, 0 ));
+
+          sample = texture( tex, offset.xy + O.xy ) * (1.0-t) +
+                   texture( tex, offset.zw + O.xy ) * t;
+
+          //alpha = (sample.r + sample.g + sample.b) * 0.3333;
+          alpha = sample.a;
+          a += alpha;
+          color = (1 - alpha ) * color + alpha * sample;
+
+
+          O -= D;
+       }
+
+       //result = texture( zOffset, vec2( O.y*64.0, 0.0 ) ).g/512.0;
+       color.a = a;
+       result = color;
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader updateradii_f
+{
+    layout(location=0) in vec2              particleIndex;// : TEXCOORD0,
+    uniform sampler2DRect particles;
+    uniform sampler2DRect levelSet;
+    uniform sampler2DRect zOffset;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       //get particle center
+
+       //translate particle's location into corresponding texture coordinate
+
+       //get level set value at particle center
+
+       //if particle was just updated (check or read cached update criteria here):
+
+            //clamp to min/max radius
+
+            //write unmodified particle center and new radius
+
+       //otherwise
+
+            //write unmodified particle center and unmodified radius
+
+       result = vec4(0);
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader velvet_v
+{
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec3 textureCoords0; /*TEXCOORD0*/
+    layout(location=3) in vec4 color;//          : COLOR,
+    layout(location=2) in vec3 normal; /*NORMAL*/
+              
+    layout(location=1) out vec3 N;//   : TEXCOORD1
+    layout(location=0) out vec3 P;//   : TEXCOORD0
+    void main()
+    {
+       gl_Position = MVP * position ;
+       P.xyz = position.xyz;
+       N = normal;
+    }
+}
+GLSLShader velvet_f
+{
+    layout(location=0) in vec3 P;// : TEXCOORD0
+    layout(location=2) in vec3 N;// : TEXCOORD1
+    //uniform vec3 eye;
+    uniform sampler2D velvet;
+
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       //Velvet shader stolen from Steven Westin's Renderman shader
+
+       vec4 color;
+       const vec3 diffuse = vec3( 1.0, 0.2, 0.2 );
+       const vec3 light = vec3( 100.0, 200.0, -100.0 );
+       vec3 E = normalize( eye - P );
+       vec3 L = normalize( light - P );
+       vec3 R = 2.0*dot( N, E )*N - E;
+       vec3 H = (E+L)*0.5;
+       float cosine, sine; // Components for horizon scatter
+       vec3 shiny;      // Non-diffuse components
+
+       cosine = max( dot( L, E ), 0 );
+       shiny  = vec3(pow( cosine, 1.0/roughness ) * backscatter);
+       cosine = max( dot( N, E ), 0 );
+       sine = sqrt( 1.0 - cosine*cosine );
+       shiny += pow( sine, edginess ) * dot( L, N );
+       shiny *= sheen;
+       shiny *= texture( velvet, P.xz*frequency ).xyz * magnitude + (1.0-magnitude);
+
+       color.rgb = diffuse * Kd * max( 0, dot( N, L )) + shiny;
+       color.a = 1;
+
+       result = color;
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader volumedepth_v
+{
+    layout(location=0) in vec4 position; /*POSITION*/
+    layout(location=8) in vec3 texCoords;// : TEXCOORD0,
+
+    layout(location=0) out float  depth;// : TEXCOORD0,
+
+    //uniform float maxGridRes;
+    void main()
+    {
+       gl_Position = MV * position ;
+       depth = gl_Position.z*maxGridRes;
+       gl_Position = Proj * gl_Position ;
+    }
+}
+GLSLShader volumedepth_f
+{
+    layout(location=0) in float depth;// TEXCOORD0
+    layout(location=0) out vec4 result;
+    void main()
+    {
+      result = vec4(depth);
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader vorticity_f
+{
+    layout(location=1) in vec4               cell1;// : TEXCOORD1,  // +/- dx
+    layout(location=2) in vec4               cell2;// : TEXCOORD2,  // +/- dy
+    layout(location=3) in vec4               cell3;// : TEXCOORD3,  // +/- dz
+    uniform sampler2DRect field;
+    layout(location=0) out vec4           vorticity;// COLOR
+    void main()
+    {
+      vec4 L = texture( field, cell1.xy );
+      vec4 R = texture( field, cell1.zw );
+      vec4 B = texture( field, cell2.xy );
+      vec4 T = texture( field, cell2.zw );
+      vec4 U = texture( field, cell3.xy );
+      vec4 D = texture( field, cell3.zw );
+
+      vorticity.xyz = 0.5 * vec3( (( T.z - B.z ) - ( U.y - D.y )) ,
+                                   (( U.x - D.x ) - ( R.z - L.z )) ,
+                                   (( R.y - L.y ) - ( T.x - B.x )) );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader watershade_f
+{
+    #define h0 r
+    #define h1 g
+    #define g0 b
+    #define g1 a
+
+    layout(location=0) in vec2 uv; /*TEXCOORD0*/
+    uniform sampler2DRect hitPos;
+    uniform sampler2DRect levelSet;
+    uniform sampler2DRect zOffset;
+    uniform sampler1D splineTable;
+    uniform samplerCube cubeMap;
+    uniform sampler2DRect background;
+    //uniform vec3 eye;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+        vec2 pixel = gl_FragCoord.xy; /*WPOS*/
+       //vec4 p = texture( hitPos, uv );
+       //result = p;
+
+       //result = texture( background, screenPos );
+
+       vec4 color;
+       vec4 p = texture( hitPos, uv );
+
+       if( p.a > 0.5 )
+       {
+          const float opacity = 0.15;
+          float fresnel;
+          vec4 tX = texture( splineTable, p.x );
+          vec4 tY = texture( splineTable, p.y );
+          vec4 tZ = texture( splineTable, p.z );
+          vec3 P = vec3( floor( p.x ), floor( p.y ), floor( p.z ) );
+       
+          //XXX change h0 so we can get rid of these negations...
+          vec3 N = tZ.g0 * ( tY.g0 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h0, tZ.h0 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h0, tZ.h0 )).xyz)  +
+                               tY.g1 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h1, tZ.h0 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h1, tZ.h0 )).xyz)) +
+                     tZ.g1 * ( tY.g0 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h0, tZ.h1 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h0, tZ.h1 )).xyz)  +
+                               tY.g1 * ( tX.g0 * texRECT3D( levelSet, zOffset, P + vec3( tX.h0, tY.h1, tZ.h1 )).xyz   +
+                                         tX.g1 * texRECT3D( levelSet, zOffset, P + vec3( tX.h1, tY.h1, tZ.h1 )).xyz)) ;
+       
+          N = normalize( N );
+          const vec3 light = vec3( 200, 500, 200 );
+          vec3 L = normalize( light - p.xyz );
+          vec3 E = normalize( eye - p.xyz );
+          vec3 R = 2.0*dot(L,N)*N - L;
+          color.rgb = max( 0, dot( N, L )) * vec3( 0.3, 0.3, 0.3 );
+          color.a = p.a;
+
+          const vec3 up = vec3( 0, 1, 0 );
+          vec3 B1, B2;
+          vec2 Nproj, pix1, pix2, pix3, pix4, pix5, pix6, pix7, pix8, pix9;
+
+          B1 = normalize( up - dot( up, E )*E );
+          B2 = cross( -E, B1 );
+          Nproj.yx = vec2( dot( N, B1 ), dot( N, B2 ) );
+          const float dispersion = 6.0;
+          const float baseOffset = 50.0;
+          pix1 = pixel - Nproj*(baseOffset-dispersion*4);
+          pix2 = pixel - Nproj*(baseOffset-dispersion*3);
+          pix3 = pixel - Nproj*(baseOffset-dispersion*2);
+          pix4 = pixel - Nproj*(baseOffset-dispersion*1);
+          pix5 = pixel - Nproj*(baseOffset-dispersion*0);
+          pix6 = pixel - Nproj*(baseOffset-dispersion*1);
+          pix7 = pixel - Nproj*(baseOffset-dispersion*2);
+          pix8 = pixel - Nproj*(baseOffset-dispersion*3);
+          pix9 = pixel - Nproj*(baseOffset-dispersion*4);
+
+          vec3 spec1, spec2, spec3, spec4, spec5, spec6, spec7, spec8, spec9;
+          vec3 specBack;
+          spec1 = texture( background, pix1 ).rgb;
+          spec2 = texture( background, pix2 ).rgb;
+          spec3 = texture( background, pix3 ).rgb;
+          spec4 = texture( background, pix4 ).rgb;
+          spec5 = texture( background, pix5 ).rgb;
+          spec6 = texture( background, pix6 ).rgb;
+          spec7 = texture( background, pix7 ).rgb;
+          spec8 = texture( background, pix8 ).rgb;
+          spec9 = texture( background, pix9 ).rgb;
+          specBack = (vec3( 1.60, 0.00, 0.00 ) * spec1 +
+                      vec3( 1.20, 0.25, 0.00 ) * spec2 +
+                      vec3( 0.80, 0.50, 0.00 ) * spec3 +
+                      vec3( 0.40, 0.75, 0.00 ) * spec4 +
+                      vec3( 0.00, 1.00, 0.00 ) * spec5 +
+                      vec3( 0.00, 0.75, 0.40 ) * spec6 +
+                      vec3( 0.00, 0.50, 0.80 ) * spec7 +
+                      vec3( 0.00, 0.25, 1.20 ) * spec8 +
+                      vec3( 0.00, 0.00, 1.60 ) * spec9)/4.0 ;
+                     
+          color.rgb = opacity * color.rgb +
+                      (1.0-opacity) * specBack;
+
+          fresnel = max(0, dot(E,N));
+
+          color.rgb = mix( texture( cubeMap, 2.0*dot(E,N)*N-E ).rgb, color.rgb, fresnel );
+
+          color.rgb += 0.5*pow( max( 0, dot( E, R )), 150 );
+
+          color.rgb *= p.a;
+                 
+       }
+       else
+       {
+          color = vec4(0);
+       }
+
+       result = color;
+
+    ////   vec4 p = texture( hitPos, uv );
+    ////   vec2 oPrev, oCur, oNext;
+    ////   vec3 N;
+    ////
+    ////   oPrev = texture( zOffset, vec2( p.z-1.0, 0 )).rg;
+    ////   oCur  = texture( zOffset, vec2( p.z    , 0 )).rg;
+    ////   oNext = texture( zOffset, vec2( p.z+1.0, 0 )).rg;
+    ////
+    ////   N = vec3(
+    ////
+    ////         texture( levelSet, p.xy + oNext ).a -
+    ////         texture( levelSet, p.xy + oPrev ).a ,
+    ////
+    ////         texture( levelSet, p.xy + oCur + vec2( 1, 0 )).a -
+    ////         texture( levelSet, p.xy + oCur - vec2( 1, 0 )).a ,
+    ////
+    ////         texture( levelSet, p.xy + oCur + vec2( 0, 1 )).a -
+    ////         texture( levelSet, p.xy + oCur - vec2( 0, 1 )).a
+    ////
+    ////         );
+    ////
+    ////   N = normalize( N );
+    ////
+    ////   result = vec4( N, 1 );
+    }
+
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader zero_f
+{
+    layout(location=0) out vec4 result;
+    void main()
+    {
+      result = vec4(0);
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader errorcorrect_v
+{
+    layout(location=0) in vec4 position;/*POSITION*/
+    layout(location=8) in vec3 textureCoords0;/*TEXCOORD0*/
+    layout(location=3) in vec4 color;/*COLOR*/
+              
+    layout(location=0) out float  R;/*TEXCOORD0*/
+    layout(location=1) out vec4 col;/*COLOR*/
+    void main()
+    {
+       //give the point a homogeneous coordinate of 1, since normally it
+       //stores the signed radius of the particle
+       gl_Position = MVP * vec4( position.xyz, 1 );
+       R = position.a;
+       col = color;
+    }
+}
+GLSLShader errorcorrect_f
+{
+    layout(location=0) in  float r;// TEXCOORD0
+    layout(location=0) out vec4 result;
+    void main()
+    {
+       //don't use point sprites because we *don't* want the fragments'
+       //texture coordinates to move smoothly w/ point center (we want
+       //the coordinate of the grid cell's center, since that's where
+       //the level set value is stored).  Instead, use the location
+       //of the fragment, which... nope.  Nevermind.  We don't have Z!
+
+       //compute distance from fragment's position to particle center
+
+       //for the moment, approximate level set function w/
+       //particle's radius (BAD!)
+
+       result = vec4(r);
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader firecast_f
+{
+    // Note: version modified by NVIDIA - Tristan Lorach (tlorach@nvidia.com)
+
+    layout(location=0) in vec3 pos;//  : TEXCOORD0,
+    uniform sampler2DRect tex;
+    uniform sampler2DRect depth;
+    uniform sampler2DRect zOffset;
+    uniform sampler1D   colors;
+    //uniform vec4      smokeColor;
+    //uniform vec3      eye;
+    //uniform float   mode;
+    //uniform vec4 fact;
+    //uniform vec4 fact2;
+    //uniform vec3 gridSz;
+    layout(location=0) out vec4 result;
+    void main()
+    {
+    #define blendAddFact fact.x
+    #define alphaFact0 (fact.y*0.051)
+    #define alphaFact1 (fact.y*0.5)
+    #define sampleAlphaFact fact.z
+    #define tex1DFact fact.w
+    #define smokeTransp fact2.x
+
+       int nSamples = int(abs(texture(depth, gl_FragCoord.xy/*wpos*/).r));
+
+       vec3 O = pos;
+       vec3 D = normalize( pos - eye );
+       vec4 color = vec4(0.0);
+       vec4 sample;
+       float alpha, a = 0.0;
+       float z1, z2, t;
+       vec4 offset;
+
+       //render back to front for proper blending
+       O += nSamples * D;
+
+       for( int i=0; i<nSamples; i++ )
+       {
+        //  //look up 3D ray origin in 2D slice texture -------
+        //  //XXX if we arranged slices linearly we could compute
+        //  //XXX the slice offset with a single divide instead of a
+        //  //XXX texture fetch, but wouldn't be able to use a grid
+        //  //XXX larger than 64^3 since 64^2 = 4096 is the max
+        //  //XXX texture width.
+
+        //for axis-aligned rendering, don't do trilinear interpolation
+        #if 0
+        offset = texture( zOffset, vec2( O.z, 0 ));
+        sample = texture( tex, offset.xy + O.xy );
+        #else
+        //do a bunch of extra math to get trilinear interpolation...
+        z1 = floor( O.z );
+        z2 = O.z+1;
+        t =  O.z-z1;
+        offset = texture( zOffset, vec2( z1, 0 ));
+        
+        sample = texture( tex, offset.xy + O.xy ) * (1.0-t) + texture( tex, offset.zw + O.xy ) * t;
+        #endif
+        sample.r = 0;
+        float g = min( max( sample.g, 0 ), 1 );
+        sample.a = g * sampleAlphaFact;//0.5;
+        sample.rgb = texture( colors, g * tex1DFact ).rgb;//0.8 );
+        sample.rgb *= vec3( 0.9, 0.7, 0.6 );
+        
+        //alpha = (sample.r + sample.g + sample.b) * 0.3333;
+        alpha = sample.a;
+        float l = (O.y / gridSz.y);
+        a += alpha*mix(alphaFact0, alphaFact1, l*l);//0.5;
+        //
+        // various implementations :
+        //
+        if(mode == 0.0)
+        {
+            float a2 = alpha*l*smokeTransp + (1.0-l*smokeTransp);
+            color = mix(sample,                // favor the sample only : when smoke...
+                color+sample*alpha*blendAddFact,// BLEND the previous voxel with the new one in front
+                a2);                            // mix between these 2 solutions
+        } 
+        else if(mode == 1.0)
+        {
+            float a3 = 1-alpha;
+            color += mix(sample*blendAddFact, smokeColor, a3*a3);
+        } else {
+            float a2 = alpha*l*0.4 + (1.0-l*0.4);
+            float a3 = 1-alpha;
+            vec4 c = mix(sample, smokeColor*32.0, a3);
+            color = mix(c, color+sample*alpha*blendAddFact, a2); // Doesn't give a realistic effect...
+            //color += sample*alpha*blendAddFact;
+            //color += alpha*mix(alphaFact0, alphaFact1, l*l);//0.5;
+        }
+          O -= D;
+       }
+
+       //result = texture( zOffset, vec2( O.y*64.0, 0.0 ) ).g/512.0;
+       if(a < 0.01f)
+           discard;
+       //color.rgb = color.a;
+       color.a = a;
+       result = color;
+    }
+}
+/***********************************************************************************************
+ **
+ ** 
+ **
+ ***********************************************************************************************/
+GLSLShader gaussian_f
+{
+    // Note: version modified by NVIDIA - Tristan Lorach (tlorach@nvidia.com)
+    layout(location=7) in vec3         cell;// : TEXCOORD7, //grid coordinates
+    //uniform vec4 splatColor;
+    //uniform vec3 center;
+    //uniform float  size;
+    //uniform float  sizeZ;
+    layout(location=0) out vec4      result;// : COLOR
+    void main()
+    {
+      vec3 d = cell - center;
+      d.xy *= size;
+      d.z *= sizeZ;
+      float dist = 
+        //length( d ) * size;
+        sqrt(dot(d,d) ) ;
+      result.rgb = splatColor.rgb;// + sin(splatColor.rgb*10.0+cell*5.0)*0.2;
+      result.a = exp( -dist*dist );
+    }
+}
+/***********************************************************************************************
+ **
+ ** Techniques
+ **
+ ***********************************************************************************************/
+//--------------------------------------------------------------------------------------
+//	Fullscreen quad Vertex shader
+//--------------------------------------------------------------------------------------
+GLSLShader fullscreenquadVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=8) in vec3 TexCoord;
+    layout(location=1) out vec3 tc;
+    void main()
+    {
+        tc = TexCoord;
+        gl_Position = Position;
+    }
+}
+//--------------------------------------------------------------------------------------
+//	Simple texture fetch
+//--------------------------------------------------------------------------------------
+GLSLShader fullscreenquadPS
+{
+    uniform sampler2D quadSampler;
+    layout(location=1) in vec3 tc;
+    layout(location=0) out vec4 color;
+    void main()
+    {
+        color = /*vec4(0.3,0,0.6,0.0) +*/ texture(quadSampler, tc.xy);
+    }
+}
+//--------------------------------------------------------------------------------------
+//	Simple texture fetch
+//--------------------------------------------------------------------------------------
+GLSLShader fullscreenquadRectPS
+{
+    uniform sampler2DRect quadRectSampler;
+    layout(location=1) in vec3 tc;
+    layout(location=0) out vec4 color;
+    void main()
+    {
+        color = /*vec4(0.3,0,0.6,0.0) +*/ texture(quadRectSampler, tc.xy);
+    }
+}
+/***********************************************************************************************
+ **
+ ** Techniques
+ **
+ ***********************************************************************************************/
+Technique GroundMaterial
+{
+    Pass a
+    {
+        DEPTH_TEST = TRUE;
+        DEPTH_FUNC = LEQUAL;
+        VertexProgram = shadow_v;
+        FragmentProgram = {shadow_f, helpers };
+    }
+}
+
+Technique GlassMaterial
+{
+    Pass reflect_front
+    {
+        DEPTH_WRITEMASK = TRUE;
+        CULL_FACE_MODE = BACK;// FRONT
+        DEPTH_TEST = TRUE;
+        CULL_FACE = TRUE;
+
+        BLEND = TRUE;
+        BLEND_SRC = SRC_ALPHA;
+        BLEND_DST = ONE_MINUS_SRC_ALPHA;
+        VertexProgram = glass_v;
+        FragmentProgram = { glass_f, helpers };
+    }
+    Pass reflect_back
+    {
+        DEPTH_WRITEMASK = FALSE;
+        CULL_FACE_MODE = FRONT;
+        DEPTH_TEST = TRUE;
+        CULL_FACE = TRUE;
+
+        BLEND = TRUE;
+        BLEND_SRC = SRC_ALPHA;
+        BLEND_DST = ONE_MINUS_SRC_ALPHA;
+        VertexProgram = glass_v;
+        FragmentProgram = { glass_f, helpers };
+    }
+    Pass refract
+    {
+        VertexProgram = refract_v;
+        FragmentProgram = { refract_f, helpers };
+    }
+}
+
+Technique raycast
+{
+    Pass rasterizeResult
+    {
+        DEPTH_TEST = false;
+        CULL_FACE = false;
+        BLEND = true;
+        BLEND_SRC = SRC_ALPHA;
+        BLEND_DST = ONE_MINUS_SRC_ALPHA;
+        // TODO: There is a bug, here...
+        //RenderMode = render_fullscreen_quad;
+        VertexProgram = fullscreenquadVS;
+        //SamplerResource(quadSampler) = myRenderTextureNormals;
+        //SamplerTexUnit(quadSampler) = 0;
+        //SamplerState(quadSampler) = nearestSampler; // Strange: I can't use any other sampling filtering to not break the FBO
+        FragmentProgram = fullscreenquadPS;
+        //CurrentTarget = backbuffer;
+    }
+    Pass raycast_f
+    {
+        CULL_FACE = FALSE;
+        CULL_FACE_MODE = BACK;
+        VertexProgram = raycast_v;
+        FragmentProgram = { raycast_f, helpers };
+    }
+    Pass lsraycast_f
+    {
+        CULL_FACE = FALSE;
+        CULL_FACE_MODE = BACK;
+        VertexProgram = raycast_v;
+        FragmentProgram = { lsraycast_f, helpers };
+    }
+    Pass firecast
+    {
+        CULL_FACE = true;
+        CULL_FACE_MODE = BACK;
+        VertexProgram = raycast_v;
+        FragmentProgram = { firecast_f, helpers };
+    }
+    Pass volumedepth1
+    {
+        //BLEND = false;
+        //CULL_FACE = true;
+        //CULL_FACE_MODE = FRONT;
+        //DEPTH_TEST = false;
+        VertexProgram = volumedepth_v;
+        FragmentProgram = volumedepth_f;
+    }
+    Pass volumedepth2
+    {
+        //BLEND = true;
+        //BLENDSRC = ONE;
+        //BLENDDST = ONE;
+        //BLENDEQUATIONRGB = FUNC_SUBTRACT;
+        //BLENDEQUATIONALPHA = FUNC_SUBTRACT;
+        //CULL_FACE = true;
+        //CULL_FACE_MODE = BACK;
+        //DEPTH_TEST = false;
+        VertexProgram = volumedepth_v;
+        FragmentProgram = volumedepth_f;
+    }
+}
+Technique scene
+{
+    Pass rasterizeResult
+    {
+        DEPTH_TEST = false;
+        CULL_FACE = false;
+        BLEND = false;
+        // TODO: There is a bug, here...
+        //RenderMode = render_fullscreen_quad;
+        VertexProgram = fullscreenquadVS;
+        //SamplerResource(quadSampler) = myRenderTextureNormals;
+        //SamplerTexUnit(quadSampler) = 0;
+        //SamplerState(quadSampler) = nearestSampler; // Strange: I can't use any other sampling filtering to not break the FBO
+        FragmentProgram = fullscreenquadRectPS;
+        //CurrentTarget = backbuffer;
+    }
+}
+//
+// a Sub-Technique example for simple color advection
+//
+Technique advectColor
+{
+    Pass advect
+    {
+        CurrentTarget = FBO_SwapBuffer;
+        Uniform(modulate) = 1.0;//modulate
+        Uniform(forward) = 1.0;
+        Uniform(clamp) = 1.0f;
+        Uniform(k) = 0.003;//type==fluidTypeFire ? fireK*0.001f : 0.0f;
+        SamplerResource(velocity) = { TexRect_Velocity, 0};
+        SamplerResource(advected) = { TexRect_Color, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom0;
+        RenderGroup = 1; // here we would like to use a define, instead of '1'
+        swapResources( FBO_Color, FBO_SwapBuffer ); // Always performed after CurrentTarget (no matter where positionned in the Pass
+    }
+}
+//
+// a Sub-Technique example for more complex color advection
+//
+Technique advectColorBFECC
+{
+    Pass advectPhiStar
+    {
+        //Viewport = {0,0,16*128, 8*128}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        CurrentTarget = FBO_SwapBuffer;
+		// WARNING: setting a uniform from here will temporarily update it for this Pass
+		// but the value won't be persistent for later use. if modulate was set to 10 from the c++, this modulate=1.0
+		// won't overwrite the value 10.0. But will override it for the time of this Pass
+        //gridSizeMinusOne = {128-1, 128-1, 128-1};
+        //timestep...
+        Uniform(modulate) = 1.0;
+        Uniform(forward) = 1.0;
+        Uniform(clamp) = 1.0f;
+        Uniform(k) = 0.003;//type==fluidTypeFire ? fireK*0.001f : 0.0f;
+
+        SamplerResource(velocity) = { TexRect_Velocity, 0};
+        SamplerResource(advected) = { TexRect_Color, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom0;
+        RenderGroup = 1; // here we would like to use a define, instead of '1'
+    }
+	// NOTE: it is impossible for now to save some lines of code : the uniform values assigned in a Pass 
+	// aren't persistent from one Pass to another
+    Pass advectPhiBar
+    {
+        CurrentTarget = FBO_VelocityDivergence;
+
+        Uniform(modulate) = 1.0;
+        Uniform(forward) = -1.0;
+        Uniform(k) = 0.003;//type==fluidTypeFire ? fireK*0.001f : 0.0f;
+
+        SamplerResource(velocity) = { TexRect_Velocity, 0};
+        SamplerResource(advected) = {TexRect_SwapBuffer, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom0;
+        RenderGroup = 1; // here we would like to use a define, instead of '1'
+    }
+    Pass advectBFECC
+    {
+        CurrentTarget = FBO_SwapBuffer;
+
+        //halfVolumeDim->setValue3f( grid->dim[0]/2.0f, grid->dim[1]/2.0f, grid->dim[2]/2.0f );
+        //gridSizeMinusOne->setValue3f(grid->dim[0]-1, grid->dim[1]-1, grid->dim[2]-1 );
+        //timestep->setValue1f(timestep);
+        Uniform(modulate) = 1.0;//decay;
+        Uniform(forward) = 1.0;
+        Uniform(k) = 0.003;//(type==fluidTypeFire?fireK*0.001f : 0.0f );
+
+        SamplerResource(velocity) = { TexRect_Velocity, 0};
+        SamplerResource(phi) = { TexRect_Color, 1};
+        SamplerResource(phiBar) = { TexRect_VelocityDivergence, 2};
+        SamplerResource(phiStar) = { TexRect_SwapBuffer, 3};
+        SamplerResource(zOffset) = { TexRect_OffsetTable, 4};
+        Uniform(clamp) = 1.0f;
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advectBFECC_f, helpers };
+        RenderMode = render_custom0;
+        RenderGroup = 1; // here we would like to use a define, instead of '1'
+        swapResources( FBO_Color, FBO_SwapBuffer ); // Always performed after CurrentTarget (no matter where positionned in the Pass
+    }
+}
+
+Technique advectVelBFECC
+{
+    Pass VeladvectPhiStar
+    {
+        //Viewport = {0,0,16*128, 8*128}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        CurrentTarget = FBO_SwapBuffer;
+
+        //gridSizeMinusOne = {128-1, 128-1, 128-1};
+        //timestep...
+        Uniform(modulate) = 1.0;
+        Uniform(forward) = 1.0;
+        Uniform(k) = 0.0;//type==fluidTypeFire ? fireK*0.001f : 0.0f;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(advected) = {TexRect_Velocity, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom1;
+        RenderGroup = 2; // here we would like to use a define, instead of '1'
+    }
+    Pass VeladvectPhiStar_edges
+    {
+        //Viewport = {0,0,16*128, 8*128}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        //CurrentTarget = FBO_SwapBuffer;
+
+        //gridSizeMinusOne = {128-1, 128-1, 128-1};
+        //timestep...
+        Uniform(modulate) = -1.0;
+        Uniform(forward) = 1.0;
+        Uniform(k) = 0.0;//type==fluidTypeFire ? fireK*0.001f : 0.0f;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(advected) = {TexRect_Velocity, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom2;
+        RenderGroup = 3; // here we would like to use a define, instead of '1'
+    }
+    Pass VeladvectPhiBar
+    {
+        CurrentTarget = FBO_VelocityDivergence;
+
+        //gridSizeMinusOne = {128-1, 128-1, 128-1};
+        //timestep = ...
+        Uniform(modulate) = 1.0;
+        Uniform(forward) = -1.0;
+        Uniform(k) = 0.0;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(advected) = {TexRect_SwapBuffer, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom1;
+        RenderGroup = 2; // here we would like to use a define, instead of '1'
+    }
+    Pass VeladvectPhiBar_edges
+    {
+        //CurrentTarget = FBO_VelocityDivergence;
+
+        //gridSizeMinusOne = {128-1, 128-1, 128-1};
+        //timestep = ...
+        Uniform(modulate) = -1.0;
+        Uniform(forward) = -1.0;
+        Uniform(k) = 0.0;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(advected) = {TexRect_SwapBuffer, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom2;
+        RenderGroup = 3; // here we would like to use a define, instead of '1'
+    }
+    Pass VeladvectBFECC
+    {
+        CurrentTarget = FBO_SwapBuffer;
+
+        //halfVolumeDim->setValue3f( grid->dim[0]/2.0f, grid->dim[1]/2.0f, grid->dim[2]/2.0f );
+        //gridSizeMinusOne->setValue3f(grid->dim[0]-1, grid->dim[1]-1, grid->dim[2]-1 );
+        //timestep->setValue1f(timestep);
+        Uniform(modulate) = 1.0;//decay;
+        Uniform(forward) = 1.0;
+        Uniform(k) = 0.0;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(phi) = {TexRect_Velocity, 1};
+        SamplerResource(phiBar) = {TexRect_VelocityDivergence, 2};
+        SamplerResource(phiStar) = {TexRect_SwapBuffer, 3};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 4};
+        Uniform(clamp) = 65536.0f;
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advectBFECC_f, helpers };
+        RenderMode = render_custom1;
+        RenderGroup = 2; // here we would like to use a define, instead of '1'
+    }
+    Pass VeladvectBFECC_edges
+    {
+        //CurrentTarget = FBO_SwapBuffer;
+
+        //halfVolumeDim->setValue3f( grid->dim[0]/2.0f, grid->dim[1]/2.0f, grid->dim[2]/2.0f );
+        //gridSizeMinusOne->setValue3f(grid->dim[0]-1, grid->dim[1]-1, grid->dim[2]-1 );
+        //timestep->setValue1f(timestep);
+        Uniform(modulate) = -1.0;//decay;
+        Uniform(forward) = 1.0;
+        Uniform(k) = 0.0;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(phi) = {TexRect_Velocity, 1};
+        SamplerResource(phiBar) = {TexRect_VelocityDivergence, 2};
+        SamplerResource(phiStar) = {TexRect_SwapBuffer, 3};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 4};
+        Uniform(clamp) = 65536.0f;
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advectBFECC_f, helpers };
+        RenderMode = render_custom2;
+        RenderGroup = 3; // here we would like to use a define, instead of '1'
+        swapResources( FBO_Velocity, FBO_SwapBuffer ); // Always performed after CurrentTarget (no matter where positionned in the Pass
+    }
+}
+
+Technique advectVel
+{
+    Pass Veladvect
+    {
+        //Viewport = {0,0,16*128, 8*128}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        CurrentTarget = FBO_SwapBuffer;
+
+        //gridSizeMinusOne = {128-1, 128-1, 128-1};
+        //timestep...
+        Uniform(modulate) = 1.0;
+        Uniform(forward) = 1.0;
+        Uniform(k) = 0.0;//type==fluidTypeFire ? fireK*0.001f : 0.0f;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(advected) = {TexRect_Velocity, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom1;
+        RenderGroup = 2; // here we would like to use a define, instead of '1'
+    }
+    Pass Veladvect_edges
+    {
+        //Viewport = {0,0,16*128, 8*128}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        //CurrentTarget = FBO_SwapBuffer;
+
+        //gridSizeMinusOne = {128-1, 128-1, 128-1};
+        //timestep...
+        Uniform(modulate) = -1.0;
+        Uniform(forward) = 1.0;
+        Uniform(k) = 0.0;//type==fluidTypeFire ? fireK*0.001f : 0.0f;
+
+        SamplerResource(velocity) = {TexRect_Velocity, 0};
+        SamplerResource(advected) = {TexRect_Velocity, 1};
+        SamplerResource(zOffset) = {TexRect_OffsetTable, 2};
+
+        VertexProgram = grid_v;
+        FragmentProgram = { advect_f, helpers };
+        RenderMode = render_custom2;
+        RenderGroup = 3; // here we would like to use a define, instead of '1'
+        swapResources( FBO_Velocity, FBO_SwapBuffer ); // Always performed after CurrentTarget (no matter where positionned in the Pass
+    }
+}
+//
+// Test of a driven sequence of passes to reach the final simulation of fluids
+// in this case the application is supposed to follow the passes to get the final result
+// TODO
+//
+Technique simulateWithBFECC
+{
+    //Pass OpenBoundaryConditions
+    //{
+    //}
+    //----- advectColor
+    Technique advectColorBFECC;     // a 3 steps more complex advection
+    Technique advectColor OFF;      // a simple version of advection - turned OFF by default
+    //----- advect velocity
+    Technique advectVelBFECC;
+    Technique advectVel OFF;
+    //-----
+    Pass Vorticity
+    {
+		CurrentTarget = FBO_Vorticity;
+        SamplerResource(field) = {TexRect_Velocity, 0};
+        VertexProgram = grid_v;
+        FragmentProgram = vorticity_f;
+		RenderMode = render_custom1;
+    }
+    Pass Confinement
+    {
+		CurrentTarget = FBO_Velocity;
+        BLEND = true;
+        BLEND_SRC = ONE;
+        BLEND_DST = ONE;
+		Uniform(epsilon) = 0.1;//confinementScale;
+        SamplerResource(vorticity) = {TexRect_Vorticity, 0};
+        VertexProgram = grid_v;
+        FragmentProgram = confinement_f;
+		RenderMode = render_custom1;
+    }
+	Pass GaussianBall // if emit
+	{
+        CurrentTarget =  FBO_Color;
+        SamplerResource(vorticity) = {TexRect_Vorticity, 0};
+        Uniform(epsilon) = 0.05;//confinementScale
+
+        //size = 0.05;//impulseSize
+        //sizeZ = 0.05;//mpulseSizeZ
+        //center = {0.5*128.0, 0.1*128.0, 0.5*128.0};//{impulseX,impulseY,impulseZ}; // //0.5f * (float)(grid->dim[0])...
+		Uniform(splatColor) = { 500.0, 1.0, 1.0, 1.0 };
+
+        BLEND = true;
+        BLEND_SRC = SRC_ALPHA;
+        BLEND_DST = ONE_MINUS_SRC_ALPHA;
+        VertexProgram = grid_v;
+        FragmentProgram = gaussian_f;
+		RenderMode = render_custom1;
+	}
+    // Pass gravity
+    // { // GRAVITY if for water only...
+    // }
+	Pass fireUPForce
+	{
+		CurrentTarget = FBO_Velocity;
+        SamplerResource(temperature) = {TexRect_Color, 0};
+		//ambientTemperature = 20.0;
+		//up = {0.0f, 1.0f, 0.0f};
+        //alpha = 0.007;
+        BLEND = true;
+        BLEND_SRC = ONE;
+        BLEND_DST = ONE;
+        VertexProgram = grid_v;
+        FragmentProgram = buoyant_f;
+		RenderMode = render_custom1;
+	}
+    Pass VelocityDivergence
+    {
+		CurrentTarget = FBO_VelocityDivergence;
+		BLEND = false;
+        SamplerResource(field) = {TexRect_Velocity, 0};
+        VertexProgram = grid_v;
+        FragmentProgram = divergence_f;
+		RenderMode = render_custom0;
+    }
+	 // To be done N times (Jacobi iterations)
+    Pass computePressure
+    {
+        Loop = 10;
+        Active = true;
+		CurrentTarget = FBO_SwapBuffer;
+        SamplerResource(b) = {TexRect_VelocityDivergence, 0};
+        SamplerResource(x) = {TexRect_Pressure, 1};
+		//alpha = -1.0;
+		//rBeta = (1.0f/6.0f);
+		
+        BLEND = false;
+        VertexProgram = grid_v;
+        FragmentProgram = jacobi_f;
+        // leads to N Jacobi iterations
+        // and some "air" for water case
+        RenderMode = render_custom3;
+        swapResources( FBO_Pressure, FBO_SwapBuffer ); // Always performed after CurrentTarget
+	}
+    Pass projectVelocity
+    {
+		CurrentTarget = FBO_SwapBuffer;
+        SamplerResource(intermediateVelocity) = {TexRect_Velocity, 0};
+        SamplerResource(pressure) = {TexRect_Pressure, 1};
+		Uniform(modulate) = 1.0;
+        BLEND = false;
+        VertexProgram = grid_v;
+        FragmentProgram = project_f;
+        RenderMode = render_custom1;
+    }
+    Pass projectVelocity_edges
+    {
+		CurrentTarget = FBO_SwapBuffer;
+        SamplerResource(intermediateVelocity) = {TexRect_Velocity, 0};
+        SamplerResource(pressure) = {TexRect_Pressure, 1};
+		Uniform(modulate) = -1.0;
+        BLEND = false;
+        VertexProgram = grid_v;
+        FragmentProgram = project_f;
+        RenderMode = render_custom2;
+        swapResources( FBO_Velocity, FBO_SwapBuffer );
+    }
+}
+

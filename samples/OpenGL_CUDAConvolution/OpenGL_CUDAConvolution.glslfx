@@ -1,0 +1,415 @@
+//
+// Resources (Testing the scene-level effect part)
+//
+// will create the texture resource
+// can be then used with "SamplerResource(diffuseSampler) = myRenderTexture;"
+// TODO: in D3D, this will lead to a Texture object in D3D, too
+
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderTexture myRenderTexture
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+RenderTexture myComputeTextureCUDA
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+RenderTexture myRenderTextureNormals
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderBuffer myDST
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;
+    Format = DEPTH24STENCIL8;
+}
+// will lead to a FBO creation in a specific repository. nvFX lib will keep track of the Id
+FBO myFBO
+{
+    Color = { myRenderTexture, myRenderTextureNormals };
+    DepthStencil = myDST;
+}
+FBO cudaResultFBO
+{
+    Color = myComputeTextureCUDA;
+}
+
+uniform Texture2D myTexture;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA
+//
+
+// TODO:
+//CUDABuffer myCUDABuffer {
+//    size = 10*1024;
+//}
+
+// TODO: we should test the capability for CUDA to write into a vertex buffer for later rendering
+// TODO: we should also be allowed to expose a vertex buffer to nvFX (bind a resource) for CUDA to process it
+//VertexBuffer myVtxBuffer {
+//    size = 10*1024;
+//}
+// TODO: this vertex buffer work should be compatible with Stream-out from Vtx/Geom Shader...
+// TODO: argument for drawIndirect should be possible
+//       - add a render-mode when we ask for drawIndirect with proper VBOs
+
+CUDACode {
+    __device__ float clamp(float x, float a, float b);
+    __device__ int clamp(int x, int a, int b);
+    __device__ unsigned char clamp(unsigned char x, unsigned char a, unsigned char b);
+    __device__ int rgbaNormToInt(float r, float g, float b, float a);
+    __device__ int rgbToInt(float r, float g, float b);
+    __device__ int rgbaToInt(float r, float g, float b, float a);
+    __device__ uchar4 getPixelUChar4(int x, int y);
+    // macros to make indexing shared memory easier
+    #define SMEM(X, Y) sdata[(Y)*tilew+(X)]
+
+     
+    /*
+        2D convolution using shared memory
+        - operates on 8-bit RGB data stored in 32-bit int
+        - assumes kernel radius is less than or equal to block size
+        - not optimized for performance
+         _____________
+        |   :     :   |
+        |_ _:_____:_ _|
+        |   |     |   |
+        |   |     |   |
+        |_ _|_____|_ _|
+      r |   :     :   |
+        |___:_____:___|
+          r    bw   r
+        <----tilew---->
+    */
+}
+
+CUDACode CUDAHelpers {
+    // clamp x to range [a, b]
+    __device__ float clamp(float x, float a, float b)
+    {
+        return max(a, min(b, x));
+    }
+    __device__ int clamp(int x, int a, int b)
+    {
+        return max(a, min(b, x));
+    }
+    __device__ unsigned char clamp(unsigned char x, unsigned char a, unsigned char b)
+    {
+        return max(a, min(b, x));
+    }
+    __device__ int rgbaNormToInt(float r, float g, float b, float a)
+    {
+        r = clamp(r*255.0, 0.0f, 255.0f);
+        g = clamp(g*255.0, 0.0f, 255.0f);
+        b = clamp(b*255.0, 0.0f, 255.0f);
+        a = clamp(a*255.0, 0.0f, 255.0f);
+        return (int(a)<<24) | (int(b)<<16) | (int(g)<<8) | int(r);
+    }
+    // convert floating point rgb color to 8-bit integer
+    __device__ int rgbToInt(float r, float g, float b)
+    {
+        r = clamp(r, 0.0f, 255.0f);
+        g = clamp(g, 0.0f, 255.0f);
+        b = clamp(b, 0.0f, 255.0f);
+        return (int(b)<<16) | (int(g)<<8) | int(r);
+    }
+    __device__ int rgbaToInt(float r, float g, float b, float a)
+    {
+        r = clamp(r, 0.0f, 255.0f);
+        g = clamp(g, 0.0f, 255.0f);
+        b = clamp(b, 0.0f, 255.0f);
+        a = clamp(a, 0.0f, 255.0f);
+        return (int(a)<<24) | (int(b)<<16) | (int(g)<<8) | int(r);
+    }
+
+    // get pixel from 2D image, with clamping to border
+    __device__ uchar4 getPixelUChar4(int x, int y)
+    {
+        float4 res = tex2D(myTexture, x, y);
+        res.x = clamp(res.x*255.0, 0.0f, 255.0f);
+        res.y = clamp(res.y*255.0, 0.0f, 255.0f);
+        res.z = clamp(res.z*255.0, 0.0f, 255.0f);
+        res.w = clamp(res.w*255.0, 0.0f, 255.0f);
+	    uchar4 ucres = make_uchar4(res.x, res.y, res.z, res.w);
+        return ucres;
+    }
+
+}
+
+CUDAKernel DummyKernel(
+    unsigned int* odata, 
+    int imgw/*, float4 *test_buffer*/)
+{
+    extern __shared__ uchar4 shared_test[];
+
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int bw = blockDim.x;
+    int bh = blockDim.y;
+    int x = blockIdx.x*bw + tx;
+    int y = blockIdx.y*bh + ty;
+    // We must take into account the behavior of cuMallocPitch()
+    // TODO : Find a way to Pass the value that was computed, instead!
+    int pitch = (imgw+31) & 0xFFFFFFE0;
+
+    float4 res = tex2D(myTexture, x, y);
+    //odata[y*pitch+x] = (int(0)<<24) | (int(0)<<16) | (int(y)<<8) | int(x);
+    odata[y*pitch+x] = rgbaNormToInt(res.x, res.y, res.z, 1.0);
+}
+
+CUDAKernel Blur(unsigned int* odata, 
+     int imgw, int imgh, int tilew, 
+     int r, float threshold, float highlight)
+{
+    extern __shared__ uchar4 sdata[];
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int bw = blockDim.x;
+    int bh = blockDim.y;
+    int x = blockIdx.x*bw + tx;
+    int y = blockIdx.y*bh + ty;
+
+//	if((x >= 100)||(y >= 100))
+//		return;
+	// We must take into account the behavior of cuMallocPitch()
+	// TODO : Find a way to Pass the value that was computed, instead!
+	int pitch = (imgw+31) & 0xFFFFFFE0;
+#if 0
+    // copy tile to shared memory
+    // center region
+    //SMEM(r + tx, r + ty) = getPixelUChar4(x, y);
+
+    //// borders
+    //if (threadIdx.x < r) {
+    //    // left
+    //    SMEM(tx, r + ty) = getPixelUChar4(x - r, y);
+    //    // right
+    //    SMEM(r + bw + tx, r + ty) = getPixelUChar4(x + bw, y);
+    //}
+    //if (threadIdx.y < r) {
+    //    // top
+    //    SMEM(r + tx, ty) = getPixelUChar4(x, y - r);
+    //    // bottom
+    //    SMEM(r + tx, r + bh + ty) = getPixelUChar4(x, y + bh);
+    //}
+
+    //// load corners
+    //if ((threadIdx.x < r) && (threadIdx.y < r)) {
+    //    // tl
+    //    SMEM(tx, ty) = getPixelUChar4(x - r, y - r);
+    //    // bl
+    //    SMEM(tx, r + bh + ty) = getPixelUChar4(x - r, y + bh);
+    //    // tr
+    //    SMEM(r + bw + tx, ty) = getPixelUChar4(x + bh, y - r);
+    //    // br
+    //    SMEM(r + bw + tx, r + bh + ty) = getPixelUChar4(x + bw, y + bh);
+    //}
+
+    //// wait for loads to complete
+    //__syncthreads();
+
+    //// perform convolution
+    //float rsum = 0.0f;
+    //float gsum = 0.0f;
+    //float bsum = 0.0f;
+    //float samples = 0.0f;
+
+    //for(int dy=-r; dy<=r; dy++) {
+    //    for(int dx=-r; dx<=r; dx++) {
+    //        //try this to see the benefit of using shared memory
+    //        //uchar4 pixel = getPixelUChar4(x+dx, y+dy);
+    //        uchar4 pixel = SMEM(r+tx+dx, r+ty+dy);
+    //        // only sum pixels within disc-shaped kernel
+    //        float l = dx*dx + dy*dy;
+    //        if (l <= r*r) {
+    //            float cr = float(pixel.x);
+    //            float cg = float(pixel.y);
+    //            float cb = float(pixel.z);
+    //            // brighten highlights
+    //            float lum = (cr + cg + cb) / (255*3);
+    //            if (lum > threshold) {
+    //                cr *= highlight;
+    //                cg *= highlight;
+    //                cb *= highlight;
+    //            }
+    //            rsum += cr;
+    //            gsum += cg;
+    //            bsum += cb;
+    //            samples += 1.0f;
+    //        }
+    //    }
+    //}
+
+    //rsum /= samples;
+    //gsum /= samples;
+    //bsum /= samples;
+    //odata[y*pitch+x] = rgbaToInt(rsum, gsum, bsum, 255);
+
+    uchar4 c4 = make_uchar4(0, 0, 255, 255);//getPixelUChar4(x, y);
+    odata[y*pitch+x] = rgbaToInt(c4.x, c4.y, c4.z, c4.w);
+#else
+    // copy tile to shared memory
+    // center region
+    SMEM(r + tx, r + ty) = getPixelUChar4(x, y);
+
+    // borders
+    if (threadIdx.x < r) {
+        // left
+        SMEM(tx, r + ty) = getPixelUChar4(x - r, y);
+        // right
+        SMEM(r + bw + tx, r + ty) = getPixelUChar4(x + bw, y);
+    }
+    if (threadIdx.y < r) {
+        // top
+        SMEM(r + tx, ty) = getPixelUChar4(x, y - r);
+        // bottom
+        SMEM(r + tx, r + bh + ty) = getPixelUChar4(x, y + bh);
+    }
+
+    // load corners
+    if ((threadIdx.x < r) && (threadIdx.y < r)) {
+        // tl
+        SMEM(tx, ty) = getPixelUChar4(x - r, y - r);
+        // bl
+        SMEM(tx, r + bh + ty) = getPixelUChar4(x - r, y + bh);
+        // tr
+        SMEM(r + bw + tx, ty) = getPixelUChar4(x + bh, y - r);
+        // br
+        SMEM(r + bw + tx, r + bh + ty) = getPixelUChar4(x + bw, y + bh);
+    }
+
+    // wait for loads to complete
+    __syncthreads();
+
+    // perform convolution
+    float rsum = 0.0f;
+    float gsum = 0.0f;
+    float bsum = 0.0f;
+    float samples = 0.0f;
+
+    for(int dy=-r; dy<=r; dy++) {
+        for(int dx=-r; dx<=r; dx++) {
+            // try this to see the benefit of using shared memory
+            //uchar4 pixel = getPixelUChar4(x+dx, y+dy);
+            uchar4 pixel = SMEM(r+tx+dx, r+ty+dy);
+            // only sum pixels within disc-shaped kernel
+            float l = dx*dx + dy*dy;
+            if (l <= r*r) {
+                float r = float(pixel.x);
+                float g = float(pixel.y);
+                float b = float(pixel.z);
+                // brighten highlights
+                float lum = (r + g + b) / (255*3);
+                if (lum > threshold) {
+                    r *= highlight;
+                    g *= highlight;
+                    b *= highlight;
+                }
+                rsum += r;
+                gsum += g;
+                bsum += b;
+                samples += 1.0f;
+            }
+        }
+    }
+
+    rsum /= samples;
+    gsum /= samples;
+    bsum /= samples;
+    odata[y*pitch+x] = rgbaToInt(rsum, gsum, bsum, 255);
+#endif
+}
+//
+// CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA CUDA
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+//
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader
+{
+    #version 430 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+}
+#include "shared_globals.glslfxh"
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Test of a scene-level Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+Technique SceneTechniqueCUDA
+{
+    Pass p1
+    {
+        BLEND = false;
+        RenderMode = SceneShading;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0.88,0.5,0.4,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = myFBO;
+        //Viewport = {10,10,200,130}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        FragmentProgramOverride<"FragOut"> = fragmentOutputColorAndNw;
+    }
+    Pass cuda
+    {
+        //TODO: we should associate here the resource and the texture (sampler?)
+        //== SamplerResource()
+        // in D3D, this mst work, too. But in D3D we assign a resource view to the texture
+        // in CUDA: this will map the device ptr of the texture resource to the texture reference of the CUDA code
+        // This approach is an alternate way (line #65) of updating a texture with a resource.
+        TextureResource(myTexture) = myRenderTexture;
+
+        CudaModule = { CUDAHelpers, DummyKernel, Blur }; // added 2 kernels, here !
+        CudaKernel = { Blur, myComputeTextureCUDA, /*myComputeTextureCUDA.w*/1024, /*myComputeTextureCUDA.w*/768, 16+2*8, 8, 0.8, 4.0};
+        // do we want <<< >>> notation ? Maybe not...
+        CudaSharedMemory = (16+(2*8))*(16+(2*8))*4;
+        CudaGrid = { 64,48 };
+            //(16/*myComputeTextureCUDA.w*/,//+(2*32-1))/(2*32),
+            //(16/*myComputeTextureCUDA.h*/ //+(16-1))/16        }; 
+        CudaBlock = { 16,16 };
+        RenderMode = CUDA; // useless : implictly set to run_cuda...
+    }
+    Pass blitme
+    {
+        BlitFBOToActiveTarget = cudaResultFBO;
+        CurrentTarget = backbuffer;
+    }
+}
+
+Technique Basic
+{
+    Pass p1
+    {
+        BLEND = false;
+        RenderMode = SceneShading;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0.88,0.5,0.4,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = myFBO;
+        //Viewport = {10,10,200,130}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        FragmentProgramOverride<"FragOut"> = fragmentOutputDefault;
+    }
+    Pass blitme
+    {
+        BlitFBOToActiveTarget = myFBO;
+        //ViewPort = AppDefined;
+        CurrentTarget = backbuffer;
+    }
+}

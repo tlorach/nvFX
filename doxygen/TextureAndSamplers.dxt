@@ -1,0 +1,150 @@
+/**
+\page TextureSampler Textures and Samplers
+
+nvFX exposes 2 major objects to work with textures
+
+ - \b Texture : a resource \b binding \b point to which we can attach an OpenGL resource (OpenGL texture ID)
+ - \b sampler_state : contains the settings for how to sample a texture
+ 
+\section TEX Declaring a texture in nvFX
+
+\b Texture object allows you to create a texture resource binding point. This object accepts :
+ - \b samplerState : a keyword to associate a sampler state object to this texture. Each time this texture will be used as a resource for a shader, the referenced sampler-state will setup the way to filter the texture
+ - arbitrary annotations : you can add in the object any sort of annotations. Here in the example, "defaultFile" is a string annotation that the application can query to know which default texture file to use.
+ 
+\note beware that any syntax issue on the defined keyword \b samplerState will not raise any error : instead it would be taken as an annotation...
+
+here is an example :
+\code
+Texture diffuseTexture {
+    // directly assigning a sampler state to this texture
+    samplerState = defaultSamplerState;
+    // you can set some custom "uniforms" here. Like you'd do in annotations
+    defaultFile = "gargoyleMossyDiffuse.dds";
+}
+\endcode
+
+\section SSTATE Declaring a Sampler-state in nvFX
+
+\b sampler_state object allows you to declare a combination of filtering setup. Accepted Keywords in sampler_state are the one close to OpenGL definition :
+ - [GL][_][TEXTURE_]\b MIN_FILTER
+ - \b [GL][_][TEXTURE_]\b MAG_FILTER
+ - \b [GL][_][TEXTURE_]\b WRAP_S
+ - \b [GL][_][TEXTURE_]\b WRAP_T
+ - \b [GL][_][TEXTURE_]\b WRAP_R
+ - \b AddressS : same as \b WRAP_S
+ - \b AddressT : same as \b WRAP_T
+ - \b AddressR : same as \b WRAP_R
+ - arbitrary annotations : you can add in the object any sort of annotations. Here in the example, "defaultFile" is a string annotation that the application can query to know which default texture file to use.
+
+\note beware that any syntax issue on the defined keyword \b samplerState will not raise any error : instead it would be taken as an annotation...
+ 
+ accepted values for those fields :
+ - [GL][_]\b LINEAR_MIPMAP_LINEAR
+ - [GL][_]\b LINEAR
+ - [GL][_]\b NEAREST
+ - [GL][_]\b MIRRORED_REPEAT
+
+\note GL or GL_ can be put in these keywords. Same for GL_TEXTURE or GLTEXTURE. The reason : to allow a declaration as close as possible to what the OpenGL API spec. defined.
+
+Example:
+\code
+sampler_state normalMapSampler
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    AddressS = GL_REPEAT;
+    AddressT = GL_REPEAT;
+    AddressR = GL_REPEAT;
+}
+\endcode
+
+\section TEXPASS Using Samplers and textures in a Pass
+
+There are few ways to use textures and samplers from a pass. The way you want to use textures and samplers depend on how the application decided to handle things. The choice is therefore arbitrary.
+
+It is important to know that GLSL handles texture samplers in a very simple way : all what GLSL needs is \e the \e texture \e unit. Nothing else. The setup of the texture to use and the sampler states are done through OpenGL as usual.
+
+ - \b samplerTexUnit ( \e samplerName ) = unit#; : assigns a unit number to the uniform sampler called "samplerName"
+ 
+At this point, the application could setup the rest : sampler-states and texture ID to use for this texture unit.
+ 
+However some would like the effect to take care of this. This is where the \b Uniform object as a texture type can be used. The application can bind to this nvFX Uniform object a texture ID (OpenGL texture 'name'), a texture unit and even a sampler-state object. The application ca also bind a resource to it (nvFX::IResource)
+
+In other words, the application can bind some resource to this uniform texture object.
+
+In a pass of a Technique, you can change the resource assigment as follow:
+ 
+ - \b samplerResource ( \e samplerName ) = diffuseResource; : binds the resource 'diffuseResource' to the uniform sampler 'samplerName' (that would be in GLSL code)
+ 
+The decalaration of the uniform sampler :
+ - can be declared locally in the GLSL code where it is used. In this case, the nvFX runtime doesn't know about it (nvFX don't parse Shader codes). But it doesn't prevent you to create the binding point of this uniform through the API or to address it throught a pass-state as shown above
+  - can be declared as any other uniforms : "uniform sampler2D mysampler;" for example. This way will allow nvFX to know its existence. nvFX will then take care of instanciating them in the GLSL shaders that are in its scope. You might then be able to find back the existing uniform binding point (nvFX::IUniform)
+
+To assign from a pass any sampler-state to the sampler :
+
+ - \b samplerState ( \e samplerName ) = normalMapSampler; : assigns sampler-states to the uniform sampler 'samplerName'
+
+\code
+    pass Object_texture_as_color
+    {
+        samplerResource(diffuseSampler) = diffuseResource;
+        samplerTexUnit(diffuseSampler) = 1;
+        samplerState(diffuseSampler) = defaultSamplerState;
+        ...
+    }
+\endcode
+
+\note \b samplerState and \b samplerResource are optional
+
+\note \b samplerUnit is \e now \e optional : the nvFX runtime will try to find a free slot at validation time.
+
+\section CPPTEX Setup of textures from C++ code
+
+Here are examples of how to work with textures and samplers.
+
+\subsection CPPTEX1 Using the texture object and leaving the rest to nvFX
+
+After an effect got Loaded and parsed with nvFX::IContainer, you can look for existing textures :
+
+\code
+    nvFX::IResource *pRes = NULL;
+    pRes = pGLSLFx->findResource(0); // or could be a const char * for the name of a texture
+\endcode
+
+You may want to query some annotation to know which default texture to load :
+\code
+    const char *fname = pRes->annotations()->getAnnotationString("defaultFile");
+    // Load the texture to OpenGL...
+    glGenTextures(1, &myTexture);
+    // ...
+\endcode
+
+Now we must attach the OpenGL texture ID to the nvFX Texture object :
+\code
+    pRes->setGLTexture(nvFX::RESTEX_CUBE_MAP, myTexture);
+\endcode
+
+\subsection CPPTEX2 Working with the texture unit only
+
+if you prefer to stick to the basics of what GLSL needs, you can either let the Pass of nvFX specify the texture unit as we already explained, or you can do it at runtime : 
+\code
+    nvFX::IUniform mySampler = ...; // have the sampler uniform object available
+    // assign it a sampler unit number
+    fxsampler->setSamplerUnit(1);
+\endcode
+
+\note the method nvFX::IUniform::setSamplerUnit is doing the exact same as what a pass is doing through "samplerTexUnit(diffuseSampler) = 1;"
+
+You can do the same for the two other settings :
+ - nvFX::IUniform::setSamplerResource : assign a texture ID to the uniform sampler
+ - nvFX::IUniform::setSamplerState : assign a sampler state to the uniform sampler
+
+\code
+    nvFX::IUniform mySampler = ...; // have the sampler uniform object available
+    fxsampler->setSamplerUnit(1);
+    fxsampler->setSamplerResource(GL_TEXTURE_2D, myTexture);
+    fxsampler->setSamplerState(mySState);
+\endcode
+
+**/

@@ -1,0 +1,275 @@
+/**
+\page UNIFORMS Uniform Parameters
+
+nvFX runtime works by default with \b binding \b uniform \b object : nvFX::Uniform
+
+Uniforms are most of the time the uniforms available from GLSL source code. However keep in mind that because nvFX is a generic container, uniforms could later address parameters of HLSL or CUDA.
+
+It is important to understand that the nvFX parser \b never parses any of the encapsulated code. This clearly means that nvFX runtime \b cannot know anything from the GLSL code that it contains : none of the uniforms in there can't be gathered by nvFX !
+
+When the application creates a \e binding \e uniform nvFX::Uniform, it somehow assumes that some shaders may use a uniform of the same name.
+
+In some cases, this would happen : as soon as one program in a Pass has a uniform of the same name, this uniform will be \b targeted by the binding uniform nvFX::Uniform. If many programs have the same uniform, the binding uniform will have many targets. And finally, if a CUDA kernel is using a parameter of the same name, this binding uniform will also target it.
+
+In some other cases, it is totally possible that the application created a nvFX::Uniform binding point although none of the shaders in the effect did ever use a uniform of the same name. To prevent this to happen, there is a solution explained in \ref INTROSPECTION :Introspection of Uniforms".
+
+\section UPDATEUNIFORM set vs. update
+
+When the application finally managed to create the nvFX::Uniform instances that it needs to drive the shaders, it can finally set values to it. This can be done in 2 distinctive ways :
+ - by \b setting values to this uniform binding point
+ - by \b updating values to this uniform binding point
+
+any function of nvFX::IUniform starting with \b set will setup some \b persistent data area with the values that got assigned. Therefore the uniform binding point will know what are the values to send to the GLSL program when the time will come to bind the program and update the uniform values.
+
+In some specific cases, the application may not require the uniform binding point to mirror the data : for example if the data are always changed at every rendering loop, why should the application go through yet another stage of data copy ?
+
+To solve this, functions of nvFX::IUniform starting with \b update will directly forward the values down to the targets, without mirroring the data. In other words, this means that the uniform binding point only acts as a medium to the final target(s).
+
+Example:
+
+\code
+    nvFX::IContainer* pGLSLFx;
+    nvFX::IPass *fxPass;
+    // create uniform binding points
+    nvFX::IUniform *uniformLightAttenuation = pGLSLFx->createUniform("LightAttenuation");
+    nvFX::IUniform *uniformWVPMatrix = pGLSLFx->createUniform("WVPMatrix");
+    //...
+    // uniformLightAttenuation stores myAttenuation value for later
+    uniformLightAttenuation->setValue1f(myAttenuation);
+    //...
+    // executes the Pass. This is here that we send uniformLightAttenuation to the uniform target if any
+    fxPass->execute();
+    // uniformWVPMatrix doesn't mirror myWVP values. But sends myWVP vals to the target : only for the fxPass !
+    uniformWVPMatrix->updateMatrix4f(myWVP, fxPass);
+    //...
+\endcode
+
+To improve efficiency of \e updating values without mirroring, there is an additional argument in any \b update method of nvFX::IUniform (for example in nvFX::IUniform::updateMatrix4f ) where we can specify which Pass are we targetting. This allows the runtime to only send data to the uniform parameters of the active GLSL Shaders of the specific pass.
+
+\note If one did use "updateMatrix4f" before calling nvFX::IPass::Execute, the update would work but would have to \b bind every single program of the targeted Passes; then un-bind them. It is therefore preferable to consider that \b update methods should be invoked \e after the Pass execution.
+
+\section INTROSPECTION Introspection of Uniforms
+
+Previous examples assumed that the application knows about which uniforms to work with : nvFX::IContainer::createUniform was issues explicitly without checking if the uniforms are needed in the nvFX effect.
+
+It is obviously not such a good thing in many cases. For example, many effects could request different sets of transformation matrices : some would require World-view-projection matrix; some would require them separated; some would require the View-inverse-transpose etc.
+
+At the end, if the application wanted to support every combination of matrices, it would have have to create a uniform binding point for each case. This would be feasible, but not really efficient : the C++ code would have to issue many \e set/updateMatrix4f() even when most of them would be useless.
+
+In order to prevent this, nvFX parser allows you to declare uniforms for \e introspection purpose (known as \e reflexion, too) \b outside of any code section such as GLSLShader.
+
+It is important to repeat that nvFX parser have no way to know what is inside an encapsulated piece of code. Therefore the only way to expose to the parser some entry points like uniforms is to declare them for nvFX.
+
+nvFX parser doesn't claim to parse any sort of GLSL uniforms. For example it is not possible to declare a structure and declare a uniform of this structure type. However, the least that we need is available and should be enough in 95% of the cases.
+
+nvFX parser is able to parse uniform declarations with additional features that most of the shader such as GLSL don't have :
+ - \b semantics : Cg have this feature. This turns out to be useful to be able to differentiate between the name that the application needs from the name of the uniform that is used in the shader code.
+ - \b annotations : Cg also have this feature. It turns out to be useful for many things such as specifying min/max values for a uniform parameter; string for a widget style if the application wants to expose this uniform in a UI...
+ - "\b UniformGroup \e name { ...uniform declarations... }" allows you to put together a set of uniforms, so that it will be possible later at runtime to identify them as part of this group. This could be used to group uniforms according to their availability for the user, through user-interfaces...
+
+\note \b UniformGroup is about to be removed : in the meantime I added \ref CSTBUFFERS "Constant Buffers" as a more consistent way to gather uniforms.
+
+Example:
+\code
+    // declarations outside of any group
+    uniform vec3  eyePos : EYEPOS;
+    uniform mat4  matWVP : WORLDVIEWPROJECTION;
+    // declaration within a group
+    UniformGroup user_data
+    {
+        uniform float scaleObject : SCALEOBJECT
+        <
+            widgetStyle = "Slider";
+            min = 0.1;
+            max = 4;
+        > = 0.1; // default data can be set and will be sent to GLSL at validation time
+        uniform float attenuation;
+        uniform vec4 surfColor = {1.0, 0.268, 0.433, 1.0};
+\endcode
+
+uniforms can be declared within a \ref CSTBUFFERS "Constant Buffers". In this case, uniforms are \b not directly related to the shader : instead they are managed by the runtime to perform proper constant buffer update if necessary.
+In other words, uniforms inside a constant buffer targets the constant buffer object (UBO in GLSL, CBuffer in D3D...) rather than targeting the shaders. On the other hand the constant-buffer that owns these uniforms will target the shaders.
+
+\code
+CstBuffer myConstants { // cbuffer keywork can also be used
+	uniform mat4 modelViewProjection;
+	uniform float someScale : SCALE < default = 0.1; max = 10.0; > = 2.3;
+}
+\endcode
+
+You can declare arrays of \b float and \b vec[234] uniforms with their associated default values :
+\code
+        // array of 4 floats
+        uniform float attenuation[4] : ATTEN < string UI="ComboBox" > = {1.2, 1.5, 0.3, 1.0};
+		// ommitted the size in [] : the # of values will set the size...
+        uniform float offsets[] = {3.2, 1.2, 1.5, 0.3, 1.0}; // will set the size to 5
+		// array of vectors
+        uniform vec3 surfColor[2] = {{1.0, 0.268, 0.433}, {1.0, 0.6, 0.8}};
+\endcode
+
+\note Annotations are weakly typed to keep the code as simple as possible.
+
+An interesting consequence of doing this way : \b only uniforms that are declared outside of GLSLShader sections will be visible. This allows the effect to "decide" what is exposed from what is not. It can be a useful way to simplify the introspection process of a complex effect.
+
+\subsection INTROSPECRUNTIME What really happens in the runtime
+
+When the parser encounters such uniform declarations, a very simple action will happen : the parser will \b invoke \b for \b you the uniform binding point, exactly as what we did "by hand" in the previous example. The parser will invoke for you the nvFX::IContainer::createUniform for you with the right name, type, semantic and annotations. Everything will be done for you but in the same exact way as your would have done.
+
+From there, it is obvious that the instance of the container effect will have a list of available uniforms : the applications will then be able to query them.
+
+\code
+    nvFX::IContainer* pGLSLFx;
+    nvFX::IUniform*   fxworldMatrix;
+    nvFX::IUniform*   fxwvpMatrix;
+    //...
+    nvFX::IUniform *pUniform;
+    for(int i=0; pUniform = pGLSLFx->findUniform(i); i++)
+    {
+        LPCSTR sem = pUniform->getSemantic();
+        if(!strcmp(sem, "WORLD"))
+            fxworldMatrix = pUniform;
+        else if(!strcmp(sem, "WORLDVIEWPROJECTION"))
+            fxwvpMatrix = pUniform;
+        //...etc...
+    }
+    //...later in the rendering loop :
+    if(fxwvpMatrix) fxwvpMatrix->setMatrix4f(...); // no call if pointer == NULL
+\endcode
+
+pointers to used uniforms will be non-NULL while the others will be NULL.
+
+\subsection REDUNDANCY Avoiding redundant declarations
+
+Keeping in mind that these uniform declarations are done \e outside of any GLSLShader section, this code does not count for any GLSL code.
+
+However, nvFX parse is capable of creating the GLSL code related to these uniforms declared for introspection. The generated GLSL code will then be appended to every GLSL shader code.
+
+This means that there no need to declare these uniforms within GLSLShader section :
+\code
+    uniform vec3  eyePos : EYEPOS;
+    GLSLShader
+    {
+        uniform vec3  eyePos : EYEPOS; // no need : will raise an error because of duplicated declaration
+        void main() {...}
+    }
+\endcode
+would be \b wrong, because the uniform declarations would be done \b twice.
+Instead you should write:
+\code
+    uniform vec3  eyePos : EYEPOS;
+    GLSLShader
+    {
+        void main() {...}
+    }
+\endcode
+
+If for some reasons one wanted to keep the "integrity" of the GLSL code, a special #define is set to avoid errors : \b INFX
+\code
+    uniform vec3  eyePos : EYEPOS;
+    GLSLShader
+    {
+        #ifndef INFX // INFX define when from nvFX
+        uniform vec3  eyePos : EYEPOS;
+        #endif
+        void main() {...}
+    }
+\endcode
+
+This \b INFX define will essentially make sense for the cases where we include external GLSL files (see \ref GLSLShaderFromFile - TODO)
+
+\subsection STRUCTUNIF Structures and introspection of uniforms
+As explained earlier, the nvFX parser is only able to parse simple uniforms. The main motivation is to keep maintenance of the parse easy and to avoid getting too deep in complex grammar.
+
+As a consequence it is impossible to declare uniforms like this in nvFX :
+\code
+    UniformGroup transforms
+    {
+      struct Matrices {
+        mat4 VP;
+        mat4 P;
+        mat4 V;
+      };
+      uniform Matrices mat;
+    }
+\endcode
+
+The solution that seems good enough for such a case : declarations outside of the GLSLShader section will directly address the members of this structure, while the GLSL code will still have to carry the responsibility to declare the uniforms. In other words, this case cannot allow to remove the declaration from GLSL : both must be there.
+
+Example:
+\code
+// expose uniform members for "reflexion"/"introspection" :
+uniform mat4 mat.VP : VIEWPROJECTION;
+uniform mat4 mat.V  : VIEW;
+uniform mat4 mat.P  : PROJECTION;
+GLSLShader 
+{
+    // properly declare the structure and the related uniform for GLSL:
+    struct Matrices {
+        mat4 VP;
+        mat4 P;
+        mat4 V;
+    };
+    uniform Matrices mat;
+}
+\endcode
+
+\section UBO Uniform Buffer Objects
+
+nvFX allows you to bind a UBO to a uniform parameter. It is in fact one of the simplest way to proceed. However, extra care should be taken to the consistency of the data that are being attached to the GLSL structure.
+
+\note Note that this approach is a low-level approach : you can have more help from nvFX for Constant buffer management by using \b CstBuffer (nvFX::ICstBuffer). Check \ref CSTBUFFERS "Constant Buffers" for more.
+
+effect code example:
+\code
+GLSLShader
+{
+    layout(std140) uniform transfblock {
+        mat4 VP;
+        mat4 P;
+        mat4 V;
+        mat4 VIT;
+    };
+}
+//...
+\endcode
+
+On C++ side:
+\code
+struct transfblock
+{
+    mat4 VP;
+    mat4 Projection;
+    mat4 View;
+    mat4 ViewIT;
+};
+transfblock g_transfblock;
+//...
+glGenBuffers(1, &g_transfBO);
+glBindBuffer(GL_UNIFORM_BUFFER, g_transfBO);
+glBufferData(GL_UNIFORM_BUFFER, sizeof(g_transfblock), &g_transfblock, GL_STREAM_DRAW);
+glBindBuffer(GL_UNIFORM_BUFFER, 0);
+// Now create the uniform block proxy
+fxtransfblock = pGLSLFx->createUniform("transfblock");
+// assign a UBO to it. Here we know this BO Id will always be the same. So we assign it at init time
+// if we didn't call this here, we must later call updateBuffer each time the shader gets used... up to you
+fxtransfblock->setBuffer(g_transfBO);
+//...
+// Rendering loop :
+//...update the matrices of g_transfblock
+glBindBuffer(GL_UNIFORM_BUFFER, g_transfBO);
+glBufferData(GL_UNIFORM_BUFFER, sizeof(g_transfblock), &g_transfblock, GL_STREAM_DRAW); // BufferSubData could be used, too
+glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+\endcode
+
+Another solution for UBO usage : instead of updating the Data of the attached UBO, one could change the ID of the UBO attached to the uniform :
+\code
+// rendering loop :
+//...
+myPass->Execute();
+// assign the UBO for a specific material at index 'm' :
+fxtransfblock->updateBuffer(someMaterial[m], myPass); // directly send this value to the uniform parameter ("update") for "myPass"
+\endcode
+
+**/
+

@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<VisualStudioToolFile
+	Name="Flex"
+	Version="8.00"
+	>
+	<Rules>
+		<CustomBuildRule
+			Name="Flex"
+			DisplayName="Flex"
+			CommandLine="Flex.exe [batchscanner] [compatibility] [noline] [Debug] [cpp] [fast] [casesensitive] -o$(InputDir)$(InputName).cpp [inputs]"
+			Outputs="$(InputDir)$(InputName).cpp"
+			FileExtensions="*.yy"
+			>
+			<Properties>
+				<BooleanProperty
+					Name="Debug"
+					DisplayName="Debug"
+					Description="Debug"
+					Switch="-d"
+				/>
+				<BooleanProperty
+					Name="cpp"
+					DisplayName="cpp code"
+					Description="don&apos;t generate `#line&apos; directives"
+					Switch="-+"
+				/>
+				<BooleanProperty
+					Name="fast"
+					DisplayName="fast"
+					Description="generate fast and large scanner"
+					Switch="-f"
+				/>
+				<BooleanProperty
+					Name="casesensitive"
+					DisplayName="case-less"
+					Description="case-less scanner"
+					Switch="-i"
+					DefaultValue="true"
+				/>
+				<BooleanProperty
+					Name="noline"
+					DisplayName="No #line"
+					Description="suppress #line directives in scanner"
+					Switch="-L"
+				/>
+				<BooleanProperty
+					Name="compatibility"
+					DisplayName="maximal compatibility"
+					Description="maximal compatibility with original lex"
+					Switch="-l"
+				/>
+				<BooleanProperty
+					Name="batchscanner"
+					DisplayName="batch scanner"
+					Description="generate batch scanner (never interactive)"
+					Switch="-B"
+					DefaultValue="true"
+				/>
+			</Properties>
+		</CustomBuildRule>
+	</Rules>
+</VisualStudioToolFile>

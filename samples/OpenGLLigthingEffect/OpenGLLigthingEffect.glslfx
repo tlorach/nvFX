@@ -1,0 +1,307 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+#extension GL_ARB_separate_shader_objects : enable
+
+//////////////////////////////////////////////////////////////
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 420 compatibility
+}
+#include "lighting.glslfxh"
+//////////////////////////////////////////////////////////
+// Note: "global" would in the case where many effects yse this constant buffer
+// to share it accross effects: therefore allowing to share the UBO creation and updates
+// this example doesn't really need this keyword, though
+ConstantBuffer global transfBlock1
+{
+    uniform mat4 m4_ViewProj;
+    uniform mat4 m4_Proj;
+    uniform mat4 m4_View;
+    uniform mat4 m4_ViewIT;
+    uniform vec3 eyePos : EYEPOS;
+    uniform float dummy;
+}
+
+ConstantBuffer global transfBlock2
+{
+    uniform mat4 m4_World;
+    uniform mat4 m4_WorldView;
+    uniform mat4 m4_WorldViewProj;
+    uniform mat4 m4_WorldIT;
+};
+ConstantBuffer global materialBlock
+{
+    uniform vec3     diffuse;
+    uniform float    specexp;
+    uniform vec3     ambient;
+    uniform float    reflectivity;
+    uniform vec3     transparency;
+    uniform float    translucency;
+    uniform vec3     specular;
+};
+uniform float diffStrength = 1.0;
+uniform float specStrength = 1.0;
+uniform float reflStrength = 0.0;
+
+uniform vec4 scaleBias = {0,0,0,1.0}; // x,y,z bias and w==scale
+uniform vec3 lightPos[] = {{10,10,10},{10,10,-10}};
+uniform vec3 lightColor[] = {{0.8,0.8,0.8},{0.5,0.5,0.7}};
+
+//////////////////////////////////////////////////////////
+
+RasterizationState rasterState
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+RasterizationState rasterStateWire
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, LINE};
+}
+DepthStencilState dstStateFloor
+{
+    DEPTH_TEST = true;
+    DEPTH_WRITEMASK = true;
+    DEPTH_FUNC = LEQUAL;
+}
+////////////////////////////////////////////////////////////////////
+/// VERTEX PROGRAM /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 Normal;
+    layout(location=2) in vec3 TexCoord;
+    layout(location=3) in vec3 Tangent;
+    layout(location=4) in vec3 Binormal;
+
+    layout(location=0) out vec3 outNw;
+    layout(location=4) out vec3 outPw;
+    layout(location=5) out vec3 outWV;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+        vec3 N    = normalize((m4_World/*IT*/ * vec4(Normal,0)).xyz);
+        vec4 Po    = Position;
+        Po.xyz += scaleBias.xyz;
+        Po.xyz *= scaleBias.w;
+        vec3 Pw     = (m4_World * Po).xyz;
+
+        gl_Position = (m4_WorldViewProj * Po);
+        // Here we do this on purpose to test the UBO use :
+        //gl_Position = (m4_World * Po);
+        //gl_Position = (m4_View * gl_Position); // UBO
+        //gl_Position = (m4_Proj * gl_Position); // UBO
+
+        outNw           = N;
+        outPw           = Pw;
+        outWV           = normalize(eyePos - Pw);;
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectPS
+{
+    layout(location=0) in vec3 inNw;
+    layout(location=4) in vec3 inPw;
+    layout(location=5) in vec3 inWV;
+
+    layout(location=0) out vec4 color;
+
+    void main() 
+    {
+        vec3 Nn = normalize(inNw);
+        vec3 Vn = normalize(inWV);
+
+        LIGHTRES res;
+        res.ambientContrib = vec3(0,0,0);
+        res.diffContrib = vec3(0,0,0);
+        res.specContrib = vec3(0,0,0);
+
+        LIGHTINFOS infos;
+        infos.Vn = Vn;
+        infos.Nb = Nn;
+        infos.Pw = inPw;
+        infos.SpecExpon = 50.0;
+
+        //--------------------------------
+        lighting_reflectionHi(infos, res);
+        //--------------------------------
+        lighting_compute(infos, res);
+        //--------------------------------
+        vec3 result = (diffStrength * diffuse.rgb * ( res.diffContrib + res.ambientContrib ))
+                    + (specStrength * res.specContrib)
+                    + (reflStrength * res.reflectionHi.rgb);
+
+        color = vec4(result, 1.0);
+
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// Floor things
+////////////////////////////////////////////////////////////////////
+namespace floor
+{
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's VERTEX PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader VS
+    {
+        layout(location=0) in vec4 Position;
+        out gl_PerVertex {
+            vec4 gl_Position;
+        };
+        void main(void)
+        {
+            gl_Position = m4_ViewProj * Position;
+        }
+    }
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's FRAGMENT PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader PS
+    {
+        layout(location=0) out vec4 color;
+        void main() 
+        {
+            color = vec4(0.3, 0.5, 0.7, 1.0);
+        }
+    }
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Material Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+Technique TECH_INIT
+{
+    Pass init
+    {
+        PolygonOffset = {1.0,1.0};
+        DEPTH_TEST = True;
+        DEPTH_FUNC = LEQUAL;
+        DEPTH_MASK = True;
+    }
+}
+
+Technique TECH_WIREFLOOR
+{
+    Pass p0
+    {
+        //RasterizationState = rasterStateWire;
+        //DepthStencilState = dstStateFloor;
+
+        VertexProgram = floor::VS;
+        FragmentProgram = floor::PS;
+    }
+}
+Technique IBL
+{
+    Pass p0
+    {
+        RasterizationState = rasterState;
+
+        VertexProgram = ObjectVS;
+        FragmentProgram = ObjectPS;
+
+        SamplerResource(IBL::diffuseEnvSampler) = IBL::diffuseEnvTexture;
+        SamplerResource(IBL::specularEnvSampler) = IBL::specularEnvTexture;
+        SamplerResource(IBL::envSampler) = IBL::envTexture;
+        FragmentProgram<"lightmodel"> = IBL::lightmodel;
+        Uniform(diffStrength) = 0.8;
+        Uniform(specStrength) = 0.5;
+        Uniform(reflStrength) = 0.02;
+    }
+}
+Technique GL_Lights
+{
+    Pass p0
+    {
+        RasterizationState = rasterState;
+        VertexProgram = ObjectVS;
+        FragmentProgram = ObjectPS;
+        FragmentProgram<"lightmodel"> = DefaultLighting::lightmodel;
+        FragmentProgram<"lightingsetup"> = {DefaultLights::Point0, DefaultLights::Point1, DefaultLights::Point2};
+        Uniform(diffStrength) = 0.8;
+        Uniform(specStrength) = 0.8;
+        Uniform(reflStrength) = 0.0;
+    }
+}
+Technique GL_Lights2
+{
+    Pass p0
+    {
+        RasterizationState = rasterState;
+        VertexProgram = ObjectVS;
+        FragmentProgram = ObjectPS;
+        FragmentProgram<"lightmodel"> = DefaultLighting::lightmodel;
+        FragmentProgram<"lightingsetup"> = {DefaultLights::Dir0, DefaultLights::Spot1, DefaultLights::None2};
+        Uniform(diffStrength) = 0.8;
+        Uniform(specStrength) = 0.8;
+        Uniform(reflStrength) = 0.0;
+    }
+}
+Technique IBL2
+{
+    Pass p0
+    {
+        RasterizationState = rasterState;
+
+        VertexProgram = ObjectVS;
+        FragmentProgram = ObjectPS;
+
+        SamplerResource(IBL::diffuseEnvSampler) = IBL::diffuseEnvTexture;
+        SamplerResource(IBL::specularEnvSampler) = IBL::specularEnvTexture;
+        SamplerResource(IBL::envSampler) = {IBL::envTexture, 2};
+        FragmentProgram<"lightmodel"> = IBL::lightmodel;
+        Uniform(diffStrength) = 0.5;
+        Uniform(specStrength) = 0.8;
+        Uniform(reflStrength) = 0.0;
+    }
+}
+Technique NoLights
+{
+    Pass p0
+    {
+        RasterizationState = rasterState;
+        VertexProgram = ObjectVS;
+        FragmentProgram = ObjectPS;
+        FragmentProgram<"lightmodel"> = NoLighting::lightmodel; // empty light model
+    }
+}
+

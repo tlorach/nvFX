@@ -1,0 +1,101 @@
+/**
+\page GLSLSR Using GLSL Sub-routines
+
+It is possible to setup shader modules in such a way that we can assign GLSL Sub-routines from a pass or from the runtime.
+
+\note obviously, Sub-routines only work for GLSL for OpenGL 4.0. They are not available for OpenGL-ES
+
+\section SRDECL Declare Sub-Routines in GLSL code
+
+Declare a sub-routine prototype in the GLSL code in GLSLShader sections :
+
+\code
+GLSLShader myShader
+{
+    subroutine void LightingComputationType(int i, LIGHTINFOS infos, inout LIGHTRES prevres);
+\endcode
+
+Then Declare some uniforms using subroutine. Here we will create an array of them:
+\code
+    //in GLSLShader myShader
+    subroutine uniform LightingComputationType      lightingComputation[MaxSize];
+\endcode
+
+Add some implementations:
+\code
+    //in GLSLShader myShader
+    subroutine(LightingComputationType)
+    void lighting_compute_Dir(const int i, LIGHTINFOS infos, inout LIGHTRES res)
+    {
+        ...
+    }
+    subroutine(LightingComputationType)
+    void lighting_compute_Spot(const int i, LIGHTINFOS infos, inout LIGHTRES res)
+    {
+        ...
+    }
+    ...
+\endcode
+
+Some use of these sub-routines, for example :
+\code
+    void lighting_compute(LIGHTINFOS infos, inout LIGHTRES res)
+    {
+        res.diffContrib = vec3(0.4);
+        for(int i=0; i<numLights; i++)
+            lightingComputation[i](i, infos, res); // sub-routine invokation
+    }
+\endcode
+
+\section SRPASS Setup Sub-Routines from a pass
+
+In the Pass, you can now associate some Sub-routine implementations to uniform Sub-routines.
+This will allow the effect to run without having to do specific setup from the application.
+\code
+technique someTechnique
+{
+    pass somePass
+    {
+        VertexProgram = ObjectVS;
+        FragmentProgram = ObjectPS;
+
+        // sub-routine assignments
+        lightingComputation[0]  = lighting_compute_Dir;
+        lightingComputation[1]  = lighting_compute_Spot;
+        lightingComputation[2]  = lighting_compute_Spot;
+    }
+}
+\endcode
+
+\section SRCPP Managing Sub-routines from C++ code
+
+The whole point of Sub-Routines is to allow efficient dynamic changes of these routines at runtime.
+
+Here is how to do to replace the pass-state of sub-routine with a uniform binding that the application would update at runtime :
+
+Let's look for the existing pass-state uniform-assignment and remove it from the pass. The reasons is that we don't need anymore to have the pass do the job for us, since we decided to take the control over the sub-routine management :
+\code
+    pState = pPass->findState("lightingComputation");
+    if(pState)
+    {
+        pPass->destroy(pState);
+        pPass->validate(); // destructing a state need re-validation... 
+    }
+\endcode
+
+Now let's create a uniform binding point (nvFX::IUniform):
+\code
+    if(!fxlights)
+        fxlights = pGLSLFx->createUniform("lightingComputation");
+\endcode
+
+Now let's imagine we will have created an array of named sub-routine functions
+\code
+    char* subRoutines[4];
+    // create the string names in 'subRoutines' according to our needs...
+    fxlights->updateSubroutines((const char**)subRoutines, pPass, true);
+\endcode
+
+\note for now the only way to update Sub-Routines gets through an array of strings. We plan to find a better way, by using handles to sub-routines implementations...
+
+**/

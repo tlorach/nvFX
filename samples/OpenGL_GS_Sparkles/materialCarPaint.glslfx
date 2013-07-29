@@ -1,0 +1,386 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+#extension GL_ARB_separate_shader_objects : enable
+
+uniform global vec4 scaleBias = {0,0,0,1.0}; // x,y,z bias and w==scale
+
+ConstantBuffer materialTweaks < uigroup="surface"; >
+{
+    uniform float diffStrength <      uimin = 0;      uimax = 2;    > = 1.0;
+    uniform float specStrength <      uimin = 0;      uimax = 2;    > = 1.0;
+    // Fleck-specific
+    uniform vec3  fleck_material_color  <      uimin = 0;      uimax = 1;    > = {1,1,1};
+    uniform float freq                  <      uimin = 0;      uimax = 5;    > = 2.4;
+    //uniform float fleck_locality        <      uimin = 0;      uimax = 1;    > = 0.01;
+    uniform float fleck_shininess       <      uimin = 0;      uimax = 10;   > = 5.6;
+    uniform float fleck_scale           <      uimin = 0;      uimax = 20.0; > = 1.03;
+    uniform float clearcoat_smoothness  <      uimin = 0.0;    uimax = 100.0;  > = 25.0;
+
+}
+
+//--------------------------------------------------------------------------------------
+SamplerState linearSampler
+{
+
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    TEXTURE_WRAP_S = MIRRORED_REPEAT;
+    TEXTURE_WRAP_T = MIRRORED_REPEAT;
+    TEXTURE_WRAP_R = MIRRORED_REPEAT;
+}
+//--------------------------------------------------------------------------------------
+//    texture resources
+//--------------------------------------------------------------------------------------
+TextureResource3D noise_map <
+    defaultFile = "noise_MetalPaint.dds";
+>
+{
+    SamplerState = linearSampler;
+};
+
+uniform Sampler3D sampler3DNoise;
+//////////////////////////////////////////////////////////
+
+RasterizationState rasterState1
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+RasterizationState rasterStateWire
+{
+    LINE_WIDTH = 2;
+    POLYGON_MODE={FRONT_AND_BACK, LINE};
+}
+DepthStencilState dstStateFloor
+{
+    DEPTH_TEST = true;
+    DEPTH_WRITEMASK = true;
+    DEPTH_FUNC = LEQUAL;
+}
+//////////////////////////////////////////////////////////////
+// GLSL shared header : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 420 compatibility
+    // forward declarations
+    void getMatValues(vec3 tc, out vec4 diff, out vec4 spec);
+    vec3 compute_flecks(vec3 Vn, inout vec3 Nn, vec3 Po, vec3 Pw);
+}
+#include "shared_globals.glslfxh"
+
+//////////////////////////////////////////////////////////
+
+uniform sampler2D specSampler;
+uniform sampler2D diffuseSampler;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// sampler states are outside of GLSL.
+// names allows to make them match with the texture/sampler of GLSL (HLSL, too)
+// or maybe we would require the runtime to connect them explicitly...
+//
+SamplerState specSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    //AddressS = REPEAT;
+    //AddressT = REPEAT;
+    //AddressR = REPEAT;
+}
+SamplerState defaultSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+//
+// Texture Resources
+//
+TextureResource2D Default_color <
+    defaultFile = "gargoyleMossyDiffuse.dds";
+> {
+    // this is a possible alternate way to setup sampler-states...
+    // in OpenGL, sampler-states are defined for each texture
+    // sampler-states specified in the Pass override this one
+    SamplerState = defaultSamplerState;
+}
+TextureResource2D Default_spec <
+    defaultFile = "gargoyleMossySpec.dds";
+> {
+    SamplerState = defaultSamplerState;
+}
+
+////////////////////////////////////////////////////////////////////
+/// VERTEX PROGRAM /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 Normal;
+    layout(location=2) in vec3 TexCoord;
+    layout(location=3) in vec3 Tangent;
+    layout(location=4) in vec3 Binormal;
+
+    layout(location=0) out vec3 outNw;
+    layout(location=1) out vec3 outTC;
+    layout(location=4) out vec3 outPw;
+    layout(location=5) out vec3 outWV;
+    layout(location=6) out vec3 outPo;
+    layout(location=7) out float outHZ;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+        vec3 N    = normalize((m4_World/*IT*/ * vec4(Normal,0)).xyz);
+        vec4 Po    = Position;
+        Po.xyz += scaleBias.xyz;
+        Po.xyz *= scaleBias.w;
+        vec3 Pw     = (m4_World * Po).xyz;
+
+        gl_Position = (m4_WorldViewProj * Po);
+        outHZ = gl_Position.z;// MAYBE WRONG: FAR_CLIP - (OUT.HPosition.z + NEAR_CLIP);
+
+        outNw           = N;
+        outPw           = Pw;
+        outPo           = Po.xyz;
+        outTC           = TexCoord;
+        outWV           = normalize(eyePos - Pw);;
+    }
+}
+////////////////////////////////////////////////////////////////////
+//  Compute some Flecks
+////////////////////////////////////////////////////////////////////
+GLSLShader compute_flecks
+{
+    vec3 compute_flecks(vec3 Vn, inout vec3 Nn, vec3 Po, vec3 Pw)
+    {
+        // Scale the obj_coords to make things more sparkly
+        vec3 noise_coords = Po * fleck_scale;
+
+        //    1a) Look up 4 noise values from the noise_map, sampling at different frequencies (powers of freq)
+        //        Hint: use vec3 f3tex3D(texobj tex, vec3 texcoords);
+        vec3 fleck_normal0 = texture(sampler3DNoise, noise_coords * freq).rgb;
+        vec3 fleck_normal1 = texture(sampler3DNoise, noise_coords * pow(freq, 2)).rgb;
+        vec3 fleck_normal2 = texture(sampler3DNoise, noise_coords * pow(freq, 3)).rgb;
+        vec3 fleck_normal3 = texture(sampler3DNoise, noise_coords * pow(freq, 4)).rgb;
+
+        //    1b) Hack a specular component calculation - instead of (R dot L)^s, use (N dot E)^s
+        //        This doesn't take the light position into account, but the normals are random so nobody
+        //        will notice!  You will want to reverse the normal if it's pointing away from the eye.
+        float  fleck_intensity =
+                  pow(clamp(abs(fleck_normal0.z), 0.0, 1.0), fleck_shininess) + 
+                  pow(clamp(abs(fleck_normal1.z), 0.0, 1.0), fleck_shininess) + 
+                  pow(clamp(abs(fleck_normal2.z), 0.0, 1.0), fleck_shininess) + 
+                  pow(clamp(abs(fleck_normal3.z), 0.0, 1.0), fleck_shininess);
+
+        //    1c) Calculate specular component using this normal, just like you did above, with ONE EXCEPTION
+        //        Raise r_dot_l from above by the fleck_locality constant and modulate into the computation
+        //        This will restrict the sparkles to the vicinity of the specular highlights.
+        //for(int i=0; i<(lights.length); i++)
+
+    //
+    //BUG : changing lights do NOT initialize properly
+    //
+    // TODO: change the way to get lighting data
+    //
+        float fleck_intensity_sum = 0.0;
+        vec3 reflVect = reflect(Vn, Nn);
+        //fleck_intensity_sum = fleck_intensity * pow(lighting.phongSpec(Pw, Nn, reflVect, fleck_locality).x, fleck_locality);
+        // shall we use again 'fleck_locality' ?
+        fleck_intensity_sum = fleck_intensity;
+        //    1e) Finally, modulate with fleck's material color
+        vec3 fleck_color = fleck_intensity_sum * fleck_material_color;
+
+        // PART  2  Add noise octaves together to form smooth value noise, use to slightly perturb
+        //                     reflection vector to simulate slight irregularities on car surface
+        //                     Hint: use the fleck_normal lookups from above
+        //    2a) Synthesize a multi-frequency noise function by appropriately weighting each of the noise
+        //         freqencies with diminishing weights (1/2, 1/4, 1/8, 1/16...)
+        vec3 noise_vector = .5 * fleck_normal0 + .25 * fleck_normal1 + 
+        .125 * fleck_normal2 + .0625 * fleck_normal3;
+
+        //    2b) Use this vector to perturb N very slightly
+        Nn = normalize(noise_vector + clearcoat_smoothness * Nn);
+        return fleck_color;
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// Read some colors ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader MatFromTexture
+{
+    void getMatValues(vec3 tc, out vec4 diff, out vec4 spec)
+    {
+        diff = texture(diffuseSampler, vec2(tc.x, tc.y));
+        spec = texture(specSampler, vec2(tc.x, tc.y));
+    }
+}
+GLSLShader MatFromUniforms
+{
+    void getMatValues(vec3 tc, out vec4 diff, out vec4 spec)
+    {
+        diff = vec4(diffuse,1.0);
+        spec = vec4(specular, 1.0);
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectPS
+{
+    layout(location=0) in vec3 inNw;
+    layout(location=1) in vec3 inTC;
+    layout(location=4) in vec3 inPw;
+    layout(location=5) in vec3 inWV;
+    layout(location=6) in vec3 inPo;
+    layout(location=7) in float inHZ;
+
+    void main() 
+    {
+        vec4 diffcolor;
+        vec4 speccolor;
+        getMatValues(inTC, diffcolor, speccolor);
+        vec3 Nn = normalize(inNw);
+        vec3 Vn = normalize(inWV);
+
+        vec3 fleck_color;
+        fleck_color = compute_flecks(Vn, Nn, inPo, inPw);
+
+        vec3 result;// = vec3(0);
+
+        vec3 Ln = normalize(lightPos - inPw);
+        vec3 Hn = normalize(Vn + Ln);
+        float NdotL = max(dot(Ln, Nn), 0.0);
+        float HdotN = NdotL > 0.0 ? pow(max(0.0, dot(Hn, Nn)), 64.0) : 0.0;
+        vec3 ambientContrib = vec3(0.01,0.01,0.03);
+        result = (diffStrength * diffcolor.rgb * NdotL) 
+            + ambientContrib 
+            + (specStrength * speccolor.rgb + fleck_color) * HdotN;
+
+        // write fragments to output, depending on the needs
+        writeFragments(vec4(result, 1.0), vec3(0,0,inHZ), Nn);
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// Floor things
+////////////////////////////////////////////////////////////////////
+namespace floor
+{
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's VERTEX PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader VS
+    {
+        layout(location=0) in vec4 Position;
+        out gl_PerVertex {
+            vec4 gl_Position;
+        };
+        void main(void)
+        {
+            gl_Position = m4_ViewProj * Position;
+        }
+    }
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's FRAGMENT PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader PS
+    {
+        layout(location=0) out vec4 color;
+        void main() 
+        {
+            color = vec4(0.3, 0.5, 0.7, 1.0);
+        }
+    }
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Material Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+Technique Init
+{
+    Pass init
+    {
+        PolygonOffset = {1.0,1.0};
+        DEPTH_TEST = True;
+        DEPTH_FUNC = LEQUAL;
+        DEPTH_MASK = True;
+    }
+}
+
+Technique Floor
+{
+    Pass p0
+    {
+        //RasterizationState = rasterStateWire;
+        //DepthStencilState = dstStateFloor;
+
+        VertexProgram = floor::VS;
+        FragmentProgram = floor::PS;
+    }
+}
+Technique ObjectWithTex
+{
+    Pass p0
+    {
+        RasterizationState = rasterState1;
+        // we assume here that the resource will be set by the app
+        SamplerState(diffuseSampler) = defaultSamplerState;
+        SamplerResource(diffuseSampler) = Default_color;
+        SamplerState(specSampler) = defaultSamplerState;
+        SamplerResource(specSampler) = Default_spec;
+
+        SamplerResource(sampler3DNoise) = noise_map;
+        VertexProgram = ObjectVS;
+        // Here we link 2 parts together to finally have a consistent shader
+        FragmentProgram = { ObjectPS, MatFromTexture, compute_flecks };
+        FragmentProgram<"FragOut"> = fragmentOutputDefault;
+    }
+}
+Technique ObjectNoTex
+{
+    Pass p0
+    {
+        RasterizationState = rasterState1;
+
+        SamplerResource(sampler3DNoise) = noise_map;
+        VertexProgram = ObjectVS;
+        // Here we link 2 parts together to finally have a consistent shader
+        FragmentProgram = { ObjectPS, MatFromUniforms, compute_flecks};
+        FragmentProgram<"FragOut"> = fragmentOutputDefault;
+    }
+}

@@ -1,0 +1,93 @@
+//--------------------------------------------------------------------------------------
+// Author: Tristan Lorach
+// Email: tlorach@nvidia.com
+//
+// Copyright (c) NVIDIA Corporation 2013
+//
+// TO  THE MAXIMUM  EXTENT PERMITTED  BY APPLICABLE  LAW, THIS SOFTWARE  IS PROVIDED
+// *AS IS*  AND NVIDIA AND  ITS SUPPLIERS DISCLAIM  ALL WARRANTIES,  EITHER  EXPRESS
+// OR IMPLIED, INCLUDING, BUT NOT LIMITED  TO, IMPLIED WARRANTIES OF MERCHANTABILITY
+// AND FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL  NVIDIA OR ITS SUPPLIERS
+// BE  LIABLE  FOR  ANY  SPECIAL,  INCIDENTAL,  INDIRECT,  OR  CONSEQUENTIAL DAMAGES
+// WHATSOEVER (INCLUDING, WITHOUT LIMITATION,  DAMAGES FOR LOSS OF BUSINESS PROFITS,
+// BUSINESS INTERRUPTION, LOSS OF BUSINESS INFORMATION, OR ANY OTHER PECUNIARY LOSS)
+// ARISING OUT OF THE  USE OF OR INABILITY  TO USE THIS SOFTWARE, EVEN IF NVIDIA HAS
+// BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+//
+//--------------------------------------------------------------------------------------
+
+GLSLShader
+{
+    // forward declaration
+    void writeFragments(vec4 C, vec3 Pw, vec3 Nw);
+}
+
+ConstantBuffer global transfBlock1
+{
+    uniform mat4 m4_ViewProj;
+    uniform mat4 m4_ViewProjI;
+    uniform mat4 m4_Proj;
+    uniform mat4 m4_View;
+    uniform mat4 m4_ViewIT;
+    uniform vec3 eyePos : EYEPOS;
+    uniform float dummy;
+}
+
+ConstantBuffer global transfBlock2
+{
+    uniform mat4 m4_World;
+    uniform mat4 m4_WorldView;
+    uniform mat4 m4_WorldViewProj;
+    uniform mat4 m4_WorldIT;
+}
+ConstantBuffer global materialBlock
+{
+    uniform vec3     diffuse;
+    uniform float    specexp;
+    uniform vec3     ambient;
+    uniform float    reflectivity;
+    uniform vec3     transparency;
+    uniform float    translucency;
+    uniform vec3     specular;
+}
+
+ConstantBuffer global lightBlock
+{
+    // LIGHT... we put semantic to stop the UI to display them...
+    uniform vec3 lightPos : LIGHTPOS              = {4.0, 4, 4.0};
+    uniform vec3 lightColor : LIGHTCOLOR          = {1.0, 1.0, 1.0};
+    uniform vec3 lightColorSpec : LIGHTCOLORSPEC  = {1.0, 1.0, 1.0};
+    uniform vec3 ambiLightColor : AMBILIGHTCOLOR  = {0.07, 0.07, 0.07};
+    uniform vec3 surfColor : SURFCOLOR            = {0.2,0.0,0.5};
+    uniform float   Shininess < uimin = 0.0; uimax = 128.0; >   = 30.0;
+};
+
+GLSLShader global fragmentOutputDefault
+{
+    layout(location=0) out vec4 outColor;
+    void writeFragments(vec4 C, vec3 Pw, vec3 Nw)
+    {
+        outColor = C;
+    }
+}
+
+GLSLShader global fragmentOutputColorAndDepth
+{
+    layout(location=0) out vec4 outColor;
+    layout(location=1) out float outDepth;
+    void writeFragments(vec4 C, vec3 Pw, vec3 Nw)
+    {
+        outColor = C;
+        outDepth = Pw.z;
+    }
+}
+GLSLShader global fragmentOutputColorAndNw
+{
+    layout(location=0) out vec4 outColor;
+    layout(location=1) out vec3 outNw;
+    void writeFragments(vec4 C, vec3 Pw, vec3 Nw)
+    {
+        outColor = C;
+        outNw = Nw;
+    }
+}

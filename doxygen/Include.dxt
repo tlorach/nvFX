@@ -1,0 +1,103 @@
+/**
+\page INCLUDE Including Effect Code
+
+the pre-processor of nvFX is not a real one (yet). For now, the only preprocessor is "#include".
+
+\note Currently the way #include is implemented is rather simple : the \e lexer will jump to the included file and come back the original one after all was read. In other words, #include doesn't work as a real pre-processor command, but more as a lexer-behavior command
+
+#include obviously allows you to externalize some effect code outside in some other files.
+
+It is particularly good for situations where one would like to factorize some code. For example : lighting machinery; function helpers etc. could be put in separate include files.
+
+Here is an example on how to use it. First, here is the main effect using #include :
+
+\code
+GLSLShader 
+{
+    #version 330 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+    uniform vec3  diffuseColor;
+    ...
+}
+
+// Include some Helpers
+#include "Helpers.glslfxh"
+
+GLSLShader myVertexShader
+{
+    layout(location=0) in vec4 Position;
+    layout(location=2) in vec3 Normal;
+    void main(void)
+    {
+        ...
+        expVal = expand( val ); // declared in Helpers.glslfxh
+        ...
+    }
+}
+\endcode
+
+Helpers.glslfxh would look as follow:
+\code
+// Helpers.glslfxh
+GLSLShader
+{
+    vec3 expand( vec3 v ); // prototype
+}
+GLSLShader Helpers
+{
+    vec3 expand( vec3 v ) { return (v - 0.5) * 2.0; }
+}
+\endcode
+
+It is important to see that :
+ - the included file \b contains an un-named GLSLShader : this allows to declare the prototype of the implemented functions, if needed. Later this un-named GLSLShader will be added to the other un-named GLSLShader's, thus exposing the right prototypes for the functions
+ - #include got invoked \b after the main un-named GLSLShader module. The reasons is because the included file may contain some un-named GLSLShaders, too. And those shaders will be added to the previous un-named GLSLShaders. In GLSL, we need the "#version" pre-processor commands to be first in the code...
+
+Here is how will "myVertexShader" code look after it got parsed by nvFX runtime :
+\code
+    #version 330 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+    uniform vec3  diffuseColor;
+    ...
+    vec3 expand( vec3 v ); // prototype coming from Helpers.glslfxh !
+    layout(location=0) in vec4 Position;
+    layout(location=2) in vec3 Normal;
+    void main(void)
+    {
+        ...
+        expVal = expand( val ); // we can use it : the prototype is available
+        ...
+    }
+\endcode
+
+\section INCCB Handling #include action from the application
+
+In many cases, the include files could reside anywhere in some specific folders. These files would be hard to reach from a simple file access.
+
+In other cases, some include files could come from a resource or from a special file-system.
+
+We therefore need to give the hand to the applications as soon as "#include" gets parsed.
+
+nvFX provides a callback system for this purpose :
+
+- nvFX::setIncludeCb : will set a general callback
+- nvFX::IContainer::setIncludeCallback : will set a callback for the specific effect container
+
+The application will then implement this callback, where it will be able to either
+- load the file by itself and return the buffer of characters for the code : this will allow the application to have loaded the source code from resources or from any special way
+- open the file by itself and return a FILE descriptor pointer : this will allows the application to have searched for the file in few folders, for example
+
+\code
+    void myIncludeCb(const char *incName, FILE *&fp, const char *&buf)
+    {
+        if(fp = fopen(incName, "r"))
+            return;
+        char s[200];
+        sptrintf(s, "%s/%s", g_incPath, incName);
+        if(fp = fopen(s, "r"))
+            return;
+        buf = LoadFromResource(incName); // would return a ptr to a buffer where the code resides
+    }
+\endcode
+
+**/

@@ -1,0 +1,86 @@
+/**
+\page GLSLSHADER GLSLShader section
+
+nvFX allows you to encapsulate some GLSL Code withing a section called \b GLSLShader
+
+This section can be used in two different ways:
+ - \b GLSLShader \e name { ... } : a shader code that most often contains some vertex shader, fragment shader or some functions used by any shader.
+ - \b GLSLShader { ... } : a shader code that will be appended to every single named GLSLShader. It is a way to factorize common declaration such as #version, uniforms, prototypes etc.
+
+Example:
+
+\code
+GLSLShader 
+{
+    #version 330 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+    uniform vec3  diffuseColor;
+    ...
+    vec3 expand( vec3 v ); // prototype
+}
+
+GLSLShader Helpers
+{
+    vec3 expand( vec3 v ) { return (v - 0.5) * 2.0; }
+    ...
+}
+
+GLSLShader myVertexShader
+{
+    layout(location=0) in vec4 Position;
+    layout(location=2) in vec3 Normal;
+    void main(void)
+    {
+    ...
+    }
+}
+\endcode
+
+When the runtime parses the nvFX file, the GLSL code inside the GLSLShader section will be used to create some \b GLSL \b Shader \b Objects in OpenGL.
+
+Before creating any Shader Object, the un-named GLSLShader sections will be inserted to all the named GLSLShader's. The reason for this is to allow every shader code to have a common header that contains the basic things GLSL expects to see before any shader/function declaration.
+
+\note it is important to know that if there is \b many un-named GLSLShader sections, all will be inserted as headers to the named GLSLShaders. They will be added in the order they appear in the effect. This feature is interesting for the use of \ref INCLUDE "#include".
+
+The example above would lead to the following Shader for "myVertexShader" :
+\code
+    #version 330 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+    uniform vec3  diffuseColor;
+    ...
+    vec3 expand( vec3 v ); // prototype
+    ...
+    layout(location=0) in vec4 Position;
+    layout(location=2) in vec3 Normal;
+    void main(void)
+    {
+    ...
+    }
+\endcode
+
+and the following for the "Helpers" shader :
+\code
+    #version 330 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+    uniform vec3  diffuseColor;
+    ...
+    vec3 expand( vec3 v ); // prototype
+    ...
+    vec3 expand( vec3 v ) { return (v - 0.5) * 2.0; }
+\endcode
+
+Later, these GLSL shaders will be put together in a pass : linked in a program. More details on how to use these Shaders is available in the section \ref TECHPASS "Techniques and Passes".
+
+When the Pass references named GLSL Shaders, the runtime will simply link them together to have a fully working program for each stage of the rendering pipeline.
+\code
+Technique myTech1
+{
+    Pass myPass1
+    {
+        VertexProgram = {myVertexShader, Helpers};
+        FragmentProgram = {myFragmentShader, Helpers};
+    }
+}
+\endcode
+
+**/

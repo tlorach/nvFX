@@ -1,0 +1,178 @@
+/**
+    \page StateGroups Render-State Groups
+
+    \section SG State groups
+
+    \subsection RS Rasterization state
+
+    \code
+                                         
+        Property                         
+        --------------------------       
+        POINT_SIZE                          
+        POINT_SMOOTH                        
+        POINT_SPRITE                        
+        POINT_SPRITE_COORD_ORIGIN           
+        LINE_WIDTH                          
+        LINE_SMOOTH                         
+        // pattern << 8 | (repeat-1)
+        COMBINED_LINE_STIPPLE_NV            
+        LINE_STIPPLE_PATTERN                
+        LINE_STIPPLE_REPEAT                 
+        LINE_STIPPLE                        
+        CULL_FACE                           
+        CULL_FACE_MODE                      
+        FRONT_FACE                          
+        POLYGON_SMOOTH                      
+        // POLYGON_MODE[0] = FRONT, POLYGON_MODE[1]
+        POLYGON_MODE                        
+        POLYGON_OFFSET_FACTOR               
+        POLYGON_OFFSET_UNITS                
+        POLYGON_OFFSET_POINT                
+        POLYGON_OFFSET_LINE                 
+        POLYGON_OFFSET_FILL                 
+        POLYGON_STIPPLE                     
+        RASTERIZER_DISCARD                  
+    \endcode
+
+    \subsection CSS Color sample operations state
+    \code
+        Property                         
+        --------------------------       
+        ALPHA_TEST                          
+        ALPHA_TEST_FUNC                     
+        ALPHA_TEST_REF                      
+        BLEND                               
+        BLEND_SRC                           
+        BLEND_SRC_RGB                       
+        BLEND_SRC_ALPHA                     
+        BLEND_DST                           
+        BLEND_DST_RGB                       
+        BLEND_DST_ALPHA                     
+        BLEND_EQUATION_RGBA_NV              
+        BLEND_EQUATION_RGB                  
+        BLEND_EQUATION_ALPHA                
+        PER_DRAW_BUFFER_BLEND_FUNCTION_NV   
+        PER_DRAW_BUFFER_BLEND_EQUATION_NV   
+        PER_DRAW_BUFFER_BLEND_ENABLE_NV     
+        PER_DRAW_BUFFER_COLOR_WRITEMASK_NV  
+        // (r,g,b,a) treated as index (0,1,2,3) 
+        BLEND_COLOR                         
+        FRAMEBUFFER_SRGB                    
+        DITHER                              
+        COLOR_LOGIC_OP                      
+        LOGIC_OP_MODE                       
+        // Colormask is a bitmask, (r,g,b,a) are treated as bits (0,1,2,3)
+        COLOR_WRITEMASK                     
+        MULTISAMPLE                         
+        SAMPLE_MASK                         
+        SAMPLE_MASK_VALUE                   
+        SAMPLE_ALPHA_TO_ONE                 
+        SAMPLE_ALPHA_TO_COVERAGE            
+    \endcode
+        
+    \subsection DSTS Depth/stencil sample operations state
+
+    \code
+        Property                         
+        --------------------------       
+        DEPTH_TEST                          
+        DEPTH_FUNC                          
+        DEPTH_WRITEMASK                     
+        DEPTH_CLAMP                         
+        DEPTH_BOUNDS_TEST_EXT               
+        // DEPTH_BOUNDS_EXT[0] = MIN, DEPTH_BOUNDS_EXT[1]
+        DEPTH_BOUNDS_EXT                    
+        STENCIL_TEST                        
+        STENCIL_FUNC                        
+        STENCIL_VALUE_MASK                  
+        STENCIL_REF                         
+        STENCIL_PASS_DEPTH_PASS             
+        STENCIL_WRITEMASK                   
+        STENCIL_FRONT_FUNC                  
+        STENCIL_FRONT_VALUE_MASK            
+        STENCIL_FRONT_REF                   
+        STENCIL_FRONT_FAIL                  
+        STENCIL_FRONT_PASS_DEPTH_FAIL       
+        STENCIL_FRONT_PASS_DEPTH_PASS       
+        STENCIL_FRONT_WRITEMASK             
+        STENCIL_BACK_FUNC                   
+        STENCIL_BACK_VALUE_MASK             
+        STENCIL_BACK_REF                    
+        STENCIL_BACK_FAIL                   
+        STENCIL_BACK_PASS_DEPTH_FAIL        
+        STENCIL_BACK_PASS_DEPTH_PASS        
+        STENCIL_BACK_WRITEMASK              
+    \endcode
+
+    \section INNVFX Stategroups in nvFX
+
+    \subsection DECLSG Declaring state groups
+
+    As many state groups can be created. The available state groups are :
+     - rasterization_state
+     - color_sample_state
+     - dst_state
+
+    When declaring them, it is not needed to set some values to all the possible states that a group owns. Instead, just set the values of relevant states you need to change.
+
+    Here is an example on how to declare a state group :
+
+    \code
+    rasterization_state myRasterState
+    {
+        POINT_SIZE            =1.0;
+        CULL_FACE             =FALSE;
+        CULL_FACE_MODE        =BACK;
+        FRONT_FACE            =CCW;
+        POLYGON_SMOOTH        =FALSE;
+        POLYGON_MODE          ={GL_FRONT_AND_BACK, GL_LINE};
+        POLYGON_OFFSET_FACTOR =0;
+        POLYGON_OFFSET_UNITS  =0;
+    ...
+    }
+    \endcode
+
+    Same for Color Sample :
+
+    \code
+    color_sample_state csState
+    {
+        ALPHA_TEST      =FALSE;
+        ALPHA_TEST_FUNC =ALWAYS;
+        ALPHA_TEST_REF  =0;
+    ...
+    }
+    \endcode
+
+    And Depth Stencil :
+    \code
+    dst_state dstState
+    {
+        DEPTH_TEST       =FALSE;
+        DEPTH_FUNC       =LESS;
+        DEPTH_WRITEMASK  =TRUE;
+    ...
+    }
+    \endcode
+
+    \subsection ISG Invoking state groups
+
+    These state groups can be invoked in passes by assigning a state-group to 
+     - DSTState
+     - RasterizationState
+     - ColorSampleState
+
+    \code
+    Pass myPass
+    {
+        ...
+        DSTState           = dstState;
+        RasterizationState = rasterState;
+        ColorSampleState   = csState;
+    }
+    \endcode
+
+    \note "State" at the end is optional  (DST[State]; Rasterization[State]…)
+
+**/

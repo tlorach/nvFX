@@ -1,0 +1,295 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+//
+// Resources (Testing the scene-level effect part)
+//
+// will create the texture resource
+// can be then used with "SamplerResource(diffuseSampler) = myRenderTexture;"
+// TODO: in D3D, this will lead to a Texture object in D3D, too
+
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderTexture myRenderTexture
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+RenderTexture myRenderTextureNormals
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderBuffer myDST
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;
+    Format = DEPTH24STENCIL8;
+}
+// a texture to write the result of GLSL Compute test
+RenderTexture myComputeTextureGLSL
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+// will lead to a FBO creation in a specific repository. nvFX lib will keep track of the Id
+FBO myFBO
+{
+    Color = { myRenderTexture, myRenderTextureNormals };
+    DepthStencil = myDST;
+}
+FBO GLSLComputeResultFBO
+{
+    Color = myComputeTextureGLSL;
+}
+
+//
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader
+{
+    #version 430 compatibility
+    #extension GL_ARB_separate_shader_objects : enable
+}
+#include "shared_globals.glslfxh"
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// sampler states are outside of GLSL.
+//
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+
+//--------------------------------------------------------------------------------------
+//    Convolution to Blur the rendered image
+//--------------------------------------------------------------------------------------
+GLSLShader GLSLComputeTest
+{
+    uniform sampler2D quadSampler;
+    layout(local_size_x = 16, local_size_y = 16) in;
+    layout(binding=0,rgba8) uniform image2D GLSLComputeImage;
+    uniform vec4 params[16];
+    // SHARED Memory area
+    shared uint sdata[(16+(2*8))*(16+(2*8))*4];
+
+	uniform int imgw=1024;
+	uniform int imgh=768;
+	uniform int tilew = 16+2*8;
+	uniform int r = 8;
+	uniform float threshold = 0.8;
+	uniform float highlight = 4.0;
+
+	uint make_uint(vec4 c)
+	{
+		return (uint(c.a) << 24U) + (uint(c.b) << 16U) + (uint(c.g) << 8U) + uint(c.r);
+	}
+	vec4 make_vec4(uint c)
+	{
+		vec4 v;
+		v.w = float(c >> 24U);
+		v.z = float((c >> 16U) & 0xFF);
+		v.y = float((c >> 8U) & 0xFF);
+		v.x = float(c & 0xFF);
+		return v;
+	}
+
+    // get pixel from 2D image, with clamping to border
+    uint getPixelUInt(int x, int y)
+    {
+		vec2 tc = vec2(x,y);
+		tc /= vec2(1024.0, 768.0); // correct this
+		// use Buffer Load
+        vec4 res = texture(quadSampler, tc);
+        res.x = clamp(res.x*255.0, 0.0f, 255.0f);
+        res.y = clamp(res.y*255.0, 0.0f, 255.0f);
+        res.z = clamp(res.z*255.0, 0.0f, 255.0f);
+        res.w = clamp(res.w*255.0, 0.0f, 255.0f);
+	    uint ucres = make_uint(res);
+        return ucres;
+    }
+
+	#define SMEM(X, Y) sdata[(Y)*tilew+(X)]
+
+	void main()
+	{
+		int tx = int(gl_LocalInvocationID.x);//threadIdx.x
+		int ty = int(gl_LocalInvocationID.y);//threadIdx.y;
+		int bw = int(gl_WorkGroupSize.x);//blockDim.x;
+		int bh = int(gl_WorkGroupSize.y);//blockDim.y;
+		int x = int(gl_GlobalInvocationID.x);//blockIdx.x*bw + tx;
+		int y = int(gl_GlobalInvocationID.y);//blockIdx.y*bh + ty;
+#if 1
+        // Step 1) : fill-in the shared memory for the tile
+        // each thread will participate for a bit of this work
+		// center region
+		SMEM(r + tx, r + ty) = getPixelUInt(x, y);
+		// borders
+		if (gl_LocalInvocationID.x < r) {
+			// left
+			SMEM(tx, r + ty) = getPixelUInt(x - r, y);
+			// right
+			SMEM(r + bw + tx, r + ty) = getPixelUInt(x + bw, y);
+		}
+		if (gl_LocalInvocationID.y < r) {
+			// top
+			SMEM(r + tx, ty) = getPixelUInt(x, y - r);
+			// bottom
+			SMEM(r + tx, r + bh + ty) = getPixelUInt(x, y + bh);
+		}
+
+		// load corners
+		if ((gl_LocalInvocationID.x < r) && (gl_LocalInvocationID.y < r)) {
+			// tl
+			SMEM(tx, ty) = getPixelUInt(x - r, y - r);
+			// bl
+			SMEM(tx, r + bh + ty) = getPixelUInt(x - r, y + bh);
+			// tr
+			SMEM(r + bw + tx, ty) = getPixelUInt(x + bh, y - r);
+			// br
+			SMEM(r + bw + tx, r + bh + ty) = getPixelUInt(x + bw, y + bh);
+		}
+
+		// wait for loads to complete
+        memoryBarrier();
+//	    memoryBarrierShared(); // == __syncthreads();
+#endif
+        // step 2) :
+		// perform convolution
+		float rsum = 0.0f;
+		float gsum = 0.0f;
+		float bsum = 0.0f;
+		float samples = 0.0f;
+
+		for(int dy=-r; dy<=r; dy++) {
+			for(int dx=-r; dx<=r; dx++) {
+#if 0
+				// try this to see the benefit of using shared memory
+				uint pixel_uint = getPixelUInt(x+dx, y+dy);
+#else
+				uint pixel_uint = SMEM(r+tx+dx, r+ty+dy);
+#endif
+				vec4 pixel = make_vec4(pixel_uint);
+				// only sum pixels within disc-shaped kernel
+				float l = dx*dx + dy*dy;
+				if (l <= r*r) {
+					float r = float(pixel.x);
+					float g = float(pixel.y);
+					float b = float(pixel.z);
+					// brighten highlights
+					float lum = (r + g + b) / (255*3);
+					if (lum > threshold) {
+						r *= highlight;
+						g *= highlight;
+						b *= highlight;
+					}
+					rsum += r;
+					gsum += g;
+					bsum += b;
+					samples += 1.0f;
+				}
+			}
+		}
+		samples *= 255.0;
+		rsum /= samples;
+		gsum /= samples;
+		bsum /= samples;
+		imageStore(GLSLComputeImage, ivec2(gl_GlobalInvocationID.xy), vec4(rsum, gsum, bsum, 1.0));
+	}
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Test of a scene-level Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+Technique SceneTechniqueGLSLCompute
+{
+    Pass p1
+    {
+        BLEND = false;
+        RenderMode = SceneShading;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0,0.1,0.4,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = myFBO;
+        //Viewport = {10,10,200,130}; // arbitrary viewport. If not used, the viewport is adjusted to CurrentTarget size
+        FragmentProgramOverride<"FragOut"> = fragmentOutputColorAndNw;
+    }
+    Pass GLSLCompute
+    {
+        // an image is for ARB_shader_image_load_store : result of compute stored here
+        // can have more outputs...
+        ImageResource(GLSLComputeImage) = myComputeTextureGLSL;
+        ImageUnit(GLSLComputeImage) = 0;
+        // TODO:
+        //imageAccess(GLSLComputeImage) = WRITE_ONLY;//READ_ONLY; READ_WRITE;
+        //imageLayer(GLSLComputeImage) = 0; // layer by layer access
+        //imageLayered(GLSLComputeImage) = TRUE/FALSE; // layered or not
+        //MemoryBarrier = {See "Accepted by the <barriers> parameter of MemoryBarrier"};
+
+        SamplerResource(quadSampler) = myRenderTexture;
+        SamplerState(quadSampler) = nearestSampler; // Strange: I can't use any other sampling filtering to not break the FBO
+
+        // GLSL Compute is way easier : another target of OpenGL
+        ComputeProgram = GLSLComputeTest;
+        // TODO: we need to add the ability to recompute this grid depending on the target resolution!!
+        ComputeGroups = { 64, 48 };
+        // TODO: we should allow the group to be computed from a render target size we specify
+        //computeGroupsFromResource = myRenderTextureNormals
+        RenderMode = run_GLSLCompute; // useless : implictly set to run_cuda...
+    }
+    Pass blitme
+    {
+        BlitFBOToActiveTarget = GLSLComputeResultFBO;
+        //ViewPort = AppDefined;
+        CurrentTarget = backbuffer;
+    }
+}
+
+Technique NoGLSLCompute
+{
+    Pass p1
+    {
+        BLEND = false;
+        RenderMode = SceneShading;
+        ClearMode = all;
+        ClearColor[0] = {0,0.1,0.4,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = backbuffer;
+        FragmentProgramOverride<"FragOut"> = fragmentOutputDefault;
+    }
+}
+

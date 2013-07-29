@@ -1,0 +1,280 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+#extension GL_ARB_separate_shader_objects : enable
+
+uniform global vec4 scaleBias = {0,0,0,1.0}; // x,y,z bias and w==scale
+
+ConstantBuffer materialTweaks < uigroup="surface"; >
+{
+	uniform float ambientContrib < uigroup="surface"; uimin = 0.0;    uimax = 0.5;  > = 0.1;
+	uniform float specstrength   < uigroup="surface"; uimin = 0.0;    uimax = 10.0;  > = 4.0;
+}
+
+//--------------------------------------------------------------------------------------
+SamplerState linearSampler
+{
+
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    TEXTURE_WRAP_S = MIRRORED_REPEAT;
+    TEXTURE_WRAP_T = MIRRORED_REPEAT;
+    TEXTURE_WRAP_R = MIRRORED_REPEAT;
+}
+
+RasterizationState rasterState1
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+RasterizationState rasterStateWire
+{
+    LINE_WIDTH = 2;
+    POLYGON_MODE={FRONT_AND_BACK, LINE};
+}
+DepthStencilState dstStateFloor
+{
+    DEPTH_TEST = true;
+    DEPTH_WRITEMASK = true;
+    DEPTH_FUNC = LEQUAL;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// GLSL shared header : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 420 compatibility
+}
+#include "shared_globals.glslfxh"
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+uniform sampler2D specSampler;
+uniform sampler2D diffuseSampler;
+
+// sampler states are outside of GLSL.
+// names allows to make them match with the texture/sampler of GLSL (HLSL, too)
+// or maybe we would require the runtime to connect them explicitly...
+//
+SamplerState specSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    //AddressS = REPEAT;
+    //AddressT = REPEAT;
+    //AddressR = REPEAT;
+}
+SamplerState defaultSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+//
+// Texture Resources
+//
+TextureResource2D Default_color <
+    defaultFile = "gargoyleMossyDiffuse.dds";
+> {
+    // this is a possible alternate way to setup sampler-states...
+    // in OpenGL, sampler-states are defined for each texture
+    // sampler-states specified in the Pass override this one
+    SamplerState = defaultSamplerState;
+}
+TextureResource2D Default_spec <
+    defaultFile = "gargoyleMossySpec.dds";
+> {
+    SamplerState = defaultSamplerState;
+}
+
+////////////////////////////////////////////////////////////////////
+/// VERTEX PROGRAM /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 Normal;
+    layout(location=2) in vec3 TexCoord;
+    layout(location=3) in vec3 Tangent;
+    layout(location=4) in vec3 Binormal;
+
+    layout(location=0) out vec3 outNw;
+    layout(location=1) out vec3 outTC;
+    layout(location=4) out vec3 outPw;
+    layout(location=5) out vec3 outWV;
+    layout(location=6) out vec3 outPo;
+    layout(location=7) out float outHZ;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+        vec3 N    = normalize((m4_World/*IT*/ * vec4(Normal,0)).xyz);
+        vec4 Po    = Position;
+        Po.xyz += scaleBias.xyz;
+        Po.xyz *= scaleBias.w;
+        vec3 Pw     = (m4_World * Po).xyz;
+
+        gl_Position = (m4_WorldViewProj * Po);
+        outHZ = gl_Position.z;// MAYBE WRONG: FAR_CLIP - (OUT.HPosition.z + NEAR_CLIP);
+
+        outNw           = N;
+        outPw           = Pw;
+        outPo           = Po.xyz;
+        outTC           = TexCoord;
+        outWV           = normalize(eyePos - Pw);;
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectPS
+{
+    layout(location=0) in vec3 inNw;
+    layout(location=1) in vec3 inTC;
+    layout(location=4) in vec3 inPw;
+    layout(location=5) in vec3 inWV;
+    layout(location=6) in vec3 inPo;
+    layout(location=7) in float inHZ;
+
+    void main() 
+    {
+        vec4 diffcolor;
+        vec4 speccolor;
+        diffcolor = texture(diffuseSampler, inTC.xy);
+        speccolor = texture(specSampler, inTC.xy);
+        vec3 Nn = normalize(inNw);
+        vec3 Vn = normalize(inWV);
+
+        vec3 result;// = vec3(0);
+
+        vec3 Ln = normalize(vec3(10,10,0));//normalize(lightPos - inPw);
+        vec3 Hn = normalize(Vn + Ln);
+        float NdotL = max(dot(Ln, Nn), 0.0);
+        float HdotN = NdotL > 0.0 ? pow(max(0.0, dot(Hn, Nn)), 64.0) : 0.0;
+        result =  (diffcolor.rgb * ((1.0-ambientContrib) * NdotL + ambientContrib))
+				+ (speccolor.rgb * HdotN * specstrength);
+
+        // write fragments to output, depending on the needs
+        //writeFragments(vec4(Hn, 1.0), vec3(0,0,inHZ), Nn);
+        writeFragments(vec4(result, 1.0), vec3(0,0,inHZ), Nn);
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// Floor things
+////////////////////////////////////////////////////////////////////
+namespace floor
+{
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's VERTEX PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader VS
+    {
+        layout(location=0) in vec4 Position;
+        out gl_PerVertex {
+            vec4 gl_Position;
+        };
+        void main(void)
+        {
+            gl_Position = m4_ViewProj * Position;
+        }
+    }
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's FRAGMENT PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader PS
+    {
+        layout(location=0) out vec4 color;
+        void main() 
+        {
+            color = vec4(0.3, 0.5, 0.7, 1.0);
+        }
+    }
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Material Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+Technique Init
+{
+    Pass init
+    {
+        PolygonOffset = {1.0,1.0};
+        DEPTH_TEST = True;
+        DEPTH_FUNC = LEQUAL;
+        DEPTH_MASK = True;
+    }
+}
+
+Technique Floor
+{
+    Pass p0
+    {
+        //RasterizationState = rasterStateWire;
+        //DepthStencilState = dstStateFloor;
+
+        VertexProgram = floor::VS;
+        FragmentProgram = floor::PS;
+    }
+}
+Technique ObjectWithTex
+{
+    Pass p0
+    {
+        RasterizationState = rasterState1;
+        // we assume here that the resource will be set by the app
+        SamplerState(diffuseSampler) = defaultSamplerState;
+        SamplerState(specSampler) = defaultSamplerState;
+        SamplerResource(diffuseSampler) = Default_color;
+        SamplerResource(specSampler) = Default_spec;
+
+        VertexProgram = ObjectVS;
+        // Here we link 2 parts together to finally have a consistent shader
+        FragmentProgram = { ObjectPS };
+        FragmentProgram<"FragOut"> = fragmentOutputDefault;
+    }
+}
+Technique ObjectNoTex
+{
+    Pass p0
+    {
+        RasterizationState = rasterState1;
+
+        VertexProgram = ObjectVS;
+        // Here we link 2 parts together to finally have a consistent shader
+        FragmentProgram = { ObjectPS};
+        FragmentProgram<"FragOut"> = fragmentOutputDefault;
+    }
+}

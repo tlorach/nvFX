@@ -1,0 +1,4321 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+
+    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxParser/Grammar.ypp#11 $
+    $Date: 2013/06/20 $
+    $Revision: #11 $
+    $Author: tlorach $
+    $Change: 16301413 $
+*/
+%name-prefix "FxParser"
+%verbose
+//%debug
+// TO FIX ??? lower or 0 the Shift-reduce
+// 30+6 with optix and PTX code 
+%expect  36
+/*%glr-parser*/
+/*%expect-rr  78*/
+%{
+    /* Documentation on the keywords and grammar created in : ..\doxygen\Keywords.dxt */
+    #include  <math.h>
+    #include  <assert.h>
+    #include  <stdio.h>
+    #include  <stdlib.h>
+    #include  <string.h>
+    #include  <vector>
+    #include  <map>
+    #include  <string>
+
+    #include "FxLibEx.h"
+    #include "FxParser.h"
+
+    using namespace nvFX;
+    #ifndef LOGD
+    #define LOGD(...)  { /*nvFX::printf(__VA_ARGS__);*/ }
+    #endif
+    #ifndef LOGI
+    #define LOGI(...)  { nvFX::printf(__VA_ARGS__); }
+    #endif
+
+    #ifndef OGLES2
+    #   define USEGLSLCOMPUTE
+    #endif
+    /*
+     * values taken from OpenGL
+     *
+     */
+    #define GL_TRUE 1
+    #define GL_FALSE 0
+
+
+    /*
+     * Here we store temporary pointers of current objects being processed by the grammar
+     * the reason : the grammar executes from the deepest part to the highest part of the tree
+     * and the FX library doesn the opposite : objects are created by parents
+     */
+    IContainerEx*       curContainer = NULL;
+    ITechniqueEx*       curTechnique;
+    IPassEx*            curPass;
+    IShaderEx*          curShader;
+    IProgramEx*         curProgram;
+    ISamplerStateEx*    curSamplerState;
+    IStateGroupRasterEx* curRState;
+    IStateGroupCSEx*    curCSState;
+    IStateGroupDSTEx*   curDSTState;
+    IStateGroupPathEx*  curPRState;
+    IResourceEx*        curResource;
+    IFrameBufferObjectEx* curFBO;
+    IUniformEx*         curUniform;
+    IAnnotationEx*      curAnnotations;
+    IAnnotationEx*      namespaceAnnotations;
+    ICstBufferEx*       curCstBuffer;
+    bool                bCurCstBufferAlreadyPopulated; // true to prevent creation of sub-uniforms
+    std::string         namespaceName;
+    IShaderModuleRepositoryEx* pShdRep;
+    IFrameBufferObjectsRepositoryEx* pFboRep;
+    IResourceRepositoryEx* pResRep;
+    IUniformRepositoryEx* pURep;
+    ICstBufferRepositoryEx* pCRep;
+    //
+    // Those functions are used to create the states if NULL
+    // this case happens if states are defined in a Pass directly :
+    // we will then create implicit stategroups for this pass
+    //
+    void check_curDSTState()
+    {
+        if(curDSTState) return;
+        LOGD("no current DST State Group. We are in a Pass, Create one for this Pass\n");
+        assert(curPass);
+        curDSTState = curContainer->createStateGroup_DST(curPass->getName())->getExInterface();
+        curPass->createState(curDSTState);
+    }
+    void check_curRState()
+    {
+        if(curRState) return;
+        LOGD("no current Rasterization State Group. We are in a Pass, Create one for this Pass\n");
+        assert(curPass);
+        curRState = curContainer->createStateGroup_Raster(curPass->getName())->getExInterface();
+        curPass->createState(curRState);
+    }
+    void check_curCSState()
+    {
+        if(curCSState) return;
+        LOGD("no current Color sample State Group. We are in a Pass, Create one for this Pass\n");
+        assert(curPass);
+        curCSState = curContainer->createStateGroup_CS(curPass->getName())->getExInterface();
+        curPass->createState(curCSState);
+    }
+#ifndef OGLES2
+    void check_curPRState()
+    {
+        if(curPRState) return;
+        LOGI("no current rendering-path State Group. We are in a Pass, Create one for this Pass\n");
+        assert(curPass);
+        curPRState = curContainer->createStateGroup_PR(curPass->getName())->getExInterface();
+        curPass->createState(curPRState);
+    }
+#endif
+    extern GLenum getGLEnumValue(GLenum BisonEnum);
+
+    void createUniform(nvFX::IUniform::Type T, const char* name, const char* sem, bool global=true, IUniform::PrecisionType precision=IUniform::PHighP)
+    {
+        extern void yyerror(char  const  *);
+        IUniform *p = NULL;
+        if(curCstBuffer) // if a constant buffer is available, populate it
+        {
+            // only if allowed (if it came from an existing Global one, we don't want to add anything
+            if(bCurCstBufferAlreadyPopulated) {
+                LOGD("Skipping the sub-uniform of the constant\n");
+                p = curCstBuffer->findUniform(name);
+                if(p == NULL)
+                    yyerror("Declaration of the CstBuffer differs from the one already in global area\n");
+            } else {
+                p = curCstBuffer->getExInterface()->createUniform(name, sem);
+                p->getExInterface()->setType(T);
+            }
+        } else { // otherwise just make a regular uniform creation at the root of the effect
+            p = curContainer->createUniform(name, namespaceName.c_str(), sem, global);
+            if(p) {
+                p->getExInterface()->setType(T);
+                p->getExInterface()->setPrecision(precision);
+            } else { // failed. Try to find it in the global repository
+                if(global)
+                    p = pURep->find(name);
+                if(p==NULL)
+                    yyerror("failed to create global uniform\n");
+                else if(p->getType() != T)
+                    yyerror("uniform differs in its type the the global instance of the same name. Make it local ?\n");
+                else {
+                    curContainer->addUniform(p);
+                    pURep->addUniform(p);
+                }
+            }
+        }
+        curUniform = p ? p->getExInterface() : NULL;
+    }
+    inline int getTypeDim(IUniform::Type t)
+    {
+        switch(t)
+        {
+        case IUniform::TFloat:
+        case IUniform::TInt:
+        case IUniform::TBool:
+            return 1;
+        case IUniform::TVec2:
+        case IUniform::TInt2:
+        case IUniform::TBool2:
+            return 2;
+        case IUniform::TVec3:
+        case IUniform::TInt3:
+        case IUniform::TBool3:
+            return 3;
+        case IUniform::TVec4:
+        case IUniform::TInt4:
+        case IUniform::TBool4:
+            return 4;
+        }
+        return 0;
+    }
+%}
+
+%code requires {
+    #include  <vector>
+    #include  <string>
+    #include  "FxLibEx.h"
+    using namespace nvFX;
+
+    /*#define yyparse         FxParserparse
+    #define yylex           FxParserlex
+    #define yyerror         FxParsererror
+    #define yylval          FxParserlval
+    #define yychar          FxParserchar
+    #define yydebug         FxParserdebug
+    #define yynerrs         FxParsernerrs
+
+    #define yy_create_buffer FxParser_create_buffer
+    #define yy_delete_buffer FxParser_delete_buffer
+    #define yy_scan_buffer FxParser_scan_buffer
+    #define yy_scan_string FxParser_scan_string
+    #define yy_scan_bytes FxParser_scan_bytes
+    #define yy_flex_debug FxParser_flex_debug
+    #define yy_init_buffer FxParser_init_buffer
+    #define yy_flush_buffer FxParser_flush_buffer
+    #define yy_load_buffer_state FxParser_load_buffer_state
+    #define yy_switch_to_buffer FxParser_switch_to_buffer
+    #define yyin FxParserin
+    #define yyleng FxParserleng
+    #define yylex FxParserlex
+    #define yyout FxParserout
+    #define yyrestart FxParserrestart
+    #define yytext FxParsertext
+    #define yylineno FxParserlineno
+    #define yywrap FxParserwrap
+    */
+    #pragma warning(disable:4996)
+
+    extern int  yydebug;
+    extern int  yyparse ();
+    extern void yyerror(char  const  *);
+    extern int  yylex();
+    extern void lex_pop_state();
+    extern void lex_push_state();
+    extern FILE *yyin;
+    extern FILE *yyout;
+    extern std::string file_name; // the name of the current file (when in #include, for example)
+    extern int  line_num;
+    extern int  bracket_level;
+
+    extern IContainerEx*   curContainer;
+
+    //typedef std::vector<CgShader*>      CgShaderList;
+    typedef std::vector<IShader*>        ShaderList;
+    typedef std::vector<float>          FloatList;
+    typedef std::vector<FloatList* >    FloatVecList; ///<vector list
+    typedef std::vector<int>            IntList;
+    typedef std::vector<IntList* >      IntVecList; ///<vector list
+    typedef std::vector</*bool*/int>    BoolList; // bool ran me into compile err in XCode
+    typedef std::vector<BoolList* >     BoolVecList; ///<vector list
+    typedef std::vector<std::string>    VarNameList;
+    struct Argument {
+        Argument(ArgumentType type_, std::string *name_) : type(type_), name(*name_) {};
+        ArgumentType    type;
+        std::string     name;
+    };
+    typedef std::vector<Argument*>          ArgList;
+    typedef std::vector<ArgVal*>            ArgValList;
+    struct SUniformQualifiers
+    {
+        bool hasUniformKeyword; // not really necessary... but hey...
+        bool global;
+        IUniform::PrecisionType precisionType;
+    };
+    struct ValueList
+    {
+        FloatVecList*   floatVecList;
+        IntVecList*     intVecList;
+        BoolVecList*    boolVecList;
+    };
+    struct SASzSAUva
+    {
+        int             arraySz;
+        std::string*    semantic;
+        ValueList*      valueList;
+    };
+    struct Sglobal_varname
+    {
+        bool            global;
+        std::string*    varName;
+    };
+
+    /*struct Variable
+    {
+        std::string name;
+        //...
+    };*/
+
+    #ifndef LOGD
+    #define  LOGD(...)  { /*nvFX::printf(__VA_ARGS__);*/ }
+    #endif
+    #ifndef LOGI
+    #define  LOGI(...)  { ::printf(__VA_ARGS__); }
+    #endif
+    extern float *flattenFVecList(int t, int vecDim, FloatVecList* pfloatVecList);
+    extern int   *flattenIVecList(int t, int vecDim, IntVecList* pintVecList);
+    extern bool  *flattenBVecList(int t, int vecDim, BoolVecList* pboolVecList);
+
+    //
+    // Check 
+    //
+    inline bool checkArgCompatibility(ArgVal *argval, IShaderEx::Argument &arg)
+    {
+        if(argval->type == IUniform::TUniform)
+        {
+            ArgVal argval2;
+            argval2.type = argval->val.pUniform->getType();
+            // recursive walk through to finally check the real time
+            return checkArgCompatibility(&argval2, arg);
+        }
+        switch(arg.t)
+        {
+        case TInt:
+        case TUInt:
+            if(argval->type == IUniform::TInt)
+                return true;
+            break;
+        case TInt2:
+            if(argval->type == IUniform::TInt2)
+                return true;
+            break;
+        case TInt3:
+            if(argval->type == IUniform::TInt3)
+                return true;
+            break;
+        case TInt4:
+            if(argval->type == IUniform::TInt4)
+                return true;
+            break;
+        //case TUInt2:        case TUInt3:        case TUInt4:
+        case TFloat:
+            if(argval->type == IUniform::TFloat)
+                return true;
+            if(argval->type == IUniform::TInt)
+                return true;
+            break;
+        //case TVec2:        case TVec3:        case TVec4:
+        case TIntPtr:
+        case TUIntPtr:
+        case TFloatPtr:
+            switch(argval->type)
+            {
+            case IUniform::TCB:
+            case IUniform::TTexture:
+            case IUniform::TTexture1D:
+            case IUniform::TTexture2D:
+            case IUniform::TTexture2DRect:
+            case IUniform::TTexture3D:
+            case IUniform::TTextureCube:
+                return true;
+            default:
+                break;
+            }
+            return false;
+        //case TInt2Ptr:        case TInt3Ptr:        case TInt4Ptr:
+        //case TUInt2Ptr:        case TUInt3Ptr:        case TUInt4Ptr:
+        //case TVec2Ptr:        case TVec3Ptr:        case TVec4Ptr:
+        //TBool, TBool2, TBool3, TBool4,
+        //TMat2, TMat3, TMat4, 
+            break;
+        }
+        return false;
+    }
+}
+
+/*%parse-param  {  char  const  *fname  };*/
+%initial-action
+{
+    /*$$.container = Container::create(NULL);
+    printf("My initial action %p\n", $$.container );*/
+    line_num        = 1;
+    bracket_level   = 0;
+    //curContainer    = NULL; initialized in loadEffectFromFile()
+    curTechnique    = NULL;
+    curPass         = NULL;
+    curShader       = NULL;
+    curProgram      = NULL;
+    curSamplerState = NULL;
+    curRState       = NULL;
+    curCSState      = NULL;
+    curDSTState     = NULL;
+    curPRState    = NULL;
+    curResource     = NULL;
+    curFBO          = NULL;
+    curUniform      = NULL;
+    curCstBuffer    = NULL;
+    bCurCstBufferAlreadyPopulated = false;
+    pShdRep         = nvFX::getShaderModuleRepositorySingleton()->getExInterface();
+    pFboRep         = nvFX::getFrameBufferObjectsRepositorySingleton()->getExInterface();
+    pResRep         = nvFX::getResourceRepositorySingleton()->getExInterface();
+    pCRep           = nvFX::getCstBufferRepositorySingleton()->getExInterface();
+    pURep           = nvFX::getUniformRepositorySingleton()->getExInterface();
+};
+/*  Bison  declarations.    */
+
+%union  {
+    bool            bval;
+    bool*           pbval;
+    int             ival;
+    int*            pival;
+    float           fval;
+    float*          pfval;
+    std::string*    s; // a std::string sub-class to help to deal with "namespace"
+    VarNameList*    varNameList;
+    //CgShaderList*   cgShaderList;
+    ShaderList*     shaderList;
+    FloatList*      floatList;
+    FloatVecList*   floatVecList;
+    IntList*        intList;
+    IntVecList*     intVecList;
+    BoolList*       boolList;
+    BoolVecList*    boolVecList;
+    GLenum          glenum;
+    IPassState::Type passstateType;
+    IUniform::Type  uniformType;
+    ResourceType    resourceType;
+    /*Variable*       var;*/
+    RenderingMode   render_mode;
+    ClearMode       clear_mode;
+    ResourceFormat  resource_format;
+    ArgList*        argList;
+    Argument*       argument;
+    ArgVal*         argVal;
+    ArgValList*     argValList;
+    SASzSAUva*      saszsauva;
+    IUniform::PrecisionType precisionType;
+    SUniformQualifiers uniformQualifiers;
+    ValueList*      valueList;
+    Sglobal_varname global_varname_annots;
+}
+%destructor { if($$) delete $$; } <pbval>
+%destructor { if($$) delete $$; } <pival>
+%destructor { if($$) delete $$; } <pfval>
+// Strange: this one gets a bad pointer %destructor { if($$) yyerror($$->c_str()); else yyerror("NULL ptr"); if($$) delete $$; } <s>
+%destructor { if($$) delete $$; } <varNameList>
+%destructor { if($$) delete $$; } <shaderList>
+%destructor { if($$) delete $$; } <floatList>
+%destructor { if($$) delete $$; } <floatVecList>
+%destructor { if($$) delete $$; } <intList>
+%destructor { if($$) delete $$; } <boolList>
+%destructor { if($$) delete $$; } <argList>
+/*==================================================================
+  TOKEN
+*/
+%token              NAMESPACE
+%token  <bval>      FX_TRUE
+%token  <bval>      FX_FALSE
+%token  <fval>      FX_FLOAT
+%token  <ival>      FX_INT
+%token  <bval>      FX_BOOL
+%token  <s>         FX_STR
+%token              GLSLSHADER /*GLSL shader domain*/
+%token              HLSL10SHADER /*HLSL10 shader domain*/
+%token              HLSL11SHADER /*HLSL11 shader domain*/
+%token              CGSHADER /*CG shader domain*/
+%token              SAMPLER_STATE /*Beginning of a sampler state definition*/
+%token              DST_STATE
+%token              PR_STATE /*Path Rendering State Group*/
+%token              COLOR_SAMPLE_STATE
+%token              RASTERIZATION_STATE
+%token              TECHNIQUE /*Beginning of a technique*/
+%token              PASS
+%token  <s>         CODEBODY /* piece of code (GLSL) *including* ending bracket '}' ! But '}' is NOT in the string s */
+%token  <s>         VARNAME
+%token              TEXTURERESOURCE /* resource handle */
+%token              TEXTURERESOURCE1D
+%token              TEXTURERESOURCE2D
+%token              TEXTURERESOURCE3D
+%token              TEXTURERESOURCERECT
+%token              TEXTURERESOURCECUBE
+/*
+TODO: New resource types (from D3D)
+%token              TEXTURE1DARRAY
+%token              TEXTURE2DARRAY
+%token              TEXTURECUBEARRAY
+%token              TEXTURE2DMS
+%token              TEXTURE2MSDARRAY
+*/
+
+/*------------------------------------------------------------------
+  token for uniforms declared outside of any shader code
+*/
+%token              VOID_TYPE
+%token              UNSIGNED
+%token              HIGHP
+%token              MEDIUMP
+%token              LOWP
+%token              UNIFORM
+%token              CSTBUFFER
+%token              FLOAT_TYPE
+%token              FLOAT2_TYPE
+%token              FLOAT3_TYPE
+%token              FLOAT4_TYPE
+%token              MAT2_TYPE
+%token              MAT3_TYPE
+%token              MAT4_TYPE
+%token              BOOL_TYPE
+%token              BOOL2_TYPE
+%token              BOOL3_TYPE
+%token              BOOL4_TYPE
+%token              INT_TYPE
+%token              INT2_TYPE
+%token              INT3_TYPE
+%token              INT4_TYPE
+%token              TEXTURE1D_TYPE
+%token              TEXTURE2D_TYPE
+%token              TEXTURE2DRECT_TYPE
+%token              TEXTURE3D_TYPE
+%token              TEXTURECUBE_TYPE
+%token              SAMPLER1D_TYPE
+%token              SAMPLER2D_TYPE
+%token              SAMPLER2DRECT_TYPE
+%token              SAMPLER3D_TYPE
+%token              SAMPLERCUBE_TYPE
+
+/*------------------------------------------------------------------
+  token for extensions
+*/
+
+%token              EXTENSION
+%token              SEPARATE_SHADER
+
+/*------------------------------------------------------------------
+  token that match what is in PassState::Type for OpenGL state settings
+*/
+
+%token <passstateType>      DEPTHMASK 100 //PassState::DepthMask
+%token <passstateType>      DEPTHFUNC 101 //PassState::DepthFunc
+
+%token  VERTEXPROGRAM
+%token  FRAGMENTPROGRAM
+%token  GEOMETRYPROGRAM
+%token  HULLPROGRAM
+%token  EVALPROGRAM
+%token  SHDPROFILE
+%token  SAMPLERRESOURCE
+%token  SAMPLERTEXUNIT
+%token  SETSAMPLERSTATE
+%token  SETDSTSTATE
+%token  SETRASTERIZATIONSTATE
+%token  SETCOLORSAMPLESTATE
+/* for GL_ARB_shader_image_load_store */
+%token  IMAGERESOURCE
+%token  IMAGEUNIT
+%token  IMAGEACCESS
+%token  IMAGELAYER
+%token  IMAGELAYERED
+%token  WRITE_ONLY
+%token  READ_ONLY
+%token  READ_WRITE
+
+/*
+    override-states
+*/
+%token  VERTEXPROGRAMOVERRIDE
+%token  FRAGMENTPROGRAMOVERRIDE
+%token  GEOMETRYPROGRAMOVERRIDE
+%token  HULLPROGRAMOVERRIDE
+%token  EVALPROGRAMOVERRIDE
+%token  IMAGEACCESSOVERRIDE
+%token  IMAGELAYEROVERRIDE
+%token  IMAGELAYEREDOVERRIDE
+%token  IMAGERESOURCEOVERRIDE
+%token  UNIFORMOVERRIDE
+%token  IMAGEUNITOVERRIDE
+%token  TEXTURERESOURCEOVERRIDE
+%token  SAMPLERRESOURCEOVERRIDE
+%token  SAMPLERTEXUNITOVERRIDE
+%token  SETSAMPLERSTATEOVERRIDE
+
+/*------------------------------------------------------------------
+  OpenGL-state token : for now let's do the same as the OpenGL mess
+  i.e. : put all in one GLenum bad... less error checking... 
+  but less grammar code to write
+  Using the same values as OpenGL spec
+*/
+%token <glenum>     GLACCUM
+%token <glenum>     GLLOAD
+%token <glenum>     GLRETURN
+%token <glenum>     GLMULT
+%token <glenum>     GLADD
+%token <glenum>     GLNEVER
+%token <glenum>     GLLESS
+%token <glenum>     GLEQUAL
+%token <glenum>     GLGREATER
+%token <glenum>     GLNOTEQUAL
+%token <glenum>     GLALWAYS
+%token <glenum>     GLLEQUAL
+%token <glenum>     GLGEQUAL
+%token <glenum>     GLKEEP
+%token <glenum>     GLREPLACE
+%token <glenum>     GLINCR
+%token <glenum>     GLDECR
+%token <glenum>     GLUPPERLEFT
+%token <glenum>     GLLOWERLEFT
+%token <glenum>     GLFRONTLEFT
+%token <glenum>     GLFRONTRIGHT
+%token <glenum>     GLBACKLEFT
+%token <glenum>     GLBACKRIGHT
+%token <glenum>     GLFRONT
+%token <glenum>     GLBACK
+%token <glenum>     GLLEFT
+%token <glenum>     GLRIGHT
+%token <glenum>     GLFRONTANDBACK
+%token <glenum>     GLCCW
+%token <glenum>     GLCW
+%token <glenum>     GLPOINT
+%token <glenum>     GLLINE
+%token <glenum>     GLFILL
+%token <glenum>     GLZERO
+%token <glenum>     GLONE
+%token <glenum>     GLSRCCOLOR
+%token <glenum>     GLONEMINUSSRCCOLOR
+%token <glenum>     GLSRCALPHA
+%token <glenum>     GLONEMINUSSRCALPHA
+%token <glenum>     GLDSTALPHA
+%token <glenum>     GLONEMINUSDSTALPHA
+%token <glenum>     GLDSTCOLOR
+%token <glenum>     GLONEMINUSDSTCOLOR
+%token <glenum>     GLSRCALPHASATURATE
+%token <glenum>     GLCONSTANTCOLOR
+%token <glenum>     GLONEMINUSCONSTANTCOLOR
+%token <glenum>     GLCONSTANTALPHA
+%token <glenum>     GLONEMINUSCONSTANTALPHA
+%token <glenum>     GLFUNCADD
+%token <glenum>     GLMIN
+%token <glenum>     GLMAX
+%token <glenum>     GLFUNCSUBTRACT
+%token <glenum>     GLFUNCREVERSESUBTRACT
+%token <glenum>     GLCLEAR
+%token <glenum>     GLSET
+%token <glenum>     GLCOPY
+%token <glenum>     GLCOPYINVERTED
+%token <glenum>     GLNOOP
+%token <glenum>     GLINVERT
+%token <glenum>     GLAND
+%token <glenum>     GLNAND
+%token <glenum>     GLOR
+%token <glenum>     GLNOR
+%token <glenum>     GLXOR
+%token <glenum>     GLEQUIV
+%token <glenum>     GLANDREVERSE
+%token <glenum>     GLANDINVERTED
+%token <glenum>     GLORREVERSE
+%token <glenum>     GLORINVERTED
+
+/*------------------------------------------------------------------
+  sampler-state token
+  Using the same values as OpenGL spec
+*/
+%token <glenum>     GLTEXTUREMAGFILTER
+%token <glenum>     GLTEXTUREMINFILTER
+%token <glenum>     GLTEXTUREWRAPS
+%token <glenum>     GLTEXTUREWRAPT
+%token <glenum>     GLTEXTUREWRAPR
+
+%token <glenum>     GLNEAREST
+%token <glenum>     GLLINEAR
+%token <glenum>     GLNEARESTMIPMAPNEAREST
+%token <glenum>     GLLINEARMIPMAPNEAREST
+%token <glenum>     GLNEARESTMIPMAPLINEAR
+%token <glenum>     GLLINEARMIPMAPLINEAR
+%token <glenum>     GLCLAMPTOEDGE
+%token <glenum>     GLCLAMP
+%token <glenum>     GLREPEAT
+%token <glenum>     GLMIRROREDREPEAT
+
+/*------------------------------------------------------------------
+*/
+//rasterization_state rasterState
+%token <glenum>     GLPOINTSIZE
+%token <glenum>     GLPOINTSMOOTH
+%token <glenum>     GLPOINTSPRITE
+%token <glenum>     GLPOINTSPRITECOORDORIGIN
+%token <glenum>     GLLINEWIDTH
+%token <glenum>     GLLINESMOOTH
+%token <glenum>     GLCOMBINEDLINESTIPPLE
+%token <glenum>     GLLINESTIPPLEPATTERN
+%token <glenum>     GLLINESTIPPLEREPEAT
+%token <glenum>     GLLINESTIPPLE
+%token <glenum>     GLCULLFACE
+%token <glenum>     GLCULLFACEMODE
+%token <glenum>     GLFRONTFACE
+%token <glenum>     GLPOLYGONSMOOTH
+%token <glenum>     GLPOLYGONMODE
+%token              GLPOLYGONOFFSET
+%token <glenum>     GLPOLYGONOFFSETFACTOR
+%token <glenum>     GLPOLYGONOFFSETUNITS
+%token <glenum>     GLPOLYGONOFFSETPOINT
+%token <glenum>     GLPOLYGONOFFSETLINE
+%token <glenum>     GLPOLYGONOFFSETFILL
+%token <glenum>     GLPOLYGONSTIPPLEBIT
+%token <glenum>     GLRASTERIZERDISCARD
+
+//color_sample_state rasterState
+%token <glenum>     GLALPHATEST
+%token              GLALPHAFUNC
+%token <glenum>     GLALPHATESTFUNC
+%token <glenum>     GLALPHATESTREF
+%token              GLBLENDFUNC
+%token              GLBLENDFUNCSEPARATE
+%token <glenum>     GLBLEND
+%token <glenum>     GLBLENDSRC
+%token <glenum>     GLBLENDSRCRGB
+%token <glenum>     GLBLENDSRCALPHA
+%token <glenum>     GLBLENDDST
+%token <glenum>     GLBLENDDSTRGB
+%token <glenum>     GLBLENDDSTALPHA
+//GL_BLEND_EQUATION_RGBA_NV
+%token              GLBLENDEQUATIONSEPARATE
+%token              GLBLENDEQUATION
+%token <glenum>     GLBLENDEQUATIONRGB
+%token <glenum>     GLBLENDEQUATIONALPHA
+//GL_PER_DRAW_BUFFER_BLEND_FUNCTION_NV
+//GL_PER_DRAW_BUFFER_BLEND_EQUATION_NV
+//GL_PER_DRAW_BUFFER_BLEND_ENABLE_NV
+//GL_PER_DRAW_BUFFER_COLOR_WRITEMASK_NV
+%token <glenum>     GLBLENDCOLOR
+%token <glenum>     GLFRAMEBUFFERSRGB
+%token <glenum>     GLDITHER
+%token <glenum>     GLCOLORLOGICOP
+%token <glenum>     GLLOGICOPMODE
+%token <glenum>     GLCOLORWRITEMASK
+%token <glenum>     GLMULTISAMPLE
+%token <glenum>     GLSAMPLEMASK
+%token <glenum>     GLSAMPLEMASKVALUE
+%token <glenum>     GLSAMPLEALPHATOONE
+%token <glenum>     GLSAMPLEALPHATOCOVERAGE
+
+//dst_state dstState
+%token <glenum>     GLDEPTHTEST
+%token <glenum>     GLDEPTHFUNC
+%token <glenum>     GLDEPTHWRITEMASK
+%token <glenum>     GLDEPTHCLAMP
+%token <glenum>     GLDEPTHBOUNDSTESTEXT
+%token <glenum>     GLDEPTHBOUNDSEXT
+%token <glenum>     GLSTENCILTEST
+%token <glenum>     GLSTENCILFUNC
+%token              GLSTENCILFUNCSEPARATE
+%token <glenum>     GLSTENCILVALUEMASK
+%token <glenum>     GLSTENCILREF
+%token <glenum>     GLSTENCILFAIL
+%token <glenum>     GLSTENCILPASSDEPTHFAIL
+%token <glenum>     GLSTENCILPASSDEPTHPASS
+%token              GLSTENCILOP
+%token              GLSTENCILOPSEPARATE
+%token              GLSTENCILBACKOP
+%token <glenum>     GLSTENCILWRITEMASK
+//GL_STENCIL_FRONT_FUNC
+//GL_STENCIL_FRONT_VALUE_MASK
+//GL_STENCIL_FRONT_REF
+//GL_STENCIL_FRONT_FAIL
+//GL_STENCIL_FRONT_PASS_DEPTH_FAIL
+//GL_STENCIL_FRONT_PASS_DEPTH_PASS
+//GL_STENCIL_FRONT_WRITEMASK
+%token <glenum>     GLSTENCILBACKFUNC
+%token <glenum>     GLSTENCILBACKVALUEMASK
+%token <glenum>     GLSTENCILBACKREF
+%token <glenum>     GLSTENCILBACKFAIL
+%token <glenum>     GLSTENCILBACKPASSDEPTHFAIL
+%token <glenum>     GLSTENCILBACKPASSDEPTHPASS
+%token <glenum>     GLSTENCILBACKWRITEMASK
+
+%token  ATTRIBUTE // strange : I had to put this at the end of the GL enums to avoid some issues in iPad... still don't know why
+/*==================================================================
+  TYPES
+*/
+%type   <glenum>            glenum
+%type   <glenum>            suvmapping
+%type   <glenum>            sfilter
+
+%type   <varNameList>       varnamelist
+%type   <shaderList>        shaderlist
+%type   <shaderList>        one_or_more_shaders
+%type   <floatList>         fexplist
+%type   <floatVecList>      fexpveclist
+%type   <intVecList>        iexpveclist
+//%type   <boolVecList>       bexpveclist
+%type   <intList>           iexplist
+%type   <boolList>          bexplist
+%type   <ival>     iexp
+%type   <bval>     bexp
+%type   <fval>     fexp
+%type   <fval>     asfexp
+%type   <ival>     asiexp
+%type   <bval>     asbexp
+%type   <s>        semantic
+%type   <s>        nsvarname
+%type   <floatVecList>  valueassignment_f
+%type   <floatVecList>  valueassignment_fv
+%type   <floatVecList>  valueassignment_fvl
+%type   <intVecList>    valueassignment_i
+//%type   <intVecList>    valueassignment_iv
+//%type   <intVecList>    valueassignment_ivl
+%type   <boolVecList>   valueassignment_b
+%type   <boolVecList>   valueassignment_bv
+//%type   <boolVecList>   valueassignment_bvl
+%type   <resourceType>   resourcetype
+%type   <ival>     arraySz
+%type   <s>        name
+/*%type    <s>        str*/
+/*%type    <var>      var*/
+%type   <bval>      global
+%type   <bval>      global_true
+%type   <bval>      unsigned
+%type   <bval>      pointer
+%type   <clear_mode> clear_flags
+%type   <precisionType> precision
+%type   <uniformQualifiers> uniform_qualifiers
+%type   <valueList>     uniformvalueassigment
+%type   <saszsauva>     arraysz_semantic_annotations_uniformvalueassigment
+%type   <uniformType> uniform_type
+%type   <global_varname_annots>    global_varname_annots
+
+/*********************
+ * Additional features
+ */
+%token RENDERGROUP
+%token RENDERMODE
+%token <render_mode> RENDERMODE_ENUM
+%token BLITFBOTOACTIVETARGET
+%token CLEARMODE
+%token <clear_mode> CLEAR_ENUM
+%token CURRENTTARGET
+%token CLEARCOLOR
+%token VIEWPORT
+%token FBO
+%token RENDERBUFFER
+%token RENDERTEXTURE
+%token RENDERTEXTURERECT
+%token DSTTARGET
+%token COLORTARGETS
+%token RESOURCEMSAA
+%token RESOURCESIZE
+%token RESOURCESIZEFACTOR
+%token RESOURCERESOLVETARGET
+%token RESOURCEFORMAT
+%token <resource_format> RESOURCEFORMAT_ENUM
+%token APPDEFINED
+%token SWAPRESOURCES
+%token LOOP
+%token ACTIVE
+%token OFF
+%token GLOBAL
+%token LOCAL
+/*********************
+ * CUDA
+ */
+%type  <argList> arglist;
+%type  <argument> argument;
+%type  <argValList> argvallist;
+%type  <argVal> argval;
+%token CUDAKERNEL
+%token CUDACODE
+%token CUDAMODULE
+%token CUDASHAREDMEMORY
+%token CUDAGRID
+%token CUDABLOCK
+
+/*********************
+ * OPTIX
+ */
+%token OPTIX_CONTEXT
+%token OPTIX_CONTEXT_ENTRY
+%token  RAY_GENERATION_PROGRAM
+%token  EXCEPTION_PROGRAM
+%token  INTERSECTION_PROGRAM
+%token  BOUNDING_BOX_PROGRAM
+%token  MISS_PROGRAM
+%token  DEFAULT_MATERIAL
+%token  STACK_SIZE
+%token  OUTPUT_BUFFER
+
+%token OPTIX_MATERIAL
+%token  CLOSEST_HIT_PROGRAM
+%token  ANY_HIT_PROGRAM
+
+%token OPTIX_BUFFER
+//%token  RESOURCESIZE    // used for other things. Already declared
+//%token  RESOURCEFORMAT  // used for other things. Already declared
+
+%token PTX_PROGRAM_FROM_FILE /* not only for Optix*/
+%token  FILE_NAME
+%token  ENTRY_POINT
+
+/*********************
+ * GLSL Compute (and DirectX Compute)
+ */
+%token COMPUTEGROUPS
+%token COMPUTEPROGRAM
+%token COMPUTEPROGRAMOVERRIDE
+/*********************
+ * Path Rendering
+ */
+// Path shader token
+%token SVGPATH
+%token PSPATH
+// pass program assignment
+%token PATHSOURCEOVERRIDE
+%token PATHSOURCE
+// 'render' States for Path rendering
+%token GLPATHSTENCILDEPTHOFFSET
+%token <glenum> GLPATHSTENCILFUNC
+%token <glenum> GLPATHFOGGEN
+%token GLPATHTEXGEN
+%token GLPATHCOLORGEN
+%token <glenum> GLPATHCOVERDEPTHFUNC
+%token <glenum> GLPATHSTROKEWIDTH
+%token <glenum> GLPATHINITIALENDCAP
+%token <glenum> GLPATHTERMINALENDCAP
+%token <glenum> GLPATHINITIALDASHCAP
+%token <glenum> GLPATHTERMINALDASHCAP
+%token <glenum> GLPATHJOINSTYLE
+%token <glenum> GLPATHMITERLIMIT
+%token <glenum> GLPATHDASHOFFSET
+%token <glenum> GLPATHDASHOFFSETRESET
+%token <glenum> GLPATHCLIENTLENGTH
+// used for argument of glStencilFillPathNV
+%token <glenum> GLPATHFILLMODE
+%token <glenum> GLPATHFILLMASK
+// used for argument of glCoverFillPathNV
+%token <glenum> GLPATHFILLCOVERMODE
+// used for argument of glStencilStrokePathNV:
+%token <glenum> GLPATHSTROKEMASK
+%token <glenum> GLPATHSTROKEREFERENCE
+// used for argument of glCoverStrokePathNV
+%token <glenum> GLPATHSTROKECOVERMODE
+%token GLPATHTRANSFORMTYPE
+%token GLPATHTRANSFORM
+// new GL enums for Path rendering
+%token <glenum> GLFOGCOORDINATE
+%token <glenum> GLFRAGMENTDEPTH
+%token <glenum> GLOBJECTLINEAR
+%token <glenum> GLPATHOBJECTBOUNDINGBOX
+%token <glenum> GLEYELINEAR
+%token <glenum> GLFLAT
+%token <glenum> GLSQUARE
+%token <glenum> GLROUND
+%token <glenum> GLTRIANGULAR
+%token <glenum> GLMITERREVERT
+%token <glenum> GLMITERTRUNCATE
+%token <glenum> GLBEVEL
+%token <glenum> GLMOVETORESET
+%token <glenum> GLMOVETOCONTINUES
+%token <glenum> GLCOUNTUP
+%token <glenum> GLCOUNTDOWN
+%token <glenum> GLBOUNDINGBOX
+%token <glenum> GLCONVEXHULL
+%token <glenum> GLTRANSLATE2D
+%token <glenum> GLTRANSLATEX
+%token <glenum> GLTRANSLATEY
+%token <glenum> GLTRANSLATE3D
+%token <glenum> GLAFFINE2D
+%token <glenum> GLAFFINE3D
+%token <glenum> GLTRANSPOSEAFFINE2D
+%token <glenum> GLTRANSPOSEAFFINE3D
+// Enums not especially for path rendering
+%token <glenum> GLLUMINANCE
+%token <glenum> GLALPHA
+%token <glenum> GLINTENSITY
+%token <glenum> GLLUMINANCEALPHA
+%token <glenum> GLRGB
+%token <glenum> GLRGBA
+
+// NOTE: canceled for now... maybe we don't need this level of granularity
+// Use 
+//%type    <depthFn>   depthFuncs
+
+/*%destructor  {  printf("DESTRUCTOR %d",  @$.first_line);  }  <s>*/
+
+/*==================================================================
+  
+*/
+%right  '='
+%left   '-'  '+'
+%left   '*'  '/'
+%left   NEG         /*  negation--unary  minus  */
+%right  '^'       /*  exponentiation  */
+
+%%
+/*==================================================================
+  RULES
+*/
+input: /*empty : alway go through this one for the rest of the rules*/
+| input ';'
+| input extension
+| input tech
+//| input glslg
+| input glsl
+//| input hlsl10g
+| input hlsl10
+//| input hlsl11g
+| input hlsl11
+//| input cudacg
+| input cudac
+| input cudak
+| input texture
+| input resource
+| input fbo
+| input sstate
+| input dststate
+| input prstate
+| input csstate
+| input rstate
+| input namespace
+| input cstbuffer
+| input uniforms
+| input svgpath
+//| input svgpathg
+| input pspath
+//| input pspathg
+| input optix_context
+| input optix_material
+| input optix_buffer
+| input ptx_program_from_file
+| input error
+;
+
+extension: EXTENSION SEPARATE_SHADER ':' bexp
+{
+    curContainer->separateShadersEnable($4);
+}
+;
+
+/*------------------------------------------------------------------
+  name with or without the quotes
+*/
+name: FX_STR { $$ = $1; }
+| VARNAME { $$ = $1; }
+;
+
+/*------------------------------------------------------------------
+  float expression
+*/
+fexp: FX_FLOAT {  $$  =  $1; }
+|  fexp  '+'  fexp {  $$  =  $1  +  $3; }
+|  iexp  '+'  fexp {  $$  =  (float)$1  +  $3; }
+|  fexp  '+'  iexp {  $$  =  $1  +  (float)$3; }
+|  fexp  '-'  fexp {  $$  =  $1  -  $3; }
+|  iexp  '-'  fexp {  $$  =  (float)$1  -  $3; }
+|  fexp  '-'  iexp {  $$  =  $1  -  (float)$3; }
+|  fexp  '*'  fexp {  $$  =  $1  *  $3; }
+|  iexp  '*'  fexp {  $$  =  (float)$1  *  $3; }
+|  fexp  '*'  iexp {  $$  =  $1  *  (float)$3; }
+|  fexp  '/'  fexp {  $$  =  $1  /  $3; }
+|  iexp  '/'  fexp {  $$  =  (float)$1  /  $3; }
+|  fexp  '/'  iexp {  $$  =  $1  /  (float)$3; }
+|  iexp  '/'  iexp {  $$  =  (float)$1  /  (float)$3; }
+|  '-'  fexp    %prec  NEG  {  $$  =  -$2; }
+|  fexp  '^'  fexp {  $$  =  pow  ($1,  $3); }
+|  iexp  '^'  fexp {  $$  =  pow  ((float)$1,  $3); }
+|  fexp  '^'  iexp {  $$  =  pow  ($1,  (float)$3); }
+|  iexp  '^'  iexp {  $$  =  pow  ((float)$1,  (float)$3); }
+|  '('  fexp  ')' {  $$  =  $2; }
+/*|  */
+;
+
+/*------------------------------------------------------------------
+  integer expression
+*/
+iexp:
+   FX_INT {  $$  =  $1; }
+|  iexp  '+'  iexp {  $$  =  $1  +  $3; }
+|  iexp  '-'  iexp {  $$  =  $1  -  $3; }
+|  iexp  '*'  iexp {  $$  =  $1  *  $3; }
+|  '-'  iexp    %prec  NEG  {  $$  =  -$2; }
+|  '('  iexp  ')' {  $$  =  $2; }
+;
+/*------------------------------------------------------------------
+  boolean expression
+*/
+bexp: FX_TRUE {  $$  =  true; }
+| FX_FALSE {  $$  =  false; }
+;
+
+/*------------------------------------------------------------------
+  conversions
+*/
+asbexp: bexp { $$ = $1; }
+| iexp { 
+    if(($1 != 0)&&($1 != 1)) yyerror("    Warning : truncation of float to bool");
+    $$ = $1 ? true: false; }
+| fexp { 
+    if(($1 != 0.0f)&&($1 != 1.0f)) yyerror("    Warning : truncation of float to bool");
+    $$ = $1 ? true: false; }
+;
+asiexp: iexp { $$ = $1; }
+| fexp { 
+    if(($1 - (int)$1)!=0.0f)
+        yyerror("    Warning : truncation of float to int");
+    $$ = (int)$1; }
+| bexp { $$ = $1 ? 1: 0; }
+;
+asfexp:
+  fexp { $$ = $1; }
+| iexp { $$ = (float)$1; }
+| bexp { $$ = $1 ? 1.0f: 0.0f; }
+;
+/*------------------------------------------------------------------
+  String in between quotes
+*/
+/*str: FX_STR { $$ = $1; }*/
+
+/*------------------------------------------------------------------
+  Variable creation from a token that matched the variable name
+*/
+/*var: VARNAME {
+    $$ = new Variable; // TODO: register it in a table
+    $$->name = *$1;
+    delete $1;
+    }*/
+/*
+/*------------------------------------------------------------------
+*/
+separator: /*empty*/
+//| '+'
+| ','
+/*------------------------------------------------------------------
+   shader list
+   TODO: check destructor for new ShaderList, when we have an error
+*/
+shaderlist: FX_FALSE { $$ = NULL; }
+| VARNAME {
+    $$ = new ShaderList;
+    IShader *pShader = curContainer->findShader($1->c_str());
+    if(pShader == NULL) {
+        // second chance: look for it in the global repository
+        pShader = pShdRep->findShader($1->c_str());
+        if(pShader == NULL) {
+            yyerror("Error : Shader not found:");
+            yyerror($1->c_str());
+        }
+    }
+    if(pShader)
+        ($$)->push_back(pShader);
+    delete $1;
+}
+| shaderlist separator VARNAME {
+    $$ = $1;
+    IShader *pShader = curContainer->findShader($3->c_str());
+    if(pShader == NULL) {
+        // second chance: look for it in the global repository
+        pShader = pShdRep->findShader($3->c_str());
+        if(pShader == NULL) {
+            yyerror("Error : Shader not found:");
+            yyerror($3->c_str());
+        }
+    }
+    if(pShader)
+        ($$)->push_back(pShader);
+    delete $3;
+}
+;
+
+one_or_more_shaders: { $$ = NULL; }
+//VARNAME {
+//    $$ = new ShaderList;
+//    IShader *pShader = curContainer->findShader($1->c_str());
+//    if(pShader == NULL) {
+//        // second chance: look for it in the global repository
+//        pShader = pShdRep->findShader($1->c_str());
+//        if(pShader == NULL) {
+//            yyerror("Error : Shader not found:");
+//            yyerror($1->c_str());
+//        }
+//    }
+//    if(pShader)
+//        ($$)->push_back(pShader);
+//    delete $1;
+//}
+| shaderlist  { $$ = $1; }
+| liststart shaderlist listend { $$ = $2; }
+;
+
+/*------------------------------------------------------------------
+   variable name list (for sub-routine, for example
+   TODO: check destructor for new ShaderList, when we have an error
+*/
+varnamelist: /*empty*/ { $$ = NULL; }
+|VARNAME {
+    $$ = new VarNameList;
+    $$->push_back(*$1);
+    delete $1;
+}
+| varnamelist separator VARNAME {
+    $$ = $1;
+    $$->push_back(*$3);
+    delete $3;
+}
+;
+
+/*------------------------------------------------------------------
+   pass-states
+   TODO: Add the states
+*/
+liststart:
+'{'
+/*| '['
+| '('*/
+;
+listend:
+'}'
+/*| ']'
+| ')'*/
+;
+
+/*------------------------------------------------------------------
+   Simple list of expressions
+*/
+fexplist:fexp {
+    $$ = new FloatList;
+    $$->push_back($1);
+}
+| iexp {
+    $$ = new FloatList;
+    $$->push_back((float)$1);
+}
+| fexplist ',' fexp {
+    $$ = $1;
+    $$->push_back($3);
+}
+| fexplist ',' iexp {
+    $$ = $1;
+    $$->push_back((float)$3);
+}
+| fexplist error { 
+    $$ = $1;
+    yyerror ("Error in the list of floats");
+}
+;
+
+fexpveclist: liststart fexplist listend {
+    $$ = new FloatVecList;
+    $$->push_back($2);
+}
+| fexpveclist ',' liststart fexplist listend {
+    $$ = $1;
+    $$->push_back($4);
+}
+| fexpveclist error { $$ = $1; yyerror ("Error in the list of default values"); }
+;
+
+iexplist:iexp {
+    $$ = new IntList;
+    $$->push_back($1);
+}
+/*| fexp {
+    $$ = new IntList;
+    yyerror("    Warning : truncation of float to int");
+    $$->push_back((int)$1);
+}*/
+| iexplist ',' iexp {
+    $$ = $1;
+    $$->push_back($3);
+}
+/*| iexplist ',' fexp {
+    yyerror("    Warning : truncation of float to int");
+    $$ = $1;
+    $$->push_back((int)$3);
+}*/
+;
+
+iexpveclist: liststart iexplist listend {
+    $$ = new IntVecList;
+    $$->push_back($2);
+}
+| iexpveclist ',' liststart iexplist listend {
+    $$ = $1;
+    $$->push_back($4);
+}
+| iexpveclist error { yyerror ("Error in the list of default values"); }
+;
+
+bexplist:bexp {
+    $$ = new BoolList;
+    $$->push_back($1);
+}
+| bexplist ',' bexp {
+    $$ = $1;
+    $$->push_back($3);
+}
+;
+
+//bexpveclist: liststart bexplist listend {
+//    $$ = new BoolVecList;
+//    $$->push_back($2);
+//}
+//| bexpveclist ',' liststart bexplist listend {
+//    $$ = $1;
+//    $$->push_back($4);
+//}
+//;
+
+/*------------------------------------------------------------------
+  Argument value assignment list
+  currently used when specifying a CUDA kernel with arguments
+*/
+argval: iexp { 
+    $$ = new ArgVal(IUniform::TInt); $$->val.i[0] = $1; 
+    LOGD("Arg val = %d\n", $1);
+}
+| fexp { 
+    $$ = new ArgVal(IUniform::TFloat); $$->val.f[0] = $1;
+    LOGD("Arg val = %f\n", $1);
+}
+| VARNAME {
+    IResource* pRes = curContainer->findResource($1->c_str());
+    if(pRes) {
+        nvFX::IUniform::Type utype;
+        switch(pRes->getType())
+        {
+        case RESOURCE_UNKNOWN: utype = IUniform::TUndefined; break;
+        case RESTEX_1D: utype = IUniform::TTexture1D; break;
+        case RESTEX_2D: utype = IUniform::TTexture2D; break;
+        case RESTEX_2DRECT: utype = IUniform::TTexture2DRect; break;
+        case RESTEX_3D: utype = IUniform::TTexture3D; break;
+        case RESTEX_CUBE_MAP: utype = IUniform::TTextureCube; break;
+        default:
+            assert(!"missing convertion. TODO or to CHECK");
+        }
+        $$ = new ArgVal(utype); $$->val.pResource = pRes;
+        LOGD("Arg val = %s as a resource pointer\n", $1->c_str());
+    } else {
+        IUniform* pU = curContainer->findUniform($1->c_str());
+        if(pU) {
+            $$ = new ArgVal(IUniform::TUniform); $$->val.pUniform = pU;
+            LOGD("Arg val = %s from a uniform pointer\n", $1->c_str());
+        } else {
+            LOGD("Arg val = %s - unknown parameter !\n", $1->c_str());
+            yyerror("Unknown parameter\n"); yyerror($1->c_str()); yyerror("\n");
+        }
+    }
+    delete $1;
+}
+| error  { 
+    yyerror("Error in argument\n");
+}
+;
+
+argvallist: /*empty*/ { $$ = new ArgValList; }
+| VOID_TYPE { $$ = new ArgValList; }
+| argval {
+    $$ = new ArgValList;
+    $$->push_back($1);
+    }
+| argvallist ',' argval {
+    $$ = $1;
+    $$->push_back($3);
+    }
+| argvallist error { yyerror("Error in argument list\n");}
+;
+/*------------------------------------------------------------------
+   various enums
+   TODO: add all the needed enums for OpenGL...
+   NOTE: let's cancel this granularity... for now...
+   There is too much to write, given the high amount of states and enums in OpenGL
+*/
+/*depthFuncs: LEQUAL { $$ = $1; }
+| GEQUAL { $$ = $1; }
+| error { yyerror("Error in depth Function\n");}
+;*/
+
+/*------------------------------------------------------------------
+    GL enums that can be passed as arguments to specific openGL functions
+    TODO: add the whole set !
+*/
+glenum: GLACCUM
+| GLLOAD
+| GLRETURN
+| GLMULT
+| GLADD
+| GLNEVER
+| GLLESS
+| GLEQUAL
+| GLGREATER
+| GLNOTEQUAL
+| GLALWAYS
+| GLLEQUAL
+| GLGEQUAL
+| GLKEEP
+| GLREPLACE
+| GLINCR
+| GLDECR
+| GLUPPERLEFT
+| GLLOWERLEFT
+| GLFRONTLEFT
+| GLFRONTRIGHT
+| GLBACKLEFT
+| GLBACKRIGHT
+| GLFRONT
+| GLBACK
+| GLLEFT
+| GLRIGHT
+| GLFRONTANDBACK
+| GLCCW
+| GLCW
+| GLPOINT
+| GLLINE
+| GLFILL
+| GLZERO
+| GLONE
+| GLSRCCOLOR
+| GLONEMINUSSRCCOLOR
+| GLSRCALPHA
+| GLONEMINUSSRCALPHA
+| GLDSTALPHA
+| GLONEMINUSDSTALPHA
+| GLDSTCOLOR
+| GLONEMINUSDSTCOLOR
+| GLSRCALPHASATURATE
+| GLCONSTANTCOLOR
+| GLONEMINUSCONSTANTCOLOR
+| GLCONSTANTALPHA
+| GLONEMINUSCONSTANTALPHA
+| GLFUNCADD
+| GLMIN
+| GLMAX
+| GLFUNCSUBTRACT
+| GLFUNCREVERSESUBTRACT
+| GLCLEAR
+| GLSET
+| GLCOPY
+| GLCOPYINVERTED
+| GLNOOP
+| GLINVERT
+| GLAND
+| GLNAND
+| GLOR
+| GLNOR
+| GLXOR
+| GLEQUIV
+| GLANDREVERSE
+| GLANDINVERTED
+| GLORREVERSE
+| GLORINVERTED
+/* enums for Path Rendering */
+| GLLUMINANCE
+| GLALPHA
+| GLINTENSITY
+| GLLUMINANCEALPHA
+| GLRGB
+| GLRGBA
+| GLFOGCOORDINATE
+| GLFRAGMENTDEPTH
+| GLOBJECTLINEAR
+| GLPATHOBJECTBOUNDINGBOX
+| GLEYELINEAR
+| GLFLAT
+| GLSQUARE
+| GLROUND
+| GLTRIANGULAR
+| GLMITERREVERT
+| GLMITERTRUNCATE
+| GLBEVEL
+| GLMOVETORESET
+| GLMOVETOCONTINUES
+| GLCOUNTUP
+| GLCOUNTDOWN
+| GLBOUNDINGBOX
+| GLCONVEXHULL
+| GLTRANSLATE2D
+| GLTRANSLATEX
+| GLTRANSLATEY
+| GLTRANSLATE3D
+| GLAFFINE2D
+| GLAFFINE3D
+| GLTRANSPOSEAFFINE2D
+| GLTRANSPOSEAFFINE3D
+;
+
+
+clear_flags: CLEAR_ENUM { $$ = $1; }
+| clear_flags '|' CLEAR_ENUM { $$ = (ClearMode)((unsigned int)$3 | (unsigned int)$1); }
+;
+
+/*------------------------------------------------------------------
+   pass-states
+   TODO: Add the states
+*/
+passstates: /**/
+| passstates passglsstates
+| passstates passprstates
+| passstates OPTIX_CONTEXT '=' VARNAME ';' {
+    //if($4->size() > 0)
+    //    curPass->createState(IPassState::TVertexShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates OPTIX_CONTEXT_ENTRY '=' iexp ';' {
+    //if($4->size() > 0)
+    //    curPass->createState(IPassState::TVertexShader, & (*$4)[0], (int)$4->size());
+    }
+| passstates VERTEXPROGRAM '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createState(IPassState::TVertexShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates VERTEXPROGRAM '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createState(IPassState::TVertexShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates FRAGMENTPROGRAM '=' one_or_more_shaders ';' {
+    if($4->size()>0)
+        curPass->createState(IPassState::TFragmentShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates FRAGMENTPROGRAM '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size()>0)
+        curPass->createState(IPassState::TFragmentShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates COMPUTEPROGRAM '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createState(IPassState::TComputeShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates COMPUTEPROGRAM '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createState(IPassState::TComputeShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates PATHSOURCE '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createState(IPassState::TPathShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates PATHSOURCE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createState(IPassState::TPathShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates GEOMETRYPROGRAM '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createState(IPassState::TGeometryShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates GEOMETRYPROGRAM '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createState(IPassState::TGeometryShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates HULLPROGRAM '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createState(IPassState::TTCSShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates HULLPROGRAM '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createState(IPassState::TTCSShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates EVALPROGRAM '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createState(IPassState::TTESShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates EVALPROGRAM '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createState(IPassState::TTESShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates VERTEXPROGRAMOVERRIDE '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createStateOverride(IPassState::TVertexShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates VERTEXPROGRAMOVERRIDE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createStateOverride(IPassState::TVertexShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates FRAGMENTPROGRAMOVERRIDE '=' one_or_more_shaders ';' {
+    if($4->size()>0)
+        curPass->createStateOverride(IPassState::TFragmentShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates FRAGMENTPROGRAMOVERRIDE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size()>0)
+        curPass->createStateOverride(IPassState::TFragmentShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates COMPUTEPROGRAMOVERRIDE '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createStateOverride(IPassState::TComputeShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates COMPUTEPROGRAMOVERRIDE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createStateOverride(IPassState::TComputeShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates PATHSOURCEOVERRIDE '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createStateOverride(IPassState::TPathShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates PATHSOURCEOVERRIDE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createStateOverride(IPassState::TPathShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates GEOMETRYPROGRAMOVERRIDE '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createStateOverride(IPassState::TGeometryShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates GEOMETRYPROGRAMOVERRIDE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createStateOverride(IPassState::TGeometryShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates HULLPROGRAMOVERRIDE '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createStateOverride(IPassState::TTCSShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates HULLPROGRAMOVERRIDE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createStateOverride(IPassState::TTCSShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates EVALPROGRAMOVERRIDE '=' one_or_more_shaders ';' {
+    if($4->size() > 0)
+        curPass->createStateOverride(IPassState::TTESShader, & (*$4)[0], (int)$4->size());
+    delete $4;
+    }
+| passstates EVALPROGRAMOVERRIDE '<' name '>' '=' one_or_more_shaders ';' {
+    if($7->size() > 0)
+        curPass->createStateOverride(IPassState::TTESShader, & (*$7)[0], (int)$7->size(), $4->c_str());
+    delete $4;
+    delete $7;
+    }
+| passstates UNIFORM '(' VARNAME ')' '=' liststart varnamelist listend ';' {
+    #ifndef OGLES2
+    // we prefer this loop : we don't have the char ** available here... using vector of std::string...
+    int sz = (int)$8->size();
+    const char ** srnames = (const char **)malloc(sizeof(const char *)*sz);
+    for(int i=0; i<(int)$8->size(); i++)
+        srnames[i] = (*$8)[i].c_str();
+    curPass->createState($4->c_str(), srnames, sz);
+    delete [] srnames;
+    #else
+        yyerror("Not supported in ES2\n");
+    #endif
+    delete $4;
+    delete $8;
+    }
+| passstates UNIFORM '(' VARNAME ')' '=' VARNAME ';' {
+    #ifndef OGLES2
+    curPass->createState($4->c_str(), 0, $7->c_str());
+    #else
+        yyerror("Not supported in ES2\n");
+    #endif
+    delete $4;
+    delete $7;
+    }
+| passstates UNIFORM '(' VARNAME ')' uniformvalueassigment ';' {
+    ValueList* pvalueList = $6;
+    if(pvalueList && pvalueList->floatVecList)
+    {
+        FloatVecList *pfvl = pvalueList->floatVecList;
+        FloatList* pfl = (*pfvl)[0];
+        float* pf = &(*pfl)[0];
+        curPass->createState($4->c_str(), 0, pf, (int)pfl->size());
+        delete pfl;
+        delete pfvl;
+        delete pvalueList;
+    }
+    delete $4;
+    }
+// *** Should be merged into the previous rule ***
+
+//| passstates UNIFORM '(' VARNAME ')' '=' liststart fexpveclist listend ';' {
+//    // walk through the vector list and check few things then send the packed version
+//    int szvec = 0;
+//    float *farray = NULL;
+//    float *p = NULL;
+//    for(int i=0; i<(int)$8->size(); i++)
+//    {
+//        if(szvec == 0) {
+//            szvec = (int)(*$8)[i]->size();
+//            p = farray = new float[szvec * (int)$8->size()]; // we assume all vectors are the same size
+//        }
+//        else if(szvec != (*$8)[i]->size()) {
+//            yyerror("Vector list has inconsistent vectors\n");
+//            continue;
+//        }
+//        FloatList* pfl = (*$8)[i];
+//        for(int j=0; j<(int)pfl->size(); j++)
+//            *p++ = (*pfl)[j];
+//        delete pfl;
+//    }
+//    if(szvec == 0)
+//        yyerror("Error : vectors are 0 sized\n");
+//    else
+//        curPass->createState($4->c_str(), 0, farray, szvec, (int)$8->size());
+//    delete farray;
+//    delete $4;
+//    delete $8;
+//    }
+//| passstates UNIFORM '(' VARNAME ')' '=' iexpveclist ';' {
+//    IntVecList *pvl = $7;
+//    IntList* pl = (*pvl)[0];
+//    int* p = &(*pl)[0];
+//    curPass->createState($4->c_str(), 0, p, (int)pl->size());
+//    delete $4;
+//    delete pl;
+//    delete pvl;
+//    }
+//| passstates UNIFORM '(' VARNAME ')' '=' liststart bexplist listend ';' {
+//    curPass->createState($4->c_str(), 0, (&(*$8)[0]), (int)$8->size());
+//    delete $4;
+//    }
+| passstates UNIFORM '(' VARNAME '[' iexp ']' ')' '=' VARNAME ';' {
+    #ifndef OGLES2
+    curPass->createState($4->c_str(), $6, $10->c_str());
+    #else
+        yyerror("Not supported in ES2\n");
+    #endif
+    delete $4;
+    delete $10;
+    }
+// TODO: Conflicting with assignment for floats... we shall merge both + even other formats
+//| passstates UNIFORM '(' VARNAME '[' iexp ']' ')' '=' iexpveclist ';' {
+//    IntVecList *pvl = $10;
+//    IntList* pl = (*pvl)[0];
+//    int* p = &(*pl)[0];
+//    curPass->createState($4->c_str(), $6, p, (int)pl->size());
+//    delete $4;
+//    delete pl;
+//    delete pvl;
+//    }
+| passstates UNIFORM '(' VARNAME '[' iexp ']' ')' '=' liststart fexpveclist listend ';' {
+    // walk through the vector list and check few things then send the packed version
+    int szvec = 0;
+    float *farray = NULL;
+    float *p = NULL;
+    for(int i=0; i<(int)$11->size(); i++)
+    {
+        if(szvec == 0) {
+            szvec = (int)(*$11)[i]->size();
+            p = farray = new float[szvec * $11->size()]; // we assume all vectors are the same size
+        }
+        else if(szvec != (*$11)[i]->size()) {
+            yyerror("Vector list has inconsistent vectors\n");
+            continue;
+        }
+        FloatList* pfl = (*$11)[i];
+        for(int j=0; j<(int)pfl->size(); j++)
+            *p++ = (*pfl)[j];
+        delete pfl;
+    }
+    if(szvec == 0)
+        yyerror("Error : vectors are 0 sized\n");
+    else
+        curPass->createState($4->c_str(), $6, farray, szvec, (int)$11->size());
+    delete farray;
+    delete $4;
+    delete $11;
+    }
+| passstates UNIFORM '(' VARNAME '[' iexp ']' ')' '=' iexpveclist ';' {
+    IntVecList *pvl = $10;
+    IntList* pl = (*pvl)[0];
+    int* p = &(*pl)[0];
+    curPass->createState($4->c_str(), $6, p, (int)pl->size());
+    delete $4;
+    delete pl;
+    delete pvl;
+    }
+| passstates UNIFORM '(' VARNAME '[' iexp ']' ')' '=' liststart bexplist listend ';' {
+    curPass->createState($4->c_str(), $6, &(*$11)[0], (int)$11->size());
+    delete $4;
+    delete $11;
+    }
+| passstates SHDPROFILE '=' FX_STR ';' {
+    yyerror("TODO: SHDPROFILE for HLSL to do...\n");
+    delete $4;
+    }
+| passstates TEXTURERESOURCE '(' VARNAME ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($7->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findState($4->c_str(), 0);
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setTextureResource(pRes);
+        }
+        else
+            pS = curPass->createStateTextureResource($4->c_str(), pRes);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $7;
+}
+| passstates TEXTURERESOURCEOVERRIDE '(' VARNAME ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($7->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findStateOverride($4->c_str());
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setTextureResource(pRes);
+        }
+        else
+            pS = curPass->createStateTextureResourceOverride($4->c_str(), pRes);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $7;
+}
+| passstates SAMPLERRESOURCE '(' VARNAME ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($7->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findState($4->c_str(), 0);
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setSamplerResource(pRes, -1);
+        }
+        else
+            pS = curPass->createStateSamplerResource($4->c_str(), pRes, -1);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $7;
+}
+| passstates SAMPLERRESOURCEOVERRIDE '(' VARNAME ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($7->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findStateOverride($4->c_str());
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setSamplerResource(pRes, -1);
+        }
+        else
+            pS = curPass->createStateSamplerResourceOverride($4->c_str(), pRes, -1);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $7;
+}
+| passstates UNIFORM '(' VARNAME '.' SAMPLERRESOURCE ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($9->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findState($4->c_str(), 0);
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setSamplerResource(pRes, -1);
+        }
+        else
+            pS = curPass->createStateSamplerResource($4->c_str(), pRes, -1);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $9;
+}
+| passstates SAMPLERRESOURCE '(' VARNAME ')' '=' '{' VARNAME ',' iexp '}' ';' {
+    IResource *pRes = curContainer->findResource($8->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findState($4->c_str(), 0);
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setSamplerResource(pRes, $10);
+        }
+        else
+            pS = curPass->createStateSamplerResource($4->c_str(), pRes, $10);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $8;
+}
+| passstates SAMPLERRESOURCEOVERRIDE '(' VARNAME ')' '=' '{' VARNAME ',' iexp '}' ';' {
+    IResource *pRes = curContainer->findResource($8->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findStateOverride($4->c_str());
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setSamplerResource(pRes, $10);
+        }
+        else
+            pS = curPass->createStateSamplerResourceOverride($4->c_str(), pRes, $10);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $8;
+}
+| passstates IMAGERESOURCE '(' VARNAME ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($7->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findState($4->c_str(), 0);
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setImageResource(pRes, -1);
+        }
+        else
+            pS = curPass->createStateImageResource($4->c_str(), pRes, -1);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $7;
+}
+| passstates IMAGERESOURCEOVERRIDE '(' VARNAME ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($7->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findStateOverride($4->c_str());
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setImageResource(pRes, -1);
+        }
+        else
+            pS = curPass->createStateImageResourceOverride($4->c_str(), pRes, -1);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $7;
+}
+| passstates UNIFORM '(' VARNAME '.' IMAGERESOURCE ')' '=' VARNAME ';' {
+    IResource *pRes = curContainer->findResource($9->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findState($4->c_str(), 0);
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setImageResource(pRes, -1);
+        }
+        else
+            pS = curPass->createStateImageResource($4->c_str(), pRes, -1);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $9;
+}
+| passstates IMAGERESOURCE '(' VARNAME ')' '=' '{' VARNAME ',' iexp '}' ';' {
+    IResource *pRes = curContainer->findResource($8->c_str());
+    if(pRes) {
+        IPassState *pS = curPass->findState($4->c_str(), 0);
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            pU->setImageResource(pRes, $10);
+        }
+        else
+            pS = curPass->createStateImageResource($4->c_str(), pRes, $10);
+    }
+    else yyerror("Error in sampler resource assignment : cannot find the resource");
+    delete $4;
+    delete $8;
+}
+| passstates SAMPLERTEXUNIT '(' VARNAME ')' '=' iexp ';' {
+    IPassState *pS = curPass->findState($4->c_str(), 0);
+    if(pS)
+    {
+        IUniform *pU;
+        pU = pS->getUniform();
+        if(pU)
+            pU->setSamplerUnit($7);
+    }
+    else
+        pS = curPass->createStateSamplerResource($4->c_str(), (IResource*)NULL, $7);
+    delete $4;
+}
+| passstates SAMPLERTEXUNITOVERRIDE '(' VARNAME ')' '=' iexp ';' {
+    IPassState *pS = curPass->findStateOverride($4->c_str());
+    if(pS)
+    {
+        IUniform *pU;
+        pU = pS->getUniform();
+        if(pU)
+            pU->setSamplerUnit($7);
+    }
+    else
+        pS = curPass->createStateSamplerResourceOverride($4->c_str(), (IResource*)NULL, $7);
+    delete $4;
+}
+| passstates IMAGEUNIT '(' VARNAME ')' '=' iexp ';' {
+    IPassState *pS = curPass->findState($4->c_str(), 0);
+    if(pS)
+    {
+        IUniform *pU;
+        pU = pS->getUniform();
+        if(pU)
+            pU->setImageUnit($7);
+    }
+    else
+        pS = curPass->createStateSamplerResource($4->c_str(), (IResource*)NULL, $7);
+    delete $4;
+}
+| passstates IMAGEUNITOVERRIDE '(' VARNAME ')' '=' iexp ';' {
+    IPassState *pS = curPass->findStateOverride($4->c_str());
+    if(pS)
+    {
+        IUniform *pU;
+        pU = pS->getUniform();
+        if(pU)
+            pU->setImageUnit($7);
+    }
+    else
+        pS = curPass->createStateSamplerResourceOverride($4->c_str(), (IResource*)NULL, $7);
+    delete $4;
+}
+| passstates UNIFORM '(' VARNAME '.' SAMPLERTEXUNIT ')' '=' iexp ';' {
+    IPassState *pS = curPass->findState($4->c_str());
+    if(pS)
+    {
+        IUniform *pU;
+        pU = pS->getUniform();
+        if(pU)
+            pU->setSamplerUnit($9);
+    }
+    else
+        pS = curPass->createStateSamplerResource($4->c_str(), (IResource*)NULL, $9);
+    delete $4;
+}
+| passstates UNIFORM '(' VARNAME '.' IMAGEUNIT ')' '=' iexp ';' {
+    IPassState *pS = curPass->findState($4->c_str());
+    if(pS)
+    {
+        IUniform *pU;
+        pU = pS->getUniform();
+        if(pU)
+            pU->setImageUnit($9);
+    }
+    else
+        pS = curPass->createStateSamplerResource($4->c_str(), (IResource*)NULL, $9);
+    delete $4;
+}
+| passstates SETSAMPLERSTATE '(' VARNAME ')' '=' VARNAME ';' {
+    IPassState *pS = curPass->findState($4->c_str(), 0);
+    ISamplerState * pState = curContainer->findSamplerState($7->c_str());
+    if(!pState)
+        yyerror("Error: sampler-state referenced not found\n");
+    else {
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            if(pU && pState)
+                pU->setSamplerState(pState);
+            if(!pU)
+                yyerror("Error: IUniform parameter not found\n");
+        } else {
+            pS = curPass->createStateSamplerState($4->c_str(), pState);
+        }
+    }
+    delete $4;
+    delete $7;
+}
+| passstates SETSAMPLERSTATEOVERRIDE '(' VARNAME ')' '=' VARNAME ';' {
+    IPassState *pS = curPass->findStateOverride($4->c_str());
+    ISamplerState * pState = curContainer->findSamplerState($7->c_str());
+    if(!pState)
+        yyerror("Error: sampler-state referenced not found\n");
+    else {
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            if(pU && pState)
+                pU->setSamplerState(pState);
+            if(!pU)
+                yyerror("Error: IUniform parameter not found\n");
+        } else {
+            pS = curPass->createStateSamplerStateOverride($4->c_str(), pState);
+        }
+    }
+    delete $4;
+    delete $7;
+}
+| passstates UNIFORM '(' VARNAME '.' SETSAMPLERSTATE ')' '=' VARNAME ';' { // same as above but different way to write it
+    IPassState *pS = curPass->findState($4->c_str());
+    ISamplerState * pState = curContainer->findSamplerState($9->c_str());
+    if(!pState)
+        yyerror("Error: sampler-state referenced not found\n");
+    else {
+        if(pS)
+        {
+            IUniform *pU;
+            pU = pS->getUniform();
+            if(pU && pState)
+                pU->setSamplerState(pState);
+            if(!pU)
+                yyerror("Error: IUniform parameter not found\n");
+        } else {
+            pS = curPass->createStateSamplerState($4->c_str(), pState);
+        }
+    }
+    delete $4;
+    delete $9;
+}
+| passstates SETDSTSTATE '=' VARNAME ';' { // same as above but different way to write it
+    IStateGroupDST* pSG = curContainer->findStateGroupDST($4->c_str());
+    if(!pSG)
+        yyerror("Error: State group not found\n");
+    else {
+        // TODO: shall we check if a previous state group was assigned ? And rais an error/warning ?
+        curPass->createState(pSG);
+    }
+    delete $4;
+}
+| passstates SETDSTSTATE '(' VARNAME ')' ';' { // same as above but different way to write it
+    IStateGroupDST* pSG = curContainer->findStateGroupDST($4->c_str());
+    if(!pSG)
+        yyerror("Error: State group not found\n");
+    else {
+        // TODO: shall we check if a previous state group was assigned ? And rais an error/warning ?
+        curPass->createState(pSG);
+    }
+    delete $4;
+}
+| passstates SETRASTERIZATIONSTATE '=' VARNAME ';' { // same as above but different way to write it
+    IStateGroupRaster* pSG = curContainer->findStateGroupRaster($4->c_str());
+    if(!pSG)
+        yyerror("Error: State group not found\n");
+    else {
+        // TODO: shall we check if a previous state group was assigned ? And rais an error/warning ?
+        curPass->createState(pSG);
+    }
+    delete $4;
+}
+| passstates SETRASTERIZATIONSTATE '(' VARNAME ')' ';' { // same as above but different way to write it
+    IStateGroupRaster* pSG = curContainer->findStateGroupRaster($4->c_str());
+    if(!pSG)
+        yyerror("Error: State group not found\n");
+    else {
+        // TODO: shall we check if a previous state group was assigned ? And rais an error/warning ?
+        curPass->createState(pSG);
+    }
+    delete $4;
+}
+| passstates SETCOLORSAMPLESTATE '=' VARNAME ';' { // same as above but different way to write it
+    IStateGroupCS* pSG = curContainer->findStateGroupCS($4->c_str());
+    if(!pSG)
+        yyerror("Error: State group not found\n");
+    else {
+        // TODO: shall we check if a previous state group was assigned ? And rais an error/warning ?
+        curPass->createState(pSG);
+    }
+    delete $4;
+}
+| passstates SETCOLORSAMPLESTATE '(' VARNAME ')' ';' { // same as above but different way to write it
+    IStateGroupCS* pSG = curContainer->findStateGroupCS($4->c_str());
+    if(!pSG)
+        yyerror("Error: State group not found\n");
+    else {
+        // TODO: shall we check if a previous state group was assigned ? And rais an error/warning ?
+        curPass->createState(pSG);
+    }
+    delete $4;
+}
+/*-------------------------
+    scene-level pass-states
+*/
+| passstates RENDERMODE '=' RENDERMODE_ENUM ';' {
+    curPass->createStateRenderMode($4);
+}
+| passstates RENDERGROUP '=' asiexp ';' {
+    curPass->createStateRenderGroup($4);
+}
+| passstates BLITFBOTOACTIVETARGET '=' VARNAME ';' {
+    if((*$4) == "BackBuffer")
+        curPass->createStateBlitFBOToActiveTarget(NULL);
+    else {
+        IFrameBufferObject* pFBO = curContainer->findFbo($4->c_str());
+        if(!pFBO) {
+            yyerror("Error: could not find the Frame Buffer Object");
+            yyerror($4->c_str());
+        } else {
+            curPass->createStateBlitFBOToActiveTarget(pFBO);
+        }
+    }
+    delete $4
+}
+| passstates CLEARMODE '=' clear_flags ';' {
+    curPass->createStateClearMode($4);
+}
+| passstates CURRENTTARGET '=' VARNAME ';' {
+    if((*$4) == "backbuffer")
+        curPass->createStateRenderTarget(NULL);
+    else {
+        IFrameBufferObject* pFBO = curContainer->findFbo($4->c_str());
+        if(!pFBO) {
+            yyerror("Error: could not find the Frame Buffer Object");
+            yyerror($4->c_str());
+        } else {
+            curPass->createStateRenderTarget(pFBO);
+        }
+    }
+    delete $4;
+}
+| passstates CLEARCOLOR '[' asiexp ']' '=' fexpveclist ';' {
+    FloatVecList *pfvl = $7;
+    FloatList* pfl = (*pfvl)[0];
+    float* pf = &(*pfl)[0];
+    if($4 < 4)
+        curPass->createStateClearColor($4, (*pfl)[0], (*pfl)[1], (*pfl)[2], (*pfl)[3]);
+    else
+        yyerror("ClearColor[n] can only clear up to 4 targets\n");
+    delete $7;
+}
+| passstates CLEARCOLOR '=' liststart fexplist listend ';' {
+    curPass->createStateClearColor(0, (*$5)[0], (*$5)[1], (*$5)[2], (*$5)[3]);
+    delete $5;
+}
+| passstates VIEWPORT '=' liststart iexplist listend ';' {
+    if($5->size() >= 4)
+        curPass->createStateViewport((*$5)[0], (*$5)[1], (*$5)[2], (*$5)[3], ($5->size() >= 5)?(*$5)[4]:0.0f, ($5->size() >= 6)?(*$5)[5]:0.0f);
+    else
+        yyerror("Viewport needs a 4 or 6 components vector\n");
+    delete $5;
+}
+| passstates SWAPRESOURCES '(' VARNAME ',' VARNAME ')' ';' {
+    if(((*$4) == "backbuffer")||((*$6) == "backbuffer")) {
+            yyerror("Error: cannot swap resources with backbuffer target");
+    } else {
+        IFrameBufferObject* pFBO1 = curContainer->findFbo($4->c_str());
+        if(!pFBO1) {
+            yyerror("Error: could not find the Frame Buffer Object");
+            yyerror($4->c_str());
+        } else {
+            IFrameBufferObject* pFBO2 = curContainer->findFbo($6->c_str());
+            if(!pFBO2) {
+                yyerror("Error: could not find the Frame Buffer Object");
+                yyerror($6->c_str());
+            } else {
+                curPass->createStateSwapResources(pFBO1, pFBO2);
+            }
+        }
+    }
+    delete $4;
+    delete $6;
+}
+| passstates LOOP '=' asiexp ';' {
+    curPass->setLoopCount($4);
+}
+| passstates ACTIVE '=' asbexp ';' {
+    curPass->setActive($4);
+}
+/*----------------------------------------------------
+    Compute (GLSL/DX) pass states
+*/
+| passstates COMPUTEGROUPS '=' liststart iexplist listend ';' {
+    LOGD("computeGroups\n");
+#ifdef USEGLSLCOMPUTE
+    if($5->size() < 2)
+        yyerror("Grid size must have 2 or 3 values\n");
+    else
+        curPass->createStateComputeGroup((*$5)[0], (*$5)[1], $5->size() > 2 ? (*$5)[2] : 1);
+#else
+    yyerror("Compute Not supported in this build\n");
+#endif
+    delete $5;
+}
+/*----------------------------------------------------
+    CUDA pass states
+*/
+| passstates CUDAMODULE '=' one_or_more_shaders ';' {
+    LOGD("CUDAMODULE\n");
+#ifdef USECUDA
+    if($4->size() > 0)
+        curPass->createState(IPassState::TCUDAModule, & (*$4)[0], (int)$4->size());
+    delete $4;
+#else
+    LOGI("CUDA Not supported in this build\n");
+#endif
+}
+| passstates CUDAKERNEL '=' '{' VARNAME ',' argvallist '}' ';' {
+    LOGD("CUDAKERNEL\n");
+#ifdef USECUDA
+    // CUDAMODULE gathered pieces of CUDA code. We expect some kernels to be in there
+    // let's find the named kernel and check if the arguments are matching the assignements, here
+    bool bRes = true;
+    IShader* pShd = curContainer->findShader($5->c_str());
+    if(pShd)
+    {
+        IShaderEx* pShdEx = pShd->getExInterface();
+        for(int i=0; i<(int)$7->size(); i++)
+        {
+            // get the argument of this 
+            IShaderEx::Argument arg = pShdEx->getArgument(i);
+            // compare if the one from the pass-state is compatible
+            if(checkArgCompatibility((*$7)[i], arg) == false)
+            {
+                bRes = false;
+                yyerror("Argument values don't match the Kernel's argument!\n");
+                break;
+            }
+        }
+        if(bRes) {
+            ArgVal* vals = NULL;
+            if($7->size() > 0) {
+                vals = new ArgVal[$7->size()];
+                for(int i=0; i<(int)$7->size(); i++)
+                    vals[i] = *((*$7)[i]);
+            }
+            curPass->createStateKernelEntry($5->c_str(), (int)$7->size(), vals);
+            // we dont "delete [] vals;" because this pointer got passed to the pass-state and will be passed
+            // down to the kernel execution.
+        }
+    } else {
+        yyerror("CUDAKernel name Not found !\n");
+    }
+    for(int i=0; i<(int)$7->size(); i++)
+        delete (*$7)[i]; // free after done using it
+#else
+    LOGI("CUDA Not supported in this build\n");
+    for(int i=0; i<(int)$7->size(); i++)
+        delete (*$7)[i];
+#endif
+    delete $7;
+    delete $5;
+}
+| passstates CUDASHAREDMEMORY '=' iexp ';' {
+    LOGD("CUDASHMEM\n");
+#ifdef USECUDA
+    curPass->createStateSharedMemory($4)
+#else
+    LOGI("CUDA Not supported in this build\n");
+#endif
+}
+| passstates CUDAGRID '=' iexpveclist ';' {
+    LOGD("CUDAGRID\n");
+#ifdef USECUDA
+    IntVecList* pIVL = $4;
+    IntList* pIL = pIVL->size() >=1 ? (*pIVL)[0]:NULL;
+    if(pIL && (pIL->size()>=2))
+    {
+        if(pIL->size() < 2)
+            yyerror("Grid size must have 2 or 3 values\n");
+        curPass->createStateGridSz((*pIL)[0], (*pIL)[1], pIL->size() > 2 ? (*pIL)[2] : 1);
+    } else
+        yyerror("Error in cuda grid setup\n");
+#else
+    LOGI("CUDA Not supported in this build\n");
+#endif
+    delete $4;
+}
+| passstates CUDABLOCK '=' iexpveclist ';' {
+    LOGD("CUDABLOCK\n");
+#ifdef USECUDA
+    IntVecList* pIVL = $4;
+    IntList* pIL = pIVL->size() >=1 ? (*pIVL)[0]:NULL;
+    if(pIL && (pIL->size()>=2))
+    {
+        if(pIL->size() < 2)
+            yyerror("Grid size must have 2 values\n");
+        curPass->createStateBlockSz((*pIL)[0], (*pIL)[1], pIL->size()>2 ? (*pIL)[2] : 1);
+    } else
+        yyerror("Error in cuda grid setup\n");
+#else
+    LOGI("CUDA Not supported in this build\n");
+#endif
+    delete $4;
+}
+/*----------------------
+    input attribute definition can be done at pass level, too
+*/
+| passstates ATTRIBUTE '(' name ')' '=' asiexp ';' {
+    curPass->bindAttribute($4->c_str(), $7);
+    delete $4;
+}
+| passstates error ';' { 
+    yyerror("Error in a state of the Pass\n");
+}
+;
+
+/*----------------------
+    what a pass can be
+*/
+pass:
+PASS {
+    //printf("Creation of PASS\n");
+    curPass = curTechnique->addPass()->getExInterface();
+    curAnnotations = curPass->annotations()->getExInterface();
+    }
+  annotations '{' passstates '}'  {
+    LOGI("Pass with no name...\n");
+    curAnnotations = NULL;
+    curRState = NULL;
+    curCSState = NULL;
+    curDSTState = NULL;
+    curPRState = NULL;
+    lex_pop_state();
+}
+| PASS VARNAME {
+    //printf("Creation of PASS %s\n", $2->c_str());
+    curPass = curTechnique->addPass($2->c_str())->getExInterface();
+    curAnnotations = curPass->annotations()->getExInterface();
+    }
+  annotations '{' passstates '}'  {
+    LOGD("Pass %s...\n", $2->c_str() );
+    delete $2;
+    curAnnotations = NULL;
+    curRState = NULL;
+    curCSState = NULL;
+    curDSTState = NULL;
+    curPRState = NULL;
+    lex_pop_state();
+}
+/*--------------------------
+    pass can be this, too:
+*/
+| ATTRIBUTE '(' VARNAME ')' '=' asiexp ';' {
+    curTechnique->bindAttribute($3->c_str(), $6);
+    delete $3;
+}
+| ATTRIBUTE '(' FX_STR ')' '=' asiexp ';' {
+    curTechnique->bindAttribute($3->c_str(), $6);
+    delete $3;
+}
+| TECHNIQUE VARNAME ';' {
+    ITechnique *pTech = curContainer->findTechnique($2->c_str());
+    if(pTech == NULL)
+    {
+        yyerror("sub-technique not found\n");
+    } else if(!curTechnique->addSubTechnique(pTech))
+    {
+        yyerror("Error in adding a sub-technique\n");
+    }
+    delete $2;
+}
+| TECHNIQUE VARNAME OFF ';' {
+    ITechnique *pTech = curContainer->findTechnique($2->c_str());
+    if(pTech == NULL)
+    {
+        yyerror("sub-technique not found\n");
+    } else if(!curTechnique->addSubTechnique(pTech, false))
+    {
+        yyerror("Error in adding a sub-technique\n");
+    }
+    delete $2;
+}
+//| pass error { yyerror("Error in Pass declaration\n");}
+;
+
+/*------------------------------------------------------------------
+   passes
+*/
+passes:
+pass
+| passes pass
+| passes error { yyerror("Error in Pass list\n");}
+;
+/*------------------------------------------------------------------
+   technique
+*/
+tech:
+TECHNIQUE {
+    //printf("Creation of Technique for NO name\n");
+    curTechnique = curContainer->createTechnique()->getExInterface();
+    curAnnotations = curTechnique->annotations()->getExInterface();
+} annotations '{' passes '}' { 
+    curAnnotations = NULL;
+    lex_pop_state();
+}
+| TECHNIQUE VARNAME {
+    LOGD("creation of Technique %s...\n", $2->c_str() );
+    curTechnique = curContainer->createTechnique($2->c_str())->getExInterface();
+    curAnnotations = curTechnique->annotations()->getExInterface();
+    delete $2;
+} annotations '{' passes '}' { 
+    lex_pop_state();
+    curAnnotations = NULL;
+}
+;
+
+/*------------------------------------------------------------------
+   global qualifier
+*/
+global:
+LOCAL { $$=false; }
+| GLOBAL { $$=true; }
+;
+/*------------------------------------------------------------------
+   global qualifier
+*/
+global_true: /*empty : default here is true*/ { $$=true; }
+| LOCAL { $$=false; }
+| GLOBAL { $$=true; }
+;
+
+/*------------------------------------------------------------------
+   Adds a prefix for namespace whenever relevant
+   Note that we don't use "::" internally but some "_NS_" instead.
+   Reason : GLSL (and HLSL?) don't like "::" at any location
+*/
+nsvarname: VARNAME {
+    if(!namespaceName.empty())
+        (*$1) = namespaceName + std::string("_NS_") + (*$1);
+    $$ = $1;
+}
+;
+/*------------------------------------------------------------------
+   intermediate required to prevent reduce/reduce
+*/
+global_varname_annots: /*empty*/ { $$.global = false; $$.varName = NULL; }
+| nsvarname annotations { $$.global = false; $$.varName = $1; }
+| global nsvarname annotations
+{ 
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+    $$.global = $1; 
+    $$.varName = $2;
+}
+;
+
+/*------------------------------------------------------------------
+   GLSL shader
+*/
+glsl: GLSLSHADER global_varname_annots '{' CODEBODY {
+    Sglobal_varname &gva = $2;
+    LOGD("GLSLShader %s...\n", gva.varName ? gva.varName->c_str() : "Un-named");
+    IShader* pShader = curContainer->createGLSLShader(gva.varName ? gva.varName->c_str() : NULL, gva.global);
+    if(pShader)
+    {
+        curShader = pShader->getExInterface();
+        // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+        curShader->annotations()->getExInterface()->clear();
+        curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+        if(curShader->getShaderCodeSz() == 0) // ==0 means it needs to have some code loaded now
+            curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+        else
+            LOGI("Skipping the shader code of %s : some is already loaded\n", gva.varName ? gva.varName->c_str() : "Un-named");
+    }
+    else yyerror("Failed in creating shader");
+    delete gva.varName;
+    delete $4;
+}
+;
+/*------------------------------------------------------------------
+   GLSL shader
+*/
+svgpath: SVGPATH global_varname_annots '{' CODEBODY {
+    LOGD("SVG Path %s...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+    if(curShader = curContainer->createPathShader($2.varName ? $2.varName->c_str() : NULL, $2.global)->getExInterface())
+    {
+        // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+        curShader->annotations()->getExInterface()->clear();
+        curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+        if(curShader->getShaderCodeSz() == 0) // ==0 means it needs to have some code loaded now
+            curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+        else
+            LOGI("Skipping the shader code of %s : some is already loaded\n", $2.varName ? $2.varName->c_str() : "Un-named");
+    }
+    else yyerror("Failed in creating shader");
+    delete $2.varName;
+    delete $4;
+}
+;
+/*------------------------------------------------------------------
+   GLSL shader
+*/
+pspath: PSPATH global_varname_annots '{' CODEBODY {
+    LOGD("PS Path %s...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+    if(curShader = curContainer->createPathShader($2.varName ? $2.varName->c_str() : NULL, $2.global, true)->getExInterface())
+    {
+        // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+        curShader->annotations()->getExInterface()->clear();
+        curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+        if(curShader->getShaderCodeSz() == 0) // ==0 means it needs to have some code loaded now
+            curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+        else
+            LOGI("Skipping the shader code of %s : some is already loaded\n", $2.varName ? $2.varName->c_str() : "Un-named");
+    }
+    else yyerror("Failed in creating shader");
+    delete $2.varName;
+    delete $4;
+}
+;
+/*------------------------------------------------------------------
+   HLSL 11 shader
+*/
+hlsl11: HLSL11SHADER global_varname_annots '{' CODEBODY {
+    LOGD("HLSL11Shader %s...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+    if($2.global) { // if we need to make this shader GLOBAL
+        if(curShader = pShdRep->findShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            LOGI("    Warning : %s is already global. Skipping the declaration...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+            if(curContainer->addHLSL11Shader(curShader))
+                pShdRep->addShader(curShader);
+            else
+                yyerror("Failed in adding shader to the effect container");
+        } else {
+            if(curShader = curContainer->createHLSL11Shader($2.varName ? $2.varName->c_str() : NULL)->getExInterface()) {
+                // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+                curShader->annotations()->getExInterface()->clear();
+                curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+                curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+                pShdRep->addShader(curShader);
+            } else
+                yyerror("Failed in creating shader");
+        }
+    } else {
+        if(curShader = curContainer->createHLSL11Shader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+            curShader->annotations()->getExInterface()->clear();
+            curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+            curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+        } else yyerror("Failed in creating shader");
+    }
+    delete $2.varName;
+    delete $4;
+}
+;
+/*------------------------------------------------------------------
+   HLSL 10 shader
+*/
+hlsl10: HLSL10SHADER global_varname_annots '{' CODEBODY {
+    LOGD("HLSL10Shader %s...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+    if($2.global) { // if we need to make this shader GLOBAL
+        if(curShader = pShdRep->findShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            LOGI("    Warning : %s is already global. Skipping the declaration...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+            if(curContainer->addHLSL10Shader(curShader))
+                pShdRep->addShader(curShader);
+            else
+                yyerror("Failed in adding shader to the effect container");
+        } else {
+            if(curShader = curContainer->createHLSL10Shader($2.varName ? $2.varName->c_str() : NULL)->getExInterface()) {
+                // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+                curShader->annotations()->getExInterface()->clear();
+                curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+                curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+                pShdRep->addShader(curShader);
+            } else
+                yyerror("Failed in creating shader");
+        }
+    } else {
+        if(curShader = curContainer->createHLSL10Shader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+            curShader->annotations()->getExInterface()->clear();
+            curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+            curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+        } else yyerror("Failed in creating shader");
+    }
+    delete $2.varName;
+    delete $4;
+}
+;
+/*------------------------------------------------------------------
+   some qualifiers
+*/
+unsigned: /*empty*/ { $$ = false; }
+| UNSIGNED { $$ = true; }
+
+pointer: /*empty*/ { $$ = false; }
+| '*' { $$ = true; }
+
+/*------------------------------------------------------------------
+   CUDA Kernel argument
+*/
+argument: FLOAT_TYPE pointer VARNAME {
+    $$ = new Argument($2 ? nvFX::TFloatPtr : nvFX::TFloat, $3);
+    LOGD("Argument %s %s\n", $2 ? "TFloatPtr" : "TFloat", $3->c_str());
+    delete $3;
+}
+| unsigned INT_TYPE pointer VARNAME {
+    $$ = new Argument($1 ? ($3 ? nvFX::TUIntPtr : nvFX::TUInt) : ($3 ? nvFX::TIntPtr : nvFX::TInt), $4);
+    LOGD("Argument %s %s\n", $1 ? ($3 ? "TUIntPtr" : "TUInt") : ($3 ? "TIntPtr" : "TInt"), $4->c_str() );
+    delete $4;
+}
+;
+/*------------------------------------------------------------------
+   CUDA Kernel argument list
+*/
+arglist: /*empty*/ { $$ = new ArgList; }
+| VOID_TYPE { $$ = new ArgList; }
+| argument {
+    $$ = new ArgList;
+    $$->push_back($1);
+    }
+| arglist ',' argument {
+    $$ = $1;
+    $$->push_back($3);
+    }
+;
+/*------------------------------------------------------------------
+   CUDA
+*/
+cudak: CUDAKERNEL global_varname_annots '(' arglist ')' '{' CODEBODY {
+    LOGD("CUDAShader %s...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+#ifdef USECUDA
+    bool bNew = true;
+    if($2.global) { // if we need to make this shader GLOBAL
+        if(curShader = pShdRep->findShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            LOGI("    Warning : %s is already global. Skipping the declaration...\n", $2.varName ? $2.varName->c_str() : NULL );
+            bNew = false;
+            if(curContainer->addCUDAShader(curShader))
+                pShdRep->addShader(curShader);
+            else
+                yyerror("Failed in adding shader to the effect container");
+        } else {
+            if(curShader = curContainer->createCUDAShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface()) {
+                // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+                curShader->annotations()->getExInterface()->clear();
+                curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+                curShader->loadShaderCode($7->c_str(), line_num, file_name.c_str() );
+                pShdRep->addShader(curShader);
+            } else
+                yyerror("Failed in creating shader");
+        }
+    } else {
+        if(curShader = curContainer->createCUDAShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+            curShader->annotations()->getExInterface()->clear();
+            curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+            curShader->loadShaderCode($7->c_str(), line_num, file_name.c_str() );
+        } else yyerror("Failed in creating shader");
+    }
+    // Now take care of the arguments
+    if(bNew)
+    {
+        IShaderEx::Argument *args = new IShaderEx::Argument[$4->size()];
+        for(int i=0; i< (int)$4->size(); i++)
+        {
+            args[i].t = (*$4)[i]->type;
+            args[i].argName = (*$4)[i]->name.c_str();
+        }
+        // send the list of arguments
+        curShader->setAsKernel((int)$4->size(), args);
+        delete args;
+        for(int i=0; i< (int)$4->size(); i++)
+            delete (*$4)[i]; // done... delete
+    }
+#else
+    LOGI("CUDA Not supported in this build\n");
+#endif
+    delete $2.varName;
+    delete $4;
+    delete $7;
+}
+;
+/*------------------------------------------------------------------
+   CUDA
+*/
+cudac: CUDACODE global_varname_annots '{' CODEBODY {
+    LOGD("CUDAShader %s...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+#ifdef USECUDA
+    if($2.global) { // if we need to make this shader GLOBAL
+        if(curShader = pShdRep->findShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            LOGI("    Warning : %s is already global. Skipping the declaration...\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+            if(curContainer->addCUDAShader(curShader))
+                pShdRep->addShader(curShader);
+            else
+                yyerror("Failed in adding shader to the effect container");
+        } else {
+            if(curShader = curContainer->createCUDAShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface()) {
+                // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+                curShader->annotations()->getExInterface()->clear();
+                curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+                curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+                pShdRep->addShader(curShader);
+            } else
+                yyerror("Failed in creating shader");
+        }
+    } else {
+        if(curShader = curContainer->createCUDAShader($2.varName ? $2.varName->c_str() : NULL)->getExInterface())
+        {
+            // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+            curShader->annotations()->getExInterface()->clear();
+            curShader->annotations()->getExInterface()->copy(curAnnotations);
+
+            curShader->loadShaderCode($4->c_str(), line_num, file_name.c_str() );
+        } else yyerror("Failed in creating shader");
+    }
+#else
+    LOGI("CUDA Not supported in this build\n");
+#endif
+    delete $2.varName;
+    delete $4;
+}
+/*------------------------------------------------------------------
+   Texture resource parameters
+*/
+texparams: /* empty */
+| texparams SETSAMPLERSTATE '=' VARNAME ';' {
+    assert(curResource);
+    // for now, sampler-state MUST be decalred before the texture work. Or it won't be found
+    ISamplerState * pState = curContainer->findSamplerState($4->c_str());
+    if(!pState)
+        yyerror("Error: sampler-state referenced not found. Did you declare it before the texture using it ?\n");
+    curResource->setSamplerState(pState);
+    delete $4;
+}
+/* Should COMMENT OUT: adding annotation right into the params leads to possible typos of SamplerState with no errors, for example
+   use annotation field, instead...
+| texparams VARNAME '=' FX_STR ';' {
+    if(!curResource->annotations()->getExInterface()->addAnnotation($2->c_str(), $4->c_str()))
+        yyerror("err\n");
+    delete $4;
+    }
+| texparams VARNAME '=' fexp ';' {
+    if(!curResource)
+        yyerror("Error: no uniform to assign annotation ");
+    else if(!curResource->annotations()->getExInterface()->addAnnotation($2->c_str(), $4))
+        yyerror("err\n");
+    }
+| texparams VARNAME '=' iexp ';' {
+    if(!curResource)
+        yyerror("Error: no uniform to assign annotation ");
+    else if(!curResource->annotations()->getExInterface()->addAnnotation($2->c_str(), $4))
+        yyerror("err\n");
+    }*/
+| texparams error { 
+    yyerror("Error in texture params declaration\n"); 
+}
+;
+/*------------------------------------------------------------------
+   resources
+*/
+resourcetype: TEXTURERESOURCE { $$=nvFX::RESOURCE_UNKNOWN; }
+| TEXTURERESOURCE1D { $$=nvFX::RESTEX_1D; }
+| TEXTURERESOURCE2D { $$=nvFX::RESTEX_2D; }
+| TEXTURERESOURCE3D { $$=nvFX::RESTEX_3D; }
+| TEXTURERESOURCERECT { $$=nvFX::RESTEX_2DRECT; }
+| TEXTURERESOURCECUBE { $$=nvFX::RESTEX_CUBE_MAP; }
+;
+texture: resourcetype VARNAME ';' {
+    curResource = curContainer->createResource($2->c_str(), $1, true/*ADD AS nvFX token*/)->getExInterface();
+    curResource->setGLTexture(0); // this will tell the resource it is made of some external resource (reference to an existing texture)
+    lex_pop_state();
+    delete $2;
+    }
+| resourcetype nsvarname {
+    curResource = curContainer->createResource($2->c_str(), $1, true/*ADD AS nvFX token*/)->getExInterface();
+    curResource->setGLTexture(0); // this will tell the resource it is made of some external resource (reference to an existing texture)
+    curAnnotations = curResource->annotations()->getExInterface();
+    delete $2;
+} annotations '{' texparams '}' { 
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+    curAnnotations = NULL;
+    lex_pop_state(); lex_pop_state(); 
+}
+;
+/*
+   The following is for the render-target feature in scene-level effect
+*/
+resourceparams: /* empty */
+| resourceparams SETSAMPLERSTATE '=' VARNAME ';' {
+    if(curResource) {
+        // for now, sampler-state MUST be decalred before the texture work. Or it won't be found
+        ISamplerState * pState = curContainer->findSamplerState($4->c_str());
+        if(!pState)
+            yyerror("Error: sampler-state referenced not found. Did you declare it before the texture using it ?\n");
+        curResource->setSamplerState(pState);
+    }
+    delete $4;
+}
+| resourceparams VARNAME '=' FX_STR ';' {
+    if(curResource)
+        if(!curResource->annotations()->getExInterface()->addAnnotation($2->c_str(), $4->c_str()))
+            yyerror("err\n");
+    delete $4;
+    }
+| resourceparams RESOURCEMSAA '=' APPDEFINED ';' {
+    if(curResource)
+        curResource->setMSAAApplicationDependent();
+}
+| resourceparams RESOURCEMSAA '=' liststart iexplist listend ';' {
+    if(curResource)
+        curResource->setMSAA((*$5)[0], $5->size() > 1 ? (*$5)[1] : 0);
+    delete $5;
+}
+| resourceparams RESOURCEMSAA '=' asiexp ';' {
+    if(curResource)
+        curResource->setMSAA($4);
+}
+| resourceparams RESOURCESIZE '=' APPDEFINED ';' {
+    if(curResource)
+        curResource->setDimensionsApplicationDependent();
+}
+| resourceparams RESOURCESIZE '=' liststart iexplist listend ';' {
+    int d = (int)$5->size();
+    if(curResource)
+        curResource->setDimensions((*$5)[0], d > 1 ? (*$5)[1] : 1, d > 2 ? (*$5)[2] : 1);
+    delete $5;
+}
+| resourceparams RESOURCESIZEFACTOR '=' asfexp ';' {
+    if(curResource)
+        curResource->setDimensionFactor($4, $4);
+}
+| resourceparams RESOURCERESOLVETARGET '=' VARNAME ';' {
+    if(curResource) {
+        IResource* pRes = curContainer->findResource($4->c_str());
+        if(!pRes)
+        {
+            yyerror("Error: Could not find the Resource :");
+            yyerror($4->c_str());
+        } else {
+            curResource->setResolveTarget(pRes);
+        }
+    }
+    delete $4;
+}
+| resourceparams RESOURCEFORMAT '=' RESOURCEFORMAT_ENUM ';' {
+    if(curResource) {
+        if(!curResource->setFormat($4))
+        {
+            yyerror("Error: Bad format\n");
+        }
+    }
+}
+;
+/*------------------------------------------------------------------
+   resources
+*/
+resource: RENDERTEXTURE nsvarname global_true {
+    curResource = curContainer->createResource($2->c_str(), RESTEX_2D, $3)->getExInterface();
+    if(curResource->getFormat() != FMT_UNKNOWN)
+        curResource = NULL;
+    else
+        curAnnotations = curResource->annotations()->getExInterface();
+    delete $2;
+} annotations {
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+}'{' resourceparams '}' { 
+    curAnnotations = NULL;
+    lex_pop_state(); lex_pop_state(); 
+}
+resource: RENDERTEXTURERECT nsvarname global_true {
+    curResource = curContainer->createResource($2->c_str(), RESTEX_2DRECT, $3)->getExInterface();
+    if(curResource->getFormat() != FMT_UNKNOWN)
+        curResource = NULL;
+    else
+        curAnnotations = curResource->annotations()->getExInterface();
+    delete $2;
+} annotations {
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+}'{' resourceparams '}' { 
+    curAnnotations = NULL;
+    lex_pop_state(); lex_pop_state(); 
+}
+| RENDERBUFFER nsvarname global_true {
+    curResource = curContainer->createResource($2->c_str(), RESRBUF_2D, $3)->getExInterface();
+    if(curResource->getFormat() != FMT_UNKNOWN)
+        curResource = NULL;
+    else
+        curAnnotations = curResource->annotations()->getExInterface();
+    delete $2;
+} annotations {
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+}'{' resourceparams '}' { 
+    curAnnotations = NULL;
+    lex_pop_state(); lex_pop_state(); 
+}
+;
+/*------------------------------------------------------------------
+   Texture resource parameters
+*/
+fboparams: /* empty */
+| fboparams VARNAME '=' FX_STR ';' {
+    if(curFBO)
+      if(!curFBO->annotations()->getExInterface()->addAnnotation($2->c_str(), $4->c_str()))
+        yyerror("err\n");
+    delete $4;
+    }
+/*
+   The following is for the render-target feature in scene-level effect
+*/
+| fboparams DSTTARGET '=' VARNAME ';' {
+    if(curFBO)
+    {
+        IResource* pRes = curContainer->findResource($4->c_str());
+        if(!pRes)
+        {
+            yyerror("Error: Could not find the Texture resource :");
+            yyerror($4->c_str());
+        } else {
+            curFBO->setDSTResource(pRes);
+        }
+    }
+    delete $4;
+}
+| fboparams COLORTARGETS '=' liststart varnamelist listend ';' { /*liststart VARNAME ',' VARNAME ',' VARNAME ',' VARNAME listend ';' { */
+    if(curFBO) {
+        IResource* pRes[4/*MAX_RENDERTARGETS*/];
+        if($5->size() > 4)
+            yyerror("Error: Can't assign more than 4 color targets in a Framebuffer");
+        else {
+            bool ok = true;
+            for(int i=0; i<(int)$5->size(); i++)
+            {
+                pRes[i] = curContainer->findResource((*$5)[i].c_str());
+                if(pRes[i]==NULL)
+                {
+                    yyerror("Error: Could not find some of the Textures");
+                    ok = false;
+                }
+            }
+            if(ok) curFBO->setColorResource(pRes, (int)$5->size());
+        }
+    }
+    delete $5;
+}
+| fboparams COLORTARGETS '=' VARNAME ';' {
+    if(curFBO) {
+        IResource* pRes = curContainer->findResource($4->c_str());
+        if(!pRes)
+        {
+            yyerror("Error: Could not find the Texture :");
+            yyerror($4->c_str());
+        } else {
+            curFBO->setColorResource(&pRes, 1);
+        }
+    }
+    delete $4;
+}
+;
+/*------------------------------------------------------------------
+   resources
+*/
+fbo: FBO nsvarname global_true {
+    curFBO = curContainer->createFBO($2->c_str(), $3)->getExInterface();
+    if(curFBO->getDSTResource() || curFBO->getColorResource(0))
+        curFBO = NULL; // we already have it defined. Don't want to re-define it again
+    else
+        curAnnotations = curFBO->annotations()->getExInterface();
+    delete $2;
+} annotations {
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+}'{' fboparams '}' { 
+    curAnnotations = NULL;
+    lex_pop_state(); lex_pop_state(); // fbo and then fbo1 state
+}
+;
+/*------------------------------------------------------------------
+   enums for various OpenGL states
+   TODO: add more
+*/
+sfilter: GLNEAREST
+| GLLINEAR
+| GLNEARESTMIPMAPNEAREST
+| GLLINEARMIPMAPNEAREST
+| GLNEARESTMIPMAPLINEAR
+| GLLINEARMIPMAPLINEAR
+| error { yyerror("Error in Sampler State filtering\n");}
+;
+
+suvmapping: GLREPEAT
+| GLCLAMP
+| GLMIRROREDREPEAT
+| GLCLAMPTOEDGE
+| error { yyerror("Error in Sampler State UV Addressing\n");}
+;
+
+/*==================================================================
+   Sampler state items
+   TODO: add more
+*/
+sstates: /* empty */
+| sstates GLTEXTUREMINFILTER '=' sfilter ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates GLTEXTUREMAGFILTER '=' sfilter ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates GLTEXTUREWRAPS '=' suvmapping ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates GLTEXTUREWRAPT '=' suvmapping ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates GLTEXTUREWRAPR '=' suvmapping ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates error ';' { yyerror("Error in one of sampler-state states\n"); }
+;
+/*------------------------------------------------------------------
+   Sampler state
+*/
+sstate: SAMPLER_STATE nsvarname {
+    LOGD("Sampler-state %s\n", $2->c_str() );
+    curSamplerState = curContainer->createSamplerState($2->c_str())->getExInterface();
+    curAnnotations = curSamplerState->annotations()->getExInterface();
+    delete $2;
+} annotations '{' sstates '}' { 
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+    lex_pop_state(); curAnnotations = NULL;}
+| sstate error { 
+    yyerror("Error sampler-state declaration\n"); 
+}
+;
+
+/*==================================================================
+    All the states in the same group for direct use in the pass
+    TODO: see how to avoid redundancy. using rstates csstates and dststates in pass
+    passstates :
+    | passstates cstates
+    | passstates dststates
+    | passstates rstates
+    is looping infinitely
+    Which is why I had to do this redundant list
+*/
+passglsstates: GLPOINTSIZE '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), ($3))) yyerror("Failed to create state!\n"); }
+| GLPOINTSMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)(($3 )? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLPOINTSPRITE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)(($3 )? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLPOINTSPRITECOORDORIGIN '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLLINEWIDTH '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), ($3))) yyerror("Failed to create state!\n"); }
+| GLLINESMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)(($3 )? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+//| GLCOMBINEDLINESTIPPLENV '=' asiexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLLINESTIPPLEPATTERN '=' asiexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLLINESTIPPLEREPEAT '=' asiexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLLINESTIPPLE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLCULLFACE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLCULLFACE '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLCULLFACEMODE '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLFRONTFACE '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLPOLYGONSMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLPOLYGONMODE '=' liststart glenum separator glenum listend ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), getGLEnumValue($4), getGLEnumValue($6))) yyerror("Failed to create state!\n"); }
+| GLPOLYGONOFFSETFACTOR '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), $3)) yyerror("Failed to create state!\n"); }
+| GLPOLYGONOFFSETUNITS '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), $3)) yyerror("Failed to create state!\n"); }
+| GLPOLYGONOFFSET '=' liststart asfexp ',' asfexp listend ';' {
+    check_curRState();
+    if(!curRState->createState(getGLEnumValue(GLPOLYGONOFFSETFACTOR), $4)) yyerror("Failed to create state!\n");
+    if(!curRState->createState(getGLEnumValue(GLPOLYGONOFFSETUNITS), $6)) yyerror("Failed to create state!\n");
+}
+| GLPOLYGONOFFSETPOINT '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLPOLYGONOFFSETLINE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLPOLYGONOFFSETFILL '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+/*| GLPOLYGONSTIPPLEBIT '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }*/
+| GLRASTERIZERDISCARD '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLALPHATEST '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLALPHATESTFUNC '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLALPHATESTREF '=' asfexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), $3)) yyerror("Failed to create state!\n"); }
+| GLALPHAFUNC '=' liststart glenum ',' asfexp listend ';' {
+    check_curCSState();
+    if(!curCSState->createState(getGLEnumValue(GLALPHATESTFUNC), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLALPHATESTREF), $6)) yyerror("Failed to create state!\n");
+}
+| GLBLEND '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLBLENDFUNC '=' '{' glenum ',' glenum '}' ';' {
+    check_curCSState();
+    if(!curCSState->createState(getGLEnumValue(GLBLENDSRC), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDDST), getGLEnumValue($6))) yyerror("Failed to create state!\n");
+}
+| GLBLENDFUNCSEPARATE '=' '{' glenum ',' glenum ',' glenum ',' glenum '}' ';' {
+    check_curCSState();
+    if(!curCSState->createState(getGLEnumValue(GLBLENDSRCRGB), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDDSTRGB), getGLEnumValue($6))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDSRCALPHA), getGLEnumValue($8))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDDSTALPHA), getGLEnumValue($10))) yyerror("Failed to create state!\n");
+}
+| GLBLENDSRC '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLBLENDSRCRGB '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLBLENDSRCALPHA '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLBLENDDST '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLBLENDDSTRGB '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLBLENDDSTALPHA '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+//GL_BLEND_EQUATION_RGBA_NV
+| GLBLENDEQUATIONRGB '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLBLENDEQUATIONALPHA '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLBLENDEQUATION '=' glenum ';' {
+    check_curCSState();
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONRGB), getGLEnumValue($3))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONALPHA), getGLEnumValue($3))) yyerror("Failed to create state!\n");
+}
+| GLBLENDEQUATIONSEPARATE '=' liststart glenum ',' glenum listend ';' {
+    check_curCSState();
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONRGB), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONALPHA), getGLEnumValue($6))) yyerror("Failed to create state!\n");
+}
+//GL_PER_DRAW_BUFFER_BLEND_FUNCTION_NV
+//GL_PER_DRAW_BUFFER_BLEND_EQUATION_NV
+//GL_PER_DRAW_BUFFER_BLEND_ENABLE_NV
+//GL_PER_DRAW_BUFFER_COLOR_WRITEMASK_NV
+| GLBLENDCOLOR '=' liststart asfexp separator asfexp separator asfexp separator asfexp listend ';'
+    { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), $4, $6, $8, $10)) yyerror("Failed to create state!\n"); }
+| GLFRAMEBUFFERSRGB '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLDITHER '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLCOLORLOGICOP '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLLOGICOPMODE '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLCOLORWRITEMASK '=' liststart asbexp separator asbexp separator asbexp separator asbexp listend ';' 
+    { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), 
+    (GLboolean)($4 ? GL_TRUE: GL_FALSE),
+    (GLboolean)($6 ? GL_TRUE: GL_FALSE),
+    (GLboolean)($8 ? GL_TRUE: GL_FALSE),
+    (GLboolean)($10 ? GL_TRUE: GL_FALSE)
+    )) yyerror("Failed to create state!\n"); }
+| GLMULTISAMPLE '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLSAMPLEMASK '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+//| GLSAMPLEMASKVALUE
+| GLSAMPLEALPHATOONE '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLSAMPLEALPHATOCOVERAGE '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLDEPTHTEST '=' asbexp ';' { check_curDSTState();if(!curDSTState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLDEPTHFUNC '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLDEPTHWRITEMASK '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLDEPTHCLAMP '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLDEPTHBOUNDSTESTEXT '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLDEPTHBOUNDSEXT '=' liststart asfexp separator asfexp listend ';'
+    { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), $4, $6)) yyerror("Failed to create state!\n"); }
+| GLSTENCILTEST '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (GLenum)($3 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLSTENCILFUNC '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILFUNC '=' '{' glenum ',' asiexp ',' asiexp '}' ';' { 
+    check_curDSTState();
+    if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue(GLSTENCILREF), (unsigned int)$6)) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue(GLSTENCILVALUEMASK), (unsigned int)$8)) yyerror("Failed to create state!\n");
+}
+| GLSTENCILFUNCSEPARATE '=' '{' glenum ',' glenum ',' asiexp ',' asiexp '}' ';' { 
+    check_curDSTState();
+    if(!curDSTState->createState(getGLEnumValue($4 == GLFRONT ? GLSTENCILFUNC : GLSTENCILBACKFUNC), getGLEnumValue($6))) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue($4 == GLFRONT ? GLSTENCILREF : GLSTENCILBACKREF), (unsigned int)$8)) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue($4 == GLFRONT ? GLSTENCILVALUEMASK : GLSTENCILBACKVALUEMASK), (unsigned int)$10)) yyerror("Failed to create state!\n");
+}
+| GLSTENCILVALUEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLSTENCILREF '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLSTENCILWRITEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLSTENCILFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILPASSDEPTHFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILPASSDEPTHPASS '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILOP '=' '{' glenum ',' glenum ',' glenum '}' ';' {
+    // a concatenated version of GLSTENCILPASSDEPTHFAIL+GLSTENCILPASSDEPTHPASS+GLSTENCILWRITEMASK == GL function arguments
+    check_curDSTState();
+    if(!curDSTState->createState(getGLEnumValue(GLSTENCILFAIL), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue(GLSTENCILPASSDEPTHFAIL), getGLEnumValue($6))) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue(GLSTENCILPASSDEPTHPASS), getGLEnumValue($8))) yyerror("Failed to create state!\n");
+}
+| GLSTENCILOPSEPARATE '=' '{' glenum ',' glenum ',' glenum ',' glenum '}' ';' { 
+    check_curDSTState();
+    if(!curDSTState->createState(getGLEnumValue($4 == GLFRONT ? GLSTENCILFAIL : GLSTENCILBACKFAIL), getGLEnumValue($6))) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue($4 == GLFRONT ? GLSTENCILPASSDEPTHFAIL : GLSTENCILBACKPASSDEPTHFAIL), (unsigned int)$8)) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue($4 == GLFRONT ? GLSTENCILPASSDEPTHPASS : GLSTENCILBACKPASSDEPTHPASS), (unsigned int)$10)) yyerror("Failed to create state!\n");
+}
+//GL_STENCIL_FRONT_FUNC
+//GL_STENCIL_FRONT_VALUE_MASK
+//GL_STENCIL_FRONT_REF
+//GL_STENCIL_FRONT_FAIL
+//GL_STENCIL_FRONT_PASS_DEPTH_FAIL
+//GL_STENCIL_FRONT_PASS_DEPTH_PASS
+//GL_STENCIL_FRONT_WRITEMASK
+| GLSTENCILBACKFUNC '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILBACKFUNC '=' '{' glenum ',' asiexp ',' asiexp '}' ';' { 
+    check_curDSTState();
+    if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue(GLSTENCILBACKREF), (unsigned int)$6)) yyerror("Failed to create state!\n");
+    if(!curDSTState->createState(getGLEnumValue(GLSTENCILBACKVALUEMASK), (unsigned int)$8)) yyerror("Failed to create state!\n");
+}
+| GLSTENCILBACKVALUEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLSTENCILBACKREF '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+| GLSTENCILBACKFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILBACKPASSDEPTHFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILBACKPASSDEPTHPASS '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
+| GLSTENCILBACKWRITEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($1), (unsigned int)$3)) yyerror("Failed to create state!\n"); }
+;
+
+/*==================================================================
+   rasterization state items
+*/
+rstates: /* empty */
+| rstates GLPOINTSIZE '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n"); }
+| rstates GLPOINTSMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLPOINTSPRITE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLPOINTSPRITECOORDORIGIN '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| rstates GLLINEWIDTH '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n"); }
+| rstates GLLINESMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+//| rstates GLCOMBINEDLINESTIPPLENV '=' asiexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| rstates GLLINESTIPPLEPATTERN '=' asiexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| rstates GLLINESTIPPLEREPEAT '=' asiexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| rstates GLLINESTIPPLE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLCULLFACE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLCULLFACEMODE '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| rstates GLFRONTFACE '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONSMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONMODE '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), getGLEnumValue($4), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONMODE '=' liststart glenum separator glenum listend ';' { if(!curRState->createState(getGLEnumValue($2), getGLEnumValue($5), getGLEnumValue($7))) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONOFFSETFACTOR '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONOFFSETUNITS '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONOFFSETPOINT '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONOFFSETLINE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLPOLYGONOFFSETFILL '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+//| rstates GLPOLYGONSTIPPLEBIT '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLRASTERIZERDISCARD '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates error ';' { yyerror("Error in Rasterizer-state list\n"); }
+;
+/*------------------------------------------------------------------
+   Rasterization state
+*/
+rstate: RASTERIZATION_STATE nsvarname {
+    LOGD("Rasterization state %s\n", $2->c_str() );
+    curRState = curContainer->createStateGroup_Raster($2->c_str())->getExInterface();
+    curAnnotations = curRState->annotations()->getExInterface();
+    delete $2;
+} annotations '{' rstates '}' { 
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+    curAnnotations = NULL; curRState = NULL; lex_pop_state(); }
+| rstate error { yyerror("Error in Rasterizer-state declaration\n"); }
+;
+/*==================================================================
+   color sample state items
+*/
+cstates: /* empty */
+| cstates GLALPHATEST '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates GLALPHATESTFUNC '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLALPHATESTREF '=' asfexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n"); }
+| cstates GLBLEND '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates GLBLENDSRC '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLBLENDSRCRGB '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLBLENDSRCALPHA '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLBLENDDST '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLBLENDDSTRGB '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLBLENDDSTALPHA '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+//GL_BLEND_EQUATION_RGBA_NV
+| cstates GLBLENDEQUATIONRGB '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLBLENDEQUATIONALPHA '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| GLBLENDEQUATION '=' glenum ';' {
+    check_curCSState();
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONRGB), getGLEnumValue($3))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONALPHA), getGLEnumValue($3))) yyerror("Failed to create state!\n");
+}
+| GLBLENDEQUATIONSEPARATE '=' liststart glenum ',' glenum listend ';' {
+    check_curCSState();
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONRGB), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+    if(!curCSState->createState(getGLEnumValue(GLBLENDEQUATIONALPHA), getGLEnumValue($6))) yyerror("Failed to create state!\n");
+}
+//GL_PER_DRAW_BUFFER_BLEND_FUNCTION_NV
+//GL_PER_DRAW_BUFFER_BLEND_EQUATION_NV
+//GL_PER_DRAW_BUFFER_BLEND_ENABLE_NV
+//GL_PER_DRAW_BUFFER_COLOR_WRITEMASK_NV
+| cstates GLBLENDCOLOR '=' liststart asfexp separator asfexp separator asfexp separator asfexp listend ';'
+    { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), $5, $7, $9, $11)) yyerror("Failed to create state!\n"); }
+| cstates GLFRAMEBUFFERSRGB '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates GLDITHER '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates GLCOLORLOGICOP '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates GLLOGICOPMODE '=' glenum ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| cstates GLCOLORWRITEMASK '=' liststart asbexp separator asbexp separator asbexp separator asbexp listend ';' 
+    { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), 
+    (GLboolean)($5 ? GL_TRUE: GL_FALSE),
+    (GLboolean)($7 ? GL_TRUE: GL_FALSE),
+    (GLboolean)($9 ? GL_TRUE: GL_FALSE),
+    (GLboolean)($11 ? GL_TRUE: GL_FALSE)
+    )) yyerror("Failed to create state!\n"); }
+| cstates GLMULTISAMPLE '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates GLSAMPLEMASK '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+//| cstates GLSAMPLEMASKVALUE
+| cstates GLSAMPLEALPHATOONE '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates GLSAMPLEALPHATOCOVERAGE '=' asbexp ';' { check_curCSState(); if(!curCSState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| cstates error ';' { yyerror("Error in Color sample state list\n"); }
+;
+/*------------------------------------------------------------------
+   Color sample state
+*/
+csstate: COLOR_SAMPLE_STATE nsvarname {
+    LOGD("Color sample state %s\n", $2->c_str() );
+    curCSState = curContainer->createStateGroup_CS($2->c_str())->getExInterface();
+    curAnnotations = curCSState->annotations()->getExInterface();
+    delete $2;
+} annotations '{' cstates '}' { 
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+    curAnnotations = NULL; curCSState = NULL; lex_pop_state(); }
+| csstate error { yyerror("Error in color sampler state declaration\n"); }
+;
+/*==================================================================
+   depth stencil state items
+*/
+dststates: /* empty */
+| dststates GLDEPTHTEST '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| dststates GLDEPTHFUNC '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLDEPTHWRITEMASK '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| dststates GLDEPTHCLAMP '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| dststates GLDEPTHBOUNDSTESTEXT '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| dststates GLDEPTHBOUNDSEXT '=' liststart asfexp separator asfexp listend ';'
+    { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), $5, $7)) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILTEST '=' asbexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILFUNC '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILVALUEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILREF '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILPASSDEPTHFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILPASSDEPTHPASS '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILWRITEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+//GL_STENCIL_FRONT_FUNC
+//GL_STENCIL_FRONT_VALUE_MASK
+//GL_STENCIL_FRONT_REF
+//GL_STENCIL_FRONT_FAIL
+//GL_STENCIL_FRONT_PASS_DEPTH_FAIL
+//GL_STENCIL_FRONT_PASS_DEPTH_PASS
+//GL_STENCIL_FRONT_WRITEMASK
+| dststates GLSTENCILBACKFUNC '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILBACKVALUEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILBACKREF '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILBACKFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILBACKPASSDEPTHFAIL '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILBACKPASSDEPTHPASS '=' glenum ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
+| dststates GLSTENCILBACKWRITEMASK '=' asiexp ';' { check_curDSTState(); if(!curDSTState->createState(getGLEnumValue($2), (unsigned int)$4)) yyerror("Failed to create state!\n"); }
+| dststates error ';' { yyerror("Error in Depth Stencil state list\n"); }
+;
+/*------------------------------------------------------------------
+   Depth Stencil state
+*/
+dststate: DST_STATE nsvarname {
+    LOGD("Depth-Stencil state %s\n", $2->c_str() );
+    curDSTState = curContainer->createStateGroup_DST($2->c_str())->getExInterface();
+    curAnnotations = curDSTState->annotations()->getExInterface();
+    delete $2;
+} annotations '{' dststates '}' { 
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+    curAnnotations = NULL; curDSTState = NULL; lex_pop_state(); }
+| dststate error ';' { yyerror("Error in DST-state declaration\n"); }
+;
+
+passprstates: GLPATHSTENCILDEPTHOFFSET '=' '{' asfexp ',' asfexp '}' ';'  { LOGI("TODO"); }
+| GLPATHSTENCILFUNC '=' glenum ';'      { LOGI("TODO"); }
+| GLPATHFOGGEN '=' glenum ';'           { LOGI("TODO"); }
+| GLPATHTEXGEN '[' asiexp ']' '=' '{' glenum ',' asiexp ',' asfexp '}' ';'      { LOGI("TODO"); }
+| GLPATHCOLORGEN '[' asiexp ']' '=' '{' glenum ',' glenum ',' asfexp '}' ';'    { LOGI("TODO"); }
+| GLPATHCOVERDEPTHFUNC '=' glenum ';'   { LOGI("TODO"); }
+| GLPATHSTROKEWIDTH '=' asfexp ';'      { LOGI("TODO"); }
+| GLPATHINITIALENDCAP '=' glenum ';'    { LOGI("TODO"); }
+| GLPATHTERMINALENDCAP '=' glenum ';'   { LOGI("TODO"); }
+| GLPATHINITIALDASHCAP '=' glenum ';'   { LOGI("TODO"); }
+| GLPATHTERMINALDASHCAP '=' glenum ';'  { LOGI("TODO"); }
+| GLPATHJOINSTYLE '=' glenum ';'        { LOGI("TODO"); }
+| GLPATHMITERLIMIT '=' asfexp ';'       { LOGI("TODO"); }
+| GLPATHDASHOFFSET '=' asfexp ';'       { LOGI("TODO"); }
+| GLPATHDASHOFFSETRESET '=' glenum ';'  { LOGI("TODO"); }
+| GLPATHCLIENTLENGTH '=' asfexp ';'     { LOGI("TODO"); }
+| GLPATHFILLMODE '=' glenum ';'         { LOGI("TODO"); }
+| GLPATHFILLMASK '=' asiexp ';'         { LOGI("TODO"); }
+| GLPATHFILLCOVERMODE '=' glenum ';'    { LOGI("TODO"); }
+| GLPATHSTROKECOVERMODE '=' glenum ';'  { LOGI("TODO"); }
+| GLPATHSTROKEMASK '=' glenum ';'  { LOGI("TODO"); }
+| GLPATHSTROKEREFERENCE '=' glenum ';'  { LOGI("TODO"); }
+//| GLPATHTRANSFORMTYPE '=' glenum ';'    { LOGI("TODO")); }
+//| GLPATHTRANSFORM '=' ';'               { LOGI("TODO")); }
+;
+/*==================================================================
+   Path States
+   TODO: grammar of render state of state groups could be simplified by returning special token depending on type of assignment
+*/
+prstates: /*empty*/
+| prstates GLPATHSTENCILDEPTHOFFSET '=' '{' asfexp ',' asfexp '}' ';'  { LOGI("TODO"); }
+| prstates GLPATHSTENCILFUNC '=' glenum ';'      { 
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHFOGGEN '=' glenum ';'           {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHTEXGEN '[' asiexp ']' '=' '{' glenum ',' asiexp ',' asfexp '}' ';'      {
+#ifndef OGLES2
+    LOGI("TODO");
+#endif
+}
+| prstates GLPATHCOLORGEN '[' asiexp ']' '=' '{' glenum ',' glenum ',' asfexp '}' ';'    {
+#ifndef OGLES2
+    LOGI("TODO");
+#endif
+}
+| prstates GLPATHCOVERDEPTHFUNC '=' glenum ';'   {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHSTROKEWIDTH '=' asfexp ';'      {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHINITIALENDCAP '=' glenum ';'    {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHTERMINALENDCAP '=' glenum ';'   {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHINITIALDASHCAP '=' glenum ';'   {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHTERMINALDASHCAP '=' glenum ';'  {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHJOINSTYLE '=' glenum ';'        {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHMITERLIMIT '=' asfexp ';'       {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHDASHOFFSET '=' asfexp ';'       {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHDASHOFFSETRESET '=' glenum ';'  {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHCLIENTLENGTH '=' asfexp ';'     {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHFILLMODE '=' glenum ';'         {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHFILLMASK '=' asiexp ';'         {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHFILLCOVERMODE '=' glenum ';'    {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHSTROKECOVERMODE '=' glenum ';'  {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHSTROKEMASK '=' glenum ';'       {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+| prstates GLPATHSTROKEREFERENCE '=' glenum ';'  {
+#ifndef OGLES2
+    check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+#endif
+}
+//| prstates GLPATHTRANSFORMTYPE '=' glenum ';'    {
+//#ifndef OGLES2
+//check_curPRState(); if(!curPRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n");
+//#endif
+//}
+//| prstates GLPATHTRANSFORM '=' ';'               { LOGI("TODO"); }
+| prstates error ';' { yyerror("Error in Path-Rendering state list\n"); }
+;
+
+/*------------------------------------------------------------------
+   Path Rendering state
+*/
+prstate: PR_STATE nsvarname {
+#ifndef OGLES2
+    LOGD("Path Rendering state %s\n", $2->c_str() ); 
+    curPRState = curContainer->createStateGroup_PR($2->c_str())->getExInterface();
+    curAnnotations = curPRState->annotations()->getExInterface();
+#endif
+    delete $2;
+} annotations '{' prstates '}' {
+#ifndef OGLES2
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+    curAnnotations = NULL;
+    curPRState = NULL;
+#endif
+    lex_pop_state(); }
+| prstate error ';' { yyerror("Error in DST-state declaration\n"); }
+;
+/*------------------------------------------------------------------
+  uniform/variable declaration 
+  ------------------------------------------------------------------
+*/
+
+/*
+   ANNOTATIONS - TODO: more types of annotations
+ */
+annotation: /* empty */
+| annotation VARNAME '=' FX_STR ';' {
+    if(!curAnnotations)
+        curAnnotations = IAnnotationEx::getAnnotationSingleton(2); // need a temporary place since nothing was initialized
+    if(!curAnnotations->addAnnotation($2->c_str(), $4->c_str()))
+        yyerror("err\n");
+    delete $4;
+    }
+| annotation VARNAME '=' asfexp ';' {
+    if(!curAnnotations)
+        curAnnotations = IAnnotationEx::getAnnotationSingleton(2); // need a temporary place since nothing was initialized
+    else if(!curAnnotations->addAnnotation($2->c_str(), $4))
+        yyerror("err\n");
+    }
+| annotation VARNAME '=' iexp ';' {
+    if(!curAnnotations)
+        curAnnotations = IAnnotationEx::getAnnotationSingleton(2); // need a temporary place since nothing was initialized
+    else if(!curAnnotations->addAnnotation($2->c_str(), $4))
+        yyerror("err\n");
+    }
+| annotation VARNAME '=' bexp ';' {
+    if(!curAnnotations)
+        curAnnotations = IAnnotationEx::getAnnotationSingleton(2); // need a temporary place since nothing was initialized
+    else if(!curAnnotations->addAnnotation($2->c_str(), $4))
+        yyerror("err\n");
+    }
+/*| annotation VARNAME {
+    if(!curAnnotations)
+        curAnnotations = IAnnotationEx::getAnnotationSingleton(2); // need a temporary place since nothing was initialized
+    else if(!curAnnotations->addAnnotation($2->c_str(), 1))
+        yyerror("err\n");
+    }*/
+| annotation error { yyerror("Error in annotation\n"); }
+;
+
+annotations2: '<' annotation '>'
+;
+annotations: /*empty*/
+| annotations2
+;
+
+
+valueassignment_f: // /* empty */ { $$ = NULL; }
+  '=' fexp {
+        LOGD("value %f\n", $2 );
+        FloatList* pfl = new FloatList;
+        pfl->push_back($2);
+        $$ = new FloatVecList;
+        $$->push_back(pfl);
+}
+;
+
+valueassignment_fv: // /* empty */ { $$ = NULL; }
+  '=' liststart fexplist listend {
+    $$ = new FloatVecList;
+    $$->push_back($3);
+}
+;
+
+valueassignment_fvl: // /* empty */ { $$ = NULL; }
+  '=' liststart fexpveclist listend {
+    $$ = $3;
+}
+;
+
+valueassignment_i:
+  '=' iexp {
+        LOGD("value %d\n", $2 );
+        IntList* pfl = new IntList;
+        pfl->push_back($2);
+        $$ = new IntVecList;
+        $$->push_back(pfl);
+}
+| '=' error {
+      LOGI("Error in valueassignment_i\n");
+  }
+;
+
+//valueassignment_iv: // Not really needed
+//  '=' liststart iexplist listend {
+//    $$ = new IntVecList;
+//    $$->push_back($3);
+//}
+//;
+valueassignment_b:
+  '=' bexp {
+        LOGD("value %d\n", $2 );
+        BoolList* pfl = new BoolList;
+        pfl->push_back($2);
+        $$ = new BoolVecList;
+        $$->push_back(pfl);
+}
+;
+
+valueassignment_bv:
+  '=' liststart bexplist listend {
+    $$ = new BoolVecList;
+    $$->push_back($3);
+}
+;
+
+precision: HIGHP { $$=IUniform::PHighP; }
+| MEDIUMP { $$=IUniform::PMediumP; }
+| LOWP { $$=IUniform::PLowP; }
+;
+/*
+  a set of possible combinations of qualifiers for uniforms
+  we do so to avoid reduce/reduce issues
+*/
+uniform_qualifiers:
+UNIFORM {
+    $$.hasUniformKeyword = true;
+    $$.global = false;
+    $$.precisionType = IUniform::PHighP;
+}
+|UNIFORM global {
+    $$.hasUniformKeyword = true;
+    $$.global = $2;
+    $$.precisionType = IUniform::PHighP;
+}
+|UNIFORM precision {
+    $$.hasUniformKeyword = true;
+    $$.global = false;
+    $$.precisionType = $2;
+}
+|UNIFORM global precision {
+    $$.hasUniformKeyword = true;
+    $$.global = $2;
+    $$.precisionType = $3;
+}
+|global {
+    $$.hasUniformKeyword = false;
+    $$.global = $1;
+#ifdef OGLES2
+    $$.precisionType = IUniform::PMediumP; 
+#else
+    $$.precisionType = IUniform::PHighP;
+#endif
+}
+| precision {
+    $$.hasUniformKeyword = false;
+    $$.global = false;
+    $$.precisionType = $1;
+}
+| global precision {
+    $$.hasUniformKeyword = false;
+    $$.global = $1;
+    $$.precisionType = $2;
+}
+;
+
+/*
+  uniform values assignment
+*/
+uniformvalueassigment:
+  valueassignment_f { $$ = new ValueList; 
+    memset($$, 0, sizeof(ValueList));
+    $$->floatVecList = $1; }
+| valueassignment_fv { $$ = new ValueList; 
+    memset($$, 0, sizeof(ValueList));
+    $$->floatVecList = $1; }
+| valueassignment_fvl { $$ = new ValueList; 
+    memset($$, 0, sizeof(ValueList));
+    $$->floatVecList = $1; }
+| valueassignment_i { $$ = new ValueList; 
+    memset($$, 0, sizeof(ValueList));
+    $$->intVecList = $1; }
+//| valueassignment_iv { $$ = new ValueList; // raises reduce/reduce... and not really needed
+//    memset($$, 0, sizeof(ValueList));
+//    $$->intVecList = $1; }
+| valueassignment_b { $$ = new ValueList; 
+    memset($$, 0, sizeof(ValueList));
+    $$->boolVecList = $1; }
+| valueassignment_bv { $$ = new ValueList; 
+    memset($$, 0, sizeof(ValueList));
+    $$->boolVecList = $1; }
+| error { 
+    $$ = NULL; yyerror("Error in value assignment\n"); 
+}
+;
+
+semantic: ///* empty */ { $$ = NULL; }
+':' VARNAME {
+    LOGD("semantic %s\n", $2->c_str() );
+    $$ = $2;
+}
+;
+
+arraySz:// /*empty*/ { $$ = 1; }
+'[' ']' { 
+    $$ = -1;
+}
+| '[' iexp ']' {
+    $$ = $2;
+}
+;
+
+/*
+  we need this intermediate stage:
+  all of these guys could be empty so we can't put 2 times empty rule 
+  otherwise we'll get some reduce/reduce issue.
+  In other words, the emty here is shared for the two rules
+*/
+arraysz_semantic_annotations_uniformvalueassigment: /*empty*/ {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+}
+| annotations2 {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+}
+|   uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->valueList = $1;
+}
+|   annotations2 uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->valueList = $2;
+}
+|   semantic {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->semantic = $1;
+}
+|   semantic annotations2 {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->semantic = $1;
+}
+|   semantic uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->semantic = $1;
+    $$->valueList = $2;
+}
+|   semantic annotations2 uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->semantic = $1;
+    $$->valueList = $3;
+}
+|   arraySz {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+}
+|   arraySz annotations2 {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+}
+|   arraySz uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+    $$->valueList = $2;
+}
+|   arraySz annotations2 uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+    $$->valueList = $3;
+}
+|   arraySz semantic {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+    $$->semantic = $2;
+}
+|   arraySz semantic annotations2 {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+    $$->semantic = $2;
+}
+|   arraySz semantic uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+    $$->semantic = $2;
+    $$->valueList = $3;
+}
+|   arraySz semantic annotations2 uniformvalueassigment {
+    $$ = new SASzSAUva;
+    memset($$, 0, sizeof(SASzSAUva));
+    $$->arraySz = $1;
+    $$->semantic = $2;
+    $$->valueList = $4;
+}
+;
+/*
+  Uniform types
+*/
+uniform_type:
+   FLOAT_TYPE { $$ = nvFX::IUniform::TFloat; }
+|  FLOAT2_TYPE { $$ = nvFX::IUniform::TVec2; }
+|  FLOAT3_TYPE { $$ = nvFX::IUniform::TVec3; }
+|  FLOAT4_TYPE { $$ = nvFX::IUniform::TVec4; }
+|  INT_TYPE    { $$ = nvFX::IUniform::TInt; }
+|  INT2_TYPE { $$ = nvFX::IUniform::TInt2; }
+|  INT3_TYPE { $$ = nvFX::IUniform::TInt3; }
+|  INT4_TYPE { $$ = nvFX::IUniform::TInt4; }
+|  BOOL_TYPE { $$ = nvFX::IUniform::TBool; }
+|  BOOL2_TYPE { $$ = nvFX::IUniform::TBool2; }
+|  BOOL3_TYPE { $$ = nvFX::IUniform::TBool3; }
+|  BOOL4_TYPE { $$ = nvFX::IUniform::TBool4; }
+|  MAT2_TYPE { $$ = nvFX::IUniform::TMat2; }
+|  MAT3_TYPE { $$ = nvFX::IUniform::TMat3; }
+|  MAT4_TYPE { $$ = nvFX::IUniform::TMat4; }
+|  TEXTURE1D_TYPE { $$ = nvFX::IUniform::TTexture1D; }
+|  TEXTURE2D_TYPE { $$ = nvFX::IUniform::TTexture2D; }
+|  TEXTURE2DRECT_TYPE { $$ = nvFX::IUniform::TTexture2DRect; }
+|  TEXTURE3D_TYPE { $$ = nvFX::IUniform::TTexture3D; }
+|  TEXTURECUBE_TYPE { $$ = nvFX::IUniform::TTextureCube; }
+|  SAMPLER1D_TYPE { $$ = nvFX::IUniform::TTexture1D; }
+|  SAMPLER2D_TYPE { $$ = nvFX::IUniform::TTexture2D; }
+|  SAMPLER2DRECT_TYPE { $$ = nvFX::IUniform::TTexture2DRect; }
+|  SAMPLER3D_TYPE { $$ = nvFX::IUniform::TTexture3D; }
+|  SAMPLERCUBE_TYPE { $$ = nvFX::IUniform::TTextureCube; }
+|  error { yyerror("Error : unknown type\n"); }
+;
+/*
+  Uniform definition for floats/vecs
+*/
+uniform:
+uniform_qualifiers uniform_type VARNAME {
+        curAnnotations = IAnnotationEx::getAnnotationSingleton(); // need a temporary place
+        curAnnotations->clear();
+    } arraysz_semantic_annotations_uniformvalueassigment ';' {
+    SUniformQualifiers &q = $1;
+    IUniform::Type     &t = $2;
+    std::string*            &varName = $3;
+    SASzSAUva*              &a = $5;
+    // for the case of items within a namespace :
+    // copy the name-space annotations to this one
+    if(curAnnotations) curAnnotations->copy(namespaceAnnotations);
+
+    createUniform(t, varName->c_str(), a->semantic?a->semantic->c_str():NULL, q.global, q.precisionType);
+    if(curUniform == NULL)
+    {
+        yyerror("(DEBUG error) curUniform == NULL");
+        yyerror(varName->c_str());
+    } else {
+        if(a->arraySz > 1)
+            curUniform->getExInterface()->setArraySz(a->arraySz);
+        // Now we copy the possible annotations that were filled in arraysz_semantic_annotations_uniformvalueassigment
+        curUniform->annotations()->getExInterface()->clear();
+        curUniform->annotations()->getExInterface()->copy(curAnnotations);
+        curAnnotations->clear();
+        curAnnotations = curUniform->annotations()->getExInterface();
+    }
+    if(a->valueList)
+    {
+        if(a->valueList->floatVecList)
+        {
+            float *farray;
+            int dim = getTypeDim(t);
+            int sz = (int)a->valueList->floatVecList->size();
+            if(a->arraySz <= 0)
+                a->arraySz = (int)sz;
+            farray = flattenFVecList(a->arraySz, dim, a->valueList->floatVecList);
+            if(farray)
+            {
+                curUniform->setValuefv(farray, dim, a->arraySz, 0);
+                delete farray;
+            }
+            delete a->valueList->floatVecList;
+        }
+        else if(a->valueList->intVecList)
+        {
+            int *farray;
+            int dim = getTypeDim(t);
+            int sz = (int)a->valueList->intVecList->size();
+            if(a->arraySz <= 0)
+                a->arraySz = (int)sz;
+            farray = flattenIVecList(a->arraySz, dim, a->valueList->intVecList);
+            if(farray)
+            {
+                curUniform->setValueiv(farray, dim, a->arraySz, 0);
+                delete farray;
+            }
+            delete a->valueList->intVecList;
+        }
+        else if(a->valueList->boolVecList)
+        {
+            bool *farray;
+            int dim = getTypeDim(t);
+            int sz = (int)a->valueList->boolVecList->size();
+            if(a->arraySz <= 0)
+                a->arraySz = (int)sz;
+            farray = flattenBVecList(a->arraySz, dim, a->valueList->boolVecList);
+            if(farray)
+            {
+                curUniform->setValuebv(farray, dim, a->arraySz, 0);
+                delete farray;
+            }
+            delete a->valueList->boolVecList;
+        }
+        delete a->valueList;
+    }
+    if(a->semantic) delete a->semantic;
+    delete a;
+    delete varName;
+    curUniform = NULL;
+    curAnnotations = NULL;
+  }
+;
+
+uniforms:
+uniform
+| uniforms uniform
+;
+
+namespaceitem: 
+glsl
+| uniforms /*raises 5 shift/reduce*/
+| hlsl10
+| hlsl11
+| cudac
+| cudak
+| texture
+| resource
+| fbo
+| sstate
+| dststate
+| prstate
+| csstate
+| rstate
+| cstbuffer
+| svgpath
+| pspath
+;
+
+namespaceitems:
+namespaceitem
+| namespaceitems namespaceitem
+;
+
+/*------------------------------------------------------------------
+   namespace
+   Note: a namespace doesn't lead to a concrete object in the runtime
+   instead, it just helps to tag what is inside with annotations and 
+   this namespace name
+   Possible drawback to check : redundant copies of annotations and namespace name
+   for all items... memory use...
+   alternate solution to try : create an instance of a namespace object
+   and link it with elements inside...
+*/
+namespace: NAMESPACE VARNAME {
+    LOGD("Namespace %s\n", $2->c_str() );
+    namespaceName = *$2;
+    curAnnotations = IAnnotationEx::getAnnotationSingleton(1); // need a temporary place
+    curAnnotations->clear();
+    // keep the pointer here because the idea of namespace annotations is to copy them later
+    // on every single item in the namespace
+    namespaceAnnotations = curAnnotations;
+} annotations '{' namespaceitems '}' { 
+    namespaceName.clear(); 
+    curAnnotations = NULL;
+    namespaceAnnotations = NULL;
+    delete $2;
+}
+;
+
+/*------------------------------------------------------------------
+   Constant Buffers uniforms
+*/
+cstbufferuniforms: /*empty*/
+| '{' '}'
+| '{' uniforms '}'
+;
+/*
+   Constant Buffers
+*/
+cstbuffer: CSTBUFFER global_varname_annots {
+    if($2.varName == NULL)
+        yyerror("a Constant buffer must have a name\n");
+    LOGD("ConstantBuffer %s\n", $2.varName ? $2.varName->c_str() : "Un-named" );
+    ICstBuffer* p = curContainer->createCstBuffer($2.varName ? $2.varName->c_str() : NULL, $2.global);
+    // it is possible that it failed because already a Global one with same name is here
+    if(p == NULL)
+    {
+        if($2.varName)
+            p = pCRep->find($2.varName ? $2.varName->c_str() : NULL);
+        if(p == NULL)
+            yyerror("Error in Constant Buffer creation\n");
+        else {
+            curContainer->addCstBuffer(p);
+            pCRep->addCstBuffer(p);
+            bCurCstBufferAlreadyPopulated = true; // we prevent sub-uniforms to be created during this parsing
+        }
+    } else {
+        bCurCstBufferAlreadyPopulated = false;
+    }
+    curCstBuffer = p ? p->getExInterface() : NULL;
+    if(curCstBuffer)
+    {
+        IAnnotationEx* pA = curCstBuffer->annotations()->getExInterface();
+        pA->copy(curAnnotations);
+        // for the case of items within a namespace :
+        // copy the name-space annotations to this one
+        pA->copy(namespaceAnnotations);
+    }
+
+    delete $2.varName;
+} cstbufferuniforms {
+    curCstBuffer = NULL;
+    curAnnotations = NULL;
+    lex_pop_state();
+}
+;
+
+/*------------------------------------------------------------------
+   OPTIX Context
+*/
+
+optix_context_data: RAY_GENERATION_PROGRAM '=' liststart varnamelist listend ';' {
+    delete $4;
+    }
+| optix_context_data EXCEPTION_PROGRAM '=' liststart varnamelist listend ';' {
+    delete $5;
+    }
+| optix_context_data INTERSECTION_PROGRAM '=' VARNAME ';' {
+    delete $4
+    }
+| optix_context_data BOUNDING_BOX_PROGRAM '=' VARNAME ';' {
+    delete $4
+    }
+| optix_context_data MISS_PROGRAM '=' VARNAME ';' {
+    delete $4
+    }
+| optix_context_data DEFAULT_MATERIAL '=' VARNAME ';' {
+    delete $4
+    }
+| optix_context_data STACK_SIZE '=' iexp ';' {
+}
+| optix_context_data OUTPUT_BUFFER '=' VARNAME ';' {
+    delete $4
+    }
+| optix_context_data UNIFORM '(' VARNAME ')' '=' liststart varnamelist listend ';' {
+    // we prefer this loop : we don't have the char ** available here... using vector of std::string...
+    //for(int i=0; i<(int)$8->size(); i++)
+    //    curXX->createState($4->c_str(), i, (*$8)[i].c_str());
+    delete $4;
+    delete $8;
+    }
+| optix_context_data UNIFORM '(' VARNAME ')' '=' VARNAME ';' {
+    //curPass->createState($4->c_str(), 0, $7->c_str());
+    delete $4;
+    delete $7;
+    }
+| optix_context_data UNIFORM '(' VARNAME ')' uniformvalueassigment ';' {
+    ValueList* pvalueList = $6;
+    if(pvalueList && pvalueList->floatVecList)
+    {
+        FloatVecList *pfvl = pvalueList->floatVecList;
+        FloatList* pfl = (*pfvl)[0];
+        float* pf = &(*pfl)[0];
+        //curPass->createState($4->c_str(), 0, pf, (int)pfl->size());
+        delete pfl;
+        delete pfvl;
+        delete pvalueList;
+    }
+    delete $4;
+    }
+;
+
+optix_context: OPTIX_CONTEXT global_varname_annots {
+   } annotations {
+   } '{' optix_context_data '}' {
+   }
+;
+
+/*------------------------------------------------------------------
+   OPTIX Material
+*/
+
+optix_material_data: /*Empty*/
+| optix_material_data ANY_HIT_PROGRAM '=' liststart varnamelist listend ';' {
+    delete $5;
+    }
+| optix_material_data CLOSEST_HIT_PROGRAM '=' liststart varnamelist listend ';' {
+    delete $5;
+    }
+| optix_material_data UNIFORM '(' VARNAME ')' '=' liststart varnamelist listend ';' {
+    // we prefer this loop : we don't have the char ** available here... using vector of std::string...
+    //for(int i=0; i<(int)$8->size(); i++)
+    //    curXX->createState($4->c_str(), i, (*$8)[i].c_str());
+    delete $4;
+    delete $8;
+    }
+| optix_material_data UNIFORM '(' VARNAME ')' '=' VARNAME ';' {
+    //curPass->createState($4->c_str(), 0, $7->c_str());
+    delete $4;
+    delete $7;
+    }
+| optix_material_data UNIFORM '(' VARNAME ')' uniformvalueassigment ';' {
+    ValueList* pvalueList = $6;
+    if(pvalueList && pvalueList->floatVecList)
+    {
+        FloatVecList *pfvl = pvalueList->floatVecList;
+        FloatList* pfl = (*pfvl)[0];
+        float* pf = &(*pfl)[0];
+        //curPass->createState($4->c_str(), 0, pf, (int)pfl->size());
+        delete pfl;
+        delete pfvl;
+        delete pvalueList;
+    }
+    delete $4;
+    }
+;
+
+optix_material: OPTIX_MATERIAL global_varname_annots {
+   } annotations {
+   } '{' optix_material_data '}' {
+   }
+;
+
+/*------------------------------------------------------------------
+   OPTIX Buffer
+*/
+
+optix_buffer_data: /*Empty*/
+| optix_buffer_data RESOURCEFORMAT '=' RESOURCEFORMAT_ENUM ';' {
+    //if(curResource) {
+    //    if(!curResource->setFormat($4))
+    //    {
+    //        yyerror("Error: Bad format\n");
+    //    }
+    //}
+}
+| optix_buffer_data RESOURCESIZE '=' APPDEFINED ';' {
+    //if(curResource)
+    //    curResource->setDimensionsApplicationDependent();
+}
+| optix_buffer_data RESOURCESIZE '=' liststart iexplist listend ';' {
+    int d = (int)$5->size();
+    //if(curResource)
+    //    curResource->setDimensions((*$5)[0], d > 1 ? (*$5)[1] : 1, d > 2 ? (*$5)[2] : 1);
+    delete $5;
+}
+;
+
+optix_buffer: OPTIX_BUFFER VARNAME /*or ? global_varname_annots*/ {
+    delete $2;
+   } annotations {
+   } '{' optix_buffer_data '}' {
+   }
+;
+
+/*------------------------------------------------------------------
+   PTX Program from file
+*/
+
+ptx_program_from_file_data:
+| ptx_program_from_file_data FILE_NAME '=' FX_STR ';' {
+    delete $4;
+}
+| ptx_program_from_file_data ENTRY_POINT '=' FX_STR ';' {
+    delete $4;
+}
+;
+
+ptx_program_from_file: PTX_PROGRAM_FROM_FILE global_varname_annots {
+   } annotations {
+   } '{' ptx_program_from_file_data '}' {
+   }
+;
+
+/*  End  of  grammar.    */
+%%

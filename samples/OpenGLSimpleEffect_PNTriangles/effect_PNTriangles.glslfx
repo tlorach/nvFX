@@ -1,0 +1,507 @@
+/*
+    Copyright (c) 2013, NVIDIA CORPORATION. All rights reserved.
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of NVIDIA CORPORATION nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
+*/
+#extension GL_ARB_separate_shader_objects : enable
+
+//////////////////////////////////////////////////////////
+// Note: "global" would in the case where many effects yse this constant buffer
+// to share it accross effects: therefore allowing to share the UBO creation and updates
+// this example doesn't really need this keyword, though
+ConstantBuffer global transfBlock1
+{
+    uniform mat4 m4_ViewProj;
+    uniform mat4 m4_Proj;
+    uniform mat4 m4_View;
+    uniform mat4 m4_ViewIT;
+    uniform vec3 eyePos : EYEPOS;
+    uniform float dummy;
+}
+
+ConstantBuffer global transfBlock2
+{
+    uniform mat4 m4_World;
+    uniform mat4 m4_WorldView;
+    uniform mat4 m4_WorldViewProj;
+    uniform mat4 m4_WorldIT;
+};
+ConstantBuffer global materialBlock
+{
+    uniform vec3     diffuse;
+    uniform float    specexp;
+    uniform vec3     ambient;
+    uniform float    reflectivity;
+    uniform vec3     transparency;
+    uniform float    translucency;
+    uniform vec3     specular;
+};
+ConstantBuffer user_data
+{
+    uniform float scaleObject : SCALEOBJECT
+    <
+        Toto = "TEST";
+        A = 0.1;
+        B = 4;
+    > = 0.1; // default data can be set and will be sent to GLSL at validation time
+    uniform float attenuation;
+    uniform vec4 surfColor = {0.8, 0.8, 0.99, 1};
+    uniform float innerTessFactor =  4.0;
+    uniform float outerTessFactor =  4.0;
+}
+
+uniform vec4 scaleBias = {0,0,0,1.0}; // x,y,z bias and w==scale
+uniform vec3 lightPos[] = {{10,10,10},{10,10,-10}};
+uniform vec3 lightColor[] = {{0.8,0.8,0.8},{0.5,0.5,0.7}};
+
+//////////////////////////////////////////////////////////
+
+DepthStencilState dstStateFloor
+{
+    DEPTH_TEST = true;
+    DEPTH_WRITEMASK = true;
+    DEPTH_FUNC = LEQUAL;
+}
+RasterizationState rasterState1
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+//////////////////////////////////////////////////////////////
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 420 compatibility
+    #extension GL_ARB_tessellation_shader : enable
+
+    struct TessControlStruct
+    {
+      vec4 position[3];
+      vec3 normal[2];
+      vec3 tc;
+    };
+    // Helpers
+    vec4 ComputeCP(vec4 posA, vec4 posB, vec3 normA) 
+    {
+      vec3 C = (2.0f * posA.xyz + posB.xyz - (dot((posB.xyz - posA.xyz), normA) * normA)) / 3.0;
+      return vec4(C.x, C.y, C.z, 1.0);
+    }
+
+    vec3 ComputeCN(vec3 dP, vec3 N1, vec3 N2)
+    {
+      return normalize(N1 + N2 - (2*(dot(dP, N1 + N2)/(dot(dP, dP))))*dP);
+    }
+}
+
+//////////////////////////////////////////////////////////
+// when declaring a sampler outside of any module : sampler can be known by nvFx (instrospection)
+// and shared between various pieces of code (replicated for every single program)
+uniform sampler2D specSampler;
+uniform sampler2D diffuseSampler;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// sampler states are outside of GLSL.
+// names allows to make them match with the texture/sampler of GLSL (HLSL, too)
+// or maybe we would require the runtime to connect them explicitly...
+//
+SamplerState specSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    //AddressS = REPEAT;
+    //AddressT = REPEAT;
+    //AddressR = REPEAT;
+}
+SamplerState defaultSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+//
+// Texture Resources
+//
+TextureResource2D Default_color <
+    defaultFile = "gargoyleMossyDiffuse.dds";
+> {
+    // this is a possible alternate way to setup sampler-states...
+    // in OpenGL, sampler-states are defined for each texture
+    // sampler-states specified in the Pass override this one
+    SamplerState = defaultSamplerState;
+}
+TextureResource2D Default_spec <
+    defaultFile = "gargoyleMossySpec.dds";
+> {
+    SamplerState = defaultSamplerState;
+}
+
+////////////////////////////////////////////////////////////////////
+/// VERTEX PROGRAM /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectVS_basic
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 Normal;
+    layout(location=2) in vec3 TexCoord;
+
+    layout(location=0) out vec3 outNw;
+    layout(location=1) out vec3 outTc;
+    layout(location=4) out vec3 outPw;
+    layout(location=5) out vec3 outWv;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+        vec3 N    = normalize((m4_WorldIT * vec4(Normal,0)).xyz);
+        vec4 Po    = Position;
+        Po.xyz += scaleBias.xyz;
+        Po.xyz *= scaleBias.w;
+
+        gl_Position = (m4_WorldViewProj * Po);
+
+        outNw       = N;
+        outTc       = TexCoord;
+        outPw       = (m4_World * Po).xyz;
+        outWv       = normalize(eyePos - outPw);
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// VERTEX PROGRAM /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 Normal;
+    layout(location=2) in vec3 TexCoord;
+
+    layout(location=0) out vec4 cpPosition;
+    layout(location=1) out vec3 cpNormal;
+    layout(location=2) out vec3 cpTc;
+
+    void main()
+    {
+      cpPosition =  vec4(scaleBias.w * (Position.xyz + scaleBias.xyz), 1.0);
+      cpNormal =  Normal;
+      cpTc =  TexCoord;
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// TCS ////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectTCS
+{
+    layout(location=0) in vec4 cpPosition[];
+    layout(location=1) in vec3 cpNormal[];
+    layout(location=2) in vec3 cpTc[];
+
+    layout(vertices = 3) out;
+
+    out TessControlStruct PatchPN[3];
+    patch out vec4 CenterCP; // per-patch attribute
+
+    void main() 
+    {
+#if 0
+      PatchPN[gl_InvocationID].position[0] = cpPosition[gl_InvocationID];
+      PatchPN[gl_InvocationID].normal[0] = cpNormal[gl_InvocationID];
+      //barrier();
+      if(gl_InvocationID == 0)
+      {
+        gl_TessLevelOuter[0] = outerTessFactor;
+        gl_TessLevelOuter[1] = outerTessFactor;
+        gl_TessLevelOuter[2] = outerTessFactor;
+        gl_TessLevelOuter[3] = outerTessFactor;
+
+        gl_TessLevelInner[0] = innerTessFactor;
+        gl_TessLevelInner[1] = innerTessFactor;
+        }
+#else
+  unsigned int nextID = (gl_InvocationID + 1)%3;
+
+  PatchPN[gl_InvocationID].position[0] = cpPosition[gl_InvocationID];
+    
+  PatchPN[gl_InvocationID].position[1] = ComputeCP(cpPosition[gl_InvocationID],
+                                  cpPosition[nextID],
+                                  cpNormal[gl_InvocationID]);
+  
+  PatchPN[gl_InvocationID].position[2] = ComputeCP(cpPosition[nextID],
+                                  cpPosition[gl_InvocationID],
+                                  cpNormal[nextID]);
+
+  PatchPN[gl_InvocationID].normal[0] = cpNormal[gl_InvocationID];
+
+  //PatchPN[gl_InvocationID].normal[1] = cpNormal[gl_InvocationID];
+  PatchPN[gl_InvocationID].normal[1] = ComputeCN(cpPosition[nextID].xyz - cpPosition[gl_InvocationID].xyz,
+                                             cpNormal[gl_InvocationID], 
+                                             cpNormal[nextID]);
+  PatchPN[gl_InvocationID].tc = cpTc[gl_InvocationID];
+
+  //PatchPN[gl_InvocationID].normal[1] = ComputeCN(cpPosition[nextID].xyz - cpPosition[gl_InvocationID].xyz,
+  //                                           cpNormal[gl_InvocationID], 
+  //                                           cpNormal[nextID]);
+
+  barrier();
+
+  if(gl_InvocationID == 0)
+  {
+    gl_TessLevelOuter[0] = outerTessFactor;
+    gl_TessLevelOuter[1] = outerTessFactor;
+    gl_TessLevelOuter[2] = outerTessFactor;
+    gl_TessLevelOuter[3] = outerTessFactor;
+
+    gl_TessLevelInner[0] = innerTessFactor;
+    gl_TessLevelInner[1] = innerTessFactor;
+
+    vec4 E = (PatchPN[0].position[1] + 
+              PatchPN[0].position[2] + 
+              PatchPN[1].position[1] + 
+              PatchPN[1].position[2] + 
+              PatchPN[2].position[1] + 
+              PatchPN[2].position[2])/6.0;
+    
+    vec4 V = (PatchPN[0].position[0] +
+             PatchPN[1].position[0] + 
+             PatchPN[2].position[0])/3.0;
+
+    CenterCP = E + (E - V)/2.0;
+    CenterCP.w = 1.0f;
+    }
+#endif
+    }
+}
+
+////////////////////////////////////////////////////////////////////
+/// EVAL PROGRAM ///////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectTES
+{
+    layout(triangles, fractional_even_spacing, cw) in;
+
+    in TessControlStruct PatchPN[3];
+    patch in vec4 CenterCP; // per-patch attribute
+
+    layout(location=0) out vec3 outNw;
+    layout(location=1) out vec3 outTC;
+    layout(location=4) out vec3 outPw;
+    layout(location=5) out vec3 outWV;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main()
+    {
+        vec3 Pw;
+#if 0
+        vec3 normal = (PatchPN[0].normal.xyz);
+        vec3 uDir = PatchPN[1].normal.xyz - PatchPN[0].normal.xyz;
+        vec3 vDir = PatchPN[2].normal.xyz - PatchPN[0].normal.xyz;
+        normal += (gl_TessCoord.x * uDir) + (gl_TessCoord.y * vDir);
+        Nw = (m4_WorldIT * vec4(normalize(normal), 0.0)).xyz;
+
+        vec3 pos = (PatchPN[0].position[0].xyz);
+        uDir = PatchPN[1].position[0].xyz - PatchPN[0].position[0].xyz;
+        vDir = PatchPN[2].position[0].xyz - PatchPN[0].position[0].xyz;
+        pos += (gl_TessCoord.x * uDir) + (gl_TessCoord.y * vDir);
+        gl_Position = m4_WorldViewProj * vec4(pos,1.0);
+        Pw          = (m4_World * vec4(pos,1.0)).xyz;
+#else
+  float u = gl_TessCoord.x;
+  float v = gl_TessCoord.y;
+  float w = gl_TessCoord.z;
+
+  float uu = u * u;
+  float vv = v * v;
+  float ww = w * w;
+  float uu3 = uu * 3.0;
+  float vv3 = vv * 3.0;
+  float ww3 = ww * 3.0;
+
+  vec4 position = PatchPN[0].position[0] * uu * u +
+                  PatchPN[1].position[0] * vv * v +
+                  PatchPN[2].position[0] * ww * w +
+                  PatchPN[0].position[1] * uu3 * v +
+                  PatchPN[0].position[2] * vv3 * u +
+                  PatchPN[1].position[1] * vv3 * w +
+                  PatchPN[1].position[2] * ww3 * v +
+                  PatchPN[2].position[1] * ww3 * u +
+                  PatchPN[2].position[2] * uu3 * w +
+                  CenterCP * 6.0 * u * v * w;
+
+  position.w = 1.0f;
+  
+  gl_Position = m4_WorldViewProj * position;
+  Pw          = (m4_World * position).xyz;
+
+  vec3 tc = PatchPN[0].tc * u +
+                  PatchPN[1].tc * v +
+                  PatchPN[2].tc * w;
+
+  //vec3 normal = (1.0-u-v)*PatchPN[0].normal + u*PatchPN[1].normal + v*PatchPN[2].normal;
+  vec3 normal = PatchPN[0].normal[0] * uu +
+                PatchPN[1].normal[0] * vv +
+                PatchPN[2].normal[0] * ww +
+                PatchPN[0].normal[1] * u*v +
+                PatchPN[1].normal[1] * v*w +
+                PatchPN[2].normal[1] * w*u;
+  outNw           = ((m4_WorldIT * vec4(normalize(normal),0)).xyz);
+  outPw           = Pw;
+  outTC           = tc;
+  outWV           = normalize(eyePos - Pw);
+#endif
+  }
+}
+////////////////////////////////////////////////////////////////////
+/// FRAGMENT PROGRAM ///////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ObjectPS
+{
+    layout(location=0) in vec3 inNw;
+    layout(location=1) in vec3 inTC;
+    layout(location=4) in vec3 inPw;
+    layout(location=5) in vec3 inWV;
+
+    layout(location=0) out vec4 color;
+    void main()
+    {
+        vec4 texcolor = texture(diffuseSampler, vec2(inTC.x, 1.0 - inTC.y));
+        vec4 texspec = 3.0 * texture(specSampler, vec2(inTC.x, 1.0 - inTC.y));
+        vec3 Nn = normalize(inNw);
+        vec3 Vn = normalize(inWV);
+
+        vec3 result = vec3(0);
+        for(int l=0; l<2; l++)
+        {
+            vec3 Ln = normalize(lightPos[l] - inPw);
+            vec3 Hn = normalize(Vn + Ln);
+            float NdotL = max(dot(Ln, Nn), 0.0);
+            float HdotN = NdotL > 0.0 ? pow(max(0.0, dot(Hn, Nn)), 64.0) : 0.0;
+            vec3 diffContrib = NdotL * lightColor[l];
+            vec3 specContrib = HdotN * diffContrib;
+            vec3 ambientContrib = vec3(0.01,0.01,0.03);
+            result += texcolor.rgb * diffContrib + ambientContrib + texspec.rgb * specContrib;
+        }
+
+        color = vec4(result, 0.0);
+    }
+}
+////////////////////////////////////////////////////////////////////
+/// Floor things
+////////////////////////////////////////////////////////////////////
+namespace floor
+{
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's VERTEX PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader VS
+    {
+        layout(location=0) in vec4 Position;
+        out gl_PerVertex {
+            vec4 gl_Position;
+        };
+        void main(void)
+        {
+            gl_Position = m4_ViewProj * Position;
+        }
+    }
+    ////////////////////////////////////////////////////////////////////
+    /// FLOOR's FRAGMENT PROGRAM ///////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
+    GLSLShader PS
+    {
+        layout(location=0) out vec4 color;
+        void main() 
+        {
+            color = vec4(0.3, 0.5, 0.7, 1.0);
+        }
+    }
+}
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Material Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+Technique TECH_INIT
+{
+    Pass init
+    {
+        PolygonOffset = {1.0,1.0};
+        DEPTH_TEST = True;
+        DEPTH_FUNC = LEQUAL;
+        DEPTH_MASK = True;
+    }
+}
+
+Technique TECH_WIREFLOOR
+{
+    Pass p0
+    {
+        //RasterizationState = rasterStateWire;
+        //DepthStencilState = dstStateFloor;
+
+        VertexProgram = floor::VS;
+        FragmentProgram = floor::PS;
+    }
+}
+Technique PNTrianglesTech
+{
+    Pass p0
+    {
+        SamplerState(diffuseSampler) = defaultSamplerState;
+        SamplerResource(diffuseSampler) = Default_color;
+        SamplerState(specSampler) = defaultSamplerState;
+        SamplerResource(specSampler) = Default_spec;
+
+        //RasterizationState = rasterState1;
+        VertexProgram = ObjectVS;
+        TCSProgram = ObjectTCS;
+        TESProgram = ObjectTES;
+        FragmentProgram = ObjectPS;
+    }
+}
+Technique BasicTech
+{
+    Pass p0
+    {
+        SamplerState(diffuseSampler) = defaultSamplerState;
+        SamplerResource(diffuseSampler) = Default_color;
+        SamplerState(specSampler) = defaultSamplerState;
+        SamplerResource(specSampler) = Default_spec;
+
+        //RasterizationState = rasterState1;
+        VertexProgram = ObjectVS_basic;
+        FragmentProgram = ObjectPS;
+    }
+}

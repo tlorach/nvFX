@@ -1,0 +1,10 @@
+/**
+\page FutureWork Future Work
+
+Many new ideas to come :
+ - introduction of \e scene \e level \e effect : a way to use technique/pass for scene level management
+ - introduction of intermediate resource management from within the effect : render-targets, texture-targets...
+ - introduction of CUDA kernels : it will be possible to declare some CUDA code in a CUDAModule {...} section.
+ - introduction of OPTIX code : same as CUDA but using OPTIXModule.
+
+**/

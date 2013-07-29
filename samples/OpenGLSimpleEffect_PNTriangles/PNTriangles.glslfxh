@@ -1,0 +1,151 @@
+////////////////////////////////////////////////////////////////////
+/// Tessellation abstraction
+/// this test is to show how to EXTERNALIZE TESSELLATION CODE
+/// from the main shaders. 
+/// Imagine this piece of shader code would come from another part 
+/// that doesn't know about your shading pipeline
+////////////////////////////////////////////////////////////////////
+GLSLShader
+{
+  // this define is used for OUTSIDE of the tessellation code:
+  // to help the generic (non tessellation code) part to setup things correctly
+  #define NPATCHVERTICES 3
+  //vec3 TES_interpolate(vec3 v);
+  void computeMainTCS();
+  void computeMainTES();
+}
+
+////////////////////////////////////////////////////////////////////
+/// TCS            /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader PNtriTCS
+{
+    //
+    // Control points computation
+    //
+    vec4 ComputeCP(vec4 posA, vec4 posB, vec3 normA) 
+    {
+      vec3 C = (2.0f * posA.xyz + posB.xyz - (dot((posB.xyz - posA.xyz), normA) * normA)) / 3.0;
+      return vec4(C.x, C.y, C.z, 1.0);
+    }
+
+    vec3 ComputeCN(vec3 dP, vec3 N1, vec3 N2)
+    {
+      return normalize(N1 + N2 - (2*(dot(dP, N1 + N2)/(dot(dP, dP))))*dP);
+    }
+    // TODO: Tangent & Binormals
+
+    ////////////////////////////////////////////
+
+    layout(vertices = 3) out;
+
+    patch out vec4 CenterCP; // per-patch attribute
+
+    void computeMainTCS()
+    {
+      unsigned int nextID = (gl_InvocationID + 1)%3;
+      //
+      // Tessellation works with typical values such as Position and normal
+      //
+      setPatchPosition(0, TCS_getPosition(gl_InvocationID));
+        
+      setPatchPosition(1, ComputeCP( TCS_getPosition(gl_InvocationID),
+                                                        TCS_getPosition(nextID),
+                                                        TCS_getNormal(gl_InvocationID)) );
+      
+      setPatchPosition(2, ComputeCP( TCS_getPosition(nextID),
+                                                        TCS_getPosition(gl_InvocationID),
+                                                        TCS_getNormal(nextID)) );
+
+      setPatchNormal(0, TCS_getNormal(gl_InvocationID) );
+
+      setPatchNormal(1, ComputeCN(   TCS_getPosition(nextID).xyz - TCS_getPosition(gl_InvocationID).xyz,
+                                                        TCS_getNormal(gl_InvocationID), 
+                                                        TCS_getNormal(nextID)) );
+
+      barrier();
+
+      if(gl_InvocationID == 0)
+      {
+        gl_TessLevelOuter[0] = outerTessFactor;
+        gl_TessLevelOuter[1] = outerTessFactor;
+        gl_TessLevelOuter[2] = outerTessFactor;
+        gl_TessLevelOuter[3] = outerTessFactor;
+
+        gl_TessLevelInner[0] = innerTessFactor;
+        gl_TessLevelInner[1] = innerTessFactor;
+
+        vec4 E = (getPatchPosition(0,1) + 
+                  getPatchPosition(0,2) + 
+                  getPatchPosition(1,1) + 
+                  getPatchPosition(1,2) + 
+                  getPatchPosition(2,1) + 
+                  getPatchPosition(2,2))/6.0;
+        
+        vec4 V = (getPatchPosition(0,0) +
+                  getPatchPosition(1,0) + 
+                  getPatchPosition(2,0))/3.0;
+
+        CenterCP = E + (E - V)/2.0;
+      }
+  }
+}
+
+////////////////////////////////////////////////////////////////////
+/// TES            /////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader PNTriTES
+{
+    vec3 evaluatedNormal;
+    vec4 evaluatedPosition;
+    vec3 VS_getAttrNormal() { return evaluatedNormal; }
+    vec4 VS_getAttrPosition() { return evaluatedPosition; }
+    vec3 TES_interpolateLinear(vec3 v1, vec3 v2, vec3 v3)
+    {
+        return  v1 * gl_TessCoord.x +
+                v2 * gl_TessCoord.y +
+                v3 * gl_TessCoord.z;
+    }
+
+    layout(triangles, fractional_even_spacing, cw) in;
+
+    patch in vec4 CenterCP; // per-patch attribute
+
+    void computeMainTES()
+    {
+        float U = gl_TessCoord.x;
+        float V = gl_TessCoord.y;
+        float W = gl_TessCoord.z;
+
+        float UU = U * U;
+        float VV = V * V;
+        float WW = W * W;
+        float UU3 = UU * 3.0;
+        float VV3 = VV * 3.0;
+        float WW3 = WW * 3.0;
+
+        evaluatedPosition = getPatchPosition(0,0) * UU * U +
+                        getPatchPosition(1,0) * VV * V +
+                        getPatchPosition(2,0) * WW * W +
+                        getPatchPosition(0,1) * UU3 * V +
+                        getPatchPosition(0,2) * VV3 * U +
+                        getPatchPosition(1,1) * VV3 * W +
+                        getPatchPosition(1,2) * WW3 * V +
+                        getPatchPosition(2,1) * WW3 * U +
+                        getPatchPosition(2,2) * UU3 * W +
+                        CenterCP * 6.0 * U * V * W;
+        
+        
+        evaluatedNormal = getPatchNormal(0,0) * UU +
+                      getPatchNormal(1,0) * VV +
+                      getPatchNormal(2,0) * WW +
+                      getPatchNormal(0,1) * U*V +
+                      getPatchNormal(1,1) * V*W +
+                      getPatchNormal(2,1) * W*U;
+        // at this stage, the Evaluation of the vertex
+        // is very much like if we feed a vertex shader
+        // let's call this vertex shader body
+        // BUT attributes will be fetched in a different way !
+        VSBody();
+    }
+}

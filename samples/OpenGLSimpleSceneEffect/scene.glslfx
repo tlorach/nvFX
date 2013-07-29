@@ -1,0 +1,173 @@
+#extension GL_ARB_separate_shader_objects : enable
+//
+// Resources (Testing the scene-level effect part)
+//
+// will create the texture resource
+// can be then used with "SamplerResource(diffuseSampler) = myRenderTexture;"
+// TODO: in D3D, this will lead to a Texture object in D3D, too
+
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderTexture myRenderTexture
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+RenderTexture myRenderTextureNormals
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderBuffer myDST
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;
+    Format = DEPTH24STENCIL8;
+}
+// will lead to a FBO creation in a specific repository. nvFX lib will keep track of the Id
+FBO myFBO
+{
+    Color = { myRenderTexture, myRenderTextureNormals };
+    DepthStencil = myDST;
+}
+
+//
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader
+{
+    #version 410 compatibility
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Functions that we will use to output fragments in various ways
+// the materials would use them. Included here for the overriding operation
+//
+#include "fragOutput.glslfxh"
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// sampler states are outside of GLSL.
+//
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+
+//--------------------------------------------------------------------------------------
+//    Fullscreen quad Vertex shader
+//--------------------------------------------------------------------------------------
+GLSLShader global fullscreenquadVS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 TexCoord;
+    layout(location=1) out vec3 tc;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+    void main()
+    {
+        tc = TexCoord;
+        gl_Position = Position;
+    }
+}
+//--------------------------------------------------------------------------------------
+//    Simple texture fetch
+//--------------------------------------------------------------------------------------
+GLSLShader global fullscreenquadPS
+{
+    // we can keep local some uniforms. So they aren't visible outside from others
+    uniform sampler2D quadSampler;
+    layout(location=1) in vec3 tc;
+    layout(location=0) out vec4 color;
+    void main()
+    {
+        color = /*vec4(0,0,0.2,0.0) + */texture(quadSampler, tc.xy);
+    }
+}
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Test of a scene-level Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+Technique TwoPassesTwoFBOs
+{
+    Pass renderScene
+    {
+        DEPTH_TEST = true;
+        CULL_FACE = true;
+        BLEND = false;
+        RenderMode = SceneShading;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0,0.0,0.0,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = myFBO;
+        FragmentProgramOverride<"out"> = ColorAndNormals;
+    }
+    Pass blitme
+    {
+        BlitFBOToActiveTarget = myFBO;
+        //ViewPort = AppDefined;
+        CurrentTarget = backbuffer;
+    }
+    // Example of a quad rendering
+    Pass copy_to_texture
+    {
+        // Copy via a Fullscreen quad and texture fetch in a shader
+        DEPTH_TEST = false;
+        CULL_FACE = false;
+        BLEND = true;
+        BLEND_SRC = ONE_MINUS_CONSTANT_COLOR;
+        BLEND_DST = CONSTANT_COLOR;
+        BLEND_COLOR = {0.3,0.3,0.3,0.3};
+        RenderMode = DebugQuad3;//render_fullscreen_quad; // Only draws a quad... Won't change any renderstate. So Depth test/Cullface would be needed
+        VertexProgram = fullscreenquadVS;
+        SamplerResource(quadSampler) = myRenderTextureNormals;
+        SamplerState(quadSampler) = nearestSampler; // Strange: I can't use any other sampling filtering to not break the FBO
+        FragmentProgram = fullscreenquadPS;
+        CurrentTarget = backbuffer;
+    }
+}
+
+// Simpler case
+Technique NormalsAsColorToBackbuffer
+{
+    Pass renderScene
+    {
+        DEPTH_TEST = true;
+        CULL_FACE = true;
+        BLEND = false;
+        RenderMode = SceneShading;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0,0.0,0.0,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = backbuffer;
+        FragmentProgramOverride<"out"> = NormalsAsColor;
+    }
+}
+
+// display TC
+Technique TcAsColorToBackbuffer
+{
+    Pass renderScene
+    {
+        DEPTH_TEST = true;
+        CULL_FACE = true;
+        BLEND = false;
+        RenderMode = SceneShading;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0,0.0,0.0,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = backbuffer;
+        FragmentProgramOverride<"out"> = TcAsColor;
+    }
+}
+
