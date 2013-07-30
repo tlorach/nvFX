@@ -9,6 +9,7 @@ doxygen/log.txt
 samples/OpenGLSimpleMDLEffect
 ISF
 *.pptx
+*.ppt
 Log_nvFX.txt
 *Log.txt
 Video
