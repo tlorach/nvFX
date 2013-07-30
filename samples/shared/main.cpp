@@ -25,6 +25,13 @@
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
 */
+//#define MEMORY_LEAKS_CHECK
+#ifdef MEMORY_LEAKS_CHECK
+#   pragma message("build will Check for Memory Leaks!")
+#   define _CRTDBG_MAP_ALLOC
+#   include <stdlib.h>
+#   include <crtdbg.h>
+#endif
 
 #if defined(__APPLE__)
     #include <GLUT/glut.h>
@@ -98,8 +105,10 @@ void shutdownBase()
     g_pConsole = NULL;
     g_pLog = NULL;
     // BUG, HERE:
-    //if(g_pWinHandler) g_pWinHandler->DestroyAll();
-    //UISERVICE_UNLOAD(g_pFactUI, g_pWinHandler);
+    if(g_pWinHandler) {
+        g_pWinHandler->DestroyAll();
+        UISERVICE_UNLOAD(g_pFactUI, g_pWinHandler);
+    }
 #endif
 #ifdef SVCSPACEMOUSE
     if(g_pFactMouse)    

@@ -153,6 +153,13 @@
 //         image[0].get_mipmap(i).get_depth(), 0, image.get_format(), 
 //         GL_UNSIGNED_BYTE, image[0].get_mipmap(i));
 // }
+//#define MEMORY_LEAKS_CHECK
+#ifdef MEMORY_LEAKS_CHECK
+#   pragma message("build will Check for Memory Leaks!")
+#   define _CRTDBG_MAP_ALLOC
+#   include <stdlib.h>
+#   include <crtdbg.h>
+#endif
 
 #include <string.h>
 #if defined(WIN32)

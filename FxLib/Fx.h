@@ -45,6 +45,13 @@
 #define CHECK_POINTER(a) {if (a == NULL) assert(0);}
 #define CHECK_TRUE_RET(cond) {if (!(cond)) return;}
 #define CHECK_POINTER_RET(ptr) {if (ptr == NULL) return;}
+//#define MEMORY_LEAKS_CHECK
+#ifdef MEMORY_LEAKS_CHECK
+#   pragma message("build will Check for Memory Leaks!")
+#   define _CRTDBG_MAP_ALLOC
+#   include <stdlib.h>
+#   include <crtdbg.h>
+#endif
 #else
 #define CHECK_TRUE(a)
 #define CHECK_TRUE_MSG(cond,msg)

@@ -999,12 +999,12 @@ bool loadMaterialEffect()
     //
     // Let's keep track in interface pointers everything, for purpose of clarity
     //
-    fx_TechMaterial = fx_EffectMaterial->findTechnique("Init");
+    fx_TechMaterial = fx_EffectMaterial->findTechnique("TECH_INIT");
     if(fx_TechMaterial && (!fx_TechMaterial->validate()))
         exit(1);
     // execute the pass as a way to initialize some basic GL states
     fx_TechMaterial->getPass(0)->execute();
-    fx_TechFloor = fx_EffectMaterial->findTechnique("Floor");
+    fx_TechFloor = fx_EffectMaterial->findTechnique("TECH_WIREFLOOR");
     if(fx_TechFloor && (!fx_TechFloor->validate()))
         exit(1);
     // loop in the rest and validate them

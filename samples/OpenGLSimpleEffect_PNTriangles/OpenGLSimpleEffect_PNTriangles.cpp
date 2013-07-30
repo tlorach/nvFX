@@ -25,6 +25,14 @@
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
 */
+//#define MEMORY_LEAKS_CHECK
+#ifdef MEMORY_LEAKS_CHECK
+#   pragma message("build will Check for Memory Leaks!")
+#   define _CRTDBG_MAP_ALLOC
+#   include <stdlib.h>
+#   include <crtdbg.h>
+#endif
+
 #if defined(__APPLE__)
     #include <GLUT/glut.h>
 #else
@@ -108,13 +116,13 @@ transfBlock2 g_transfBlock2;
 struct MaterialBlock
 {
     // we map it the same as in bk3d::Material for the sake of simplicity of the demo
-    vec3     diffuse[3];         ///< RGB diffuse color
+    vec3     diffuse;         ///< RGB diffuse color
     float    specexp;            ///< exponent of the specular lighting
-    vec3     ambient[3];         ///< RGB ambient color
+    vec3     ambient;         ///< RGB ambient color
     float    reflectivity;       ///< intensity of the reflection
-    vec3     transparency[3];    ///< RGB transparency
+    vec3     transparency;    ///< RGB transparency
     float    translucency;       ///< translucency : 0, no transparency at all; 1 : object 100% transparent (transparency could be used)
-    vec3     specular[3];        ///< specular RGB color
+    vec3     specular;        ///< specular RGB color
 };
 
 vec4 scaleBias;
@@ -447,7 +455,7 @@ void keyboard(unsigned char key, int x, int y)
             break;
         case '1':
         case '2':
-        case '3':
+        //case '3':
             fx_Tech    = fx_Effect->findTechnique(TECH_DEFAULT+key-'1');
             LOGI("Using scene technique %s", fx_Tech->getName());
             #ifdef USESVCUI
@@ -1033,7 +1041,8 @@ void display()
                 if(pMat->diffuse[0]==0.0==pMat->diffuse[1]==pMat->diffuse[2])
                     pMat->diffuse[0]=pMat->diffuse[1]=pMat->diffuse[2]= 0.7f;
                 // simply copy of the data as they are in the original model memory
-                memcpy(p, pMat->diffuse, sizeof(MaterialBlock));
+                int sz = sizeof(MaterialBlock);
+                memcpy(p, pMat->diffuse, sz);
                 fx_materialBlock->unmapBuffer();
             }
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (long)pPG->userPtr);

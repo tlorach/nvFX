@@ -135,14 +135,13 @@ transfBlock2 g_transfBlock2;
 struct MaterialBlock
 {
     // we map it the same as in bk3d::Material for the sake of simplicity of the demo
-    vec3     diffuse[3];         ///< RGB diffuse color
+    vec3     diffuse;         ///< RGB diffuse color
     float    specexp;            ///< exponent of the specular lighting
-    vec3     ambient[3];         ///< RGB ambient color
+    vec3     ambient;         ///< RGB ambient color
     float    reflectivity;       ///< intensity of the reflection
-    vec3     transparency[3];    ///< RGB transparency
+    vec3     transparency;    ///< RGB transparency
     float    translucency;       ///< translucency : 0, no transparency at all; 1 : object 100% transparent (transparency could be used)
-    vec3     specular[3];        ///< specular RGB color
-    float    _dummy;
+    vec3     specular;        ///< specular RGB color
 };
 
 int     g_maxSprites = 5;
