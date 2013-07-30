@@ -24,12 +24,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLib/StateGroup.cpp#4 $
-    $Date: 2013/06/20 $
-    $Revision: #4 $
-    $Author: tlorach $
-    $Change: 16301413 $
 */
 #ifdef WIN32
 #include <windows.h> // for OutputDebugString

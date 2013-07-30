@@ -24,12 +24,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLib/Pass.cpp#9 $
-    $Date: 2013/07/06 $
-    $Revision: #9 $
-    $Author: tlorach $
-    $Change: 16408260 $
 */
 #include <fstream>
 //#include <assert.h> //pas le droits aux assers

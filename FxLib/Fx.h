@@ -24,12 +24,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLib/Fx.h#15 $
-    $Date: 2013/06/20 $
-    $Revision: #15 $
-    $Author: tlorach $
-    $Change: 16301413 $
 */
 #ifndef __FX_H__
 #define __FX_H__

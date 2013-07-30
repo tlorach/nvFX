@@ -25,11 +25,6 @@
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
 
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLib/Technique.cpp#6 $
-    $Date: 2013/06/20 $
-    $Revision: #6 $
-    $Author: tlorach $
-    $Change: 16301413 $
 */
 #include <fstream>
 #include <assert.h>

@@ -25,12 +25,6 @@
 
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/nvFxcc/nvFXcc.cpp#5 $
-    $Date: 2013/06/20 $
-    $Revision: #5 $
-    $Author: tlorach $
-    $Change: 16301413 $
 */
 
 #include "stdafx.h"
@@ -351,13 +345,10 @@ void initGL()
     if(wglCreateContextAttribsARB)
     {
         HGLRC hRC = NULL;
-        // Creates an OpenGL 3.1 forward compatible rendering context.
-        // A forward compatible rendering context will not support any OpenGL 3.0
-        // functionality that has been marked as deprecated.
         int attribList[] =
         {
-            WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
-            WGL_CONTEXT_MINOR_VERSION_ARB, 2,
+            WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+            WGL_CONTEXT_MINOR_VERSION_ARB, 0,
             WGL_CONTEXT_FLAGS_ARB, //WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB|
 #ifdef _DEBUG
             WGL_CONTEXT_DEBUG_BIT_ARB

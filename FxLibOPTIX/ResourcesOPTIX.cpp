@@ -24,12 +24,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLibCUDA/resourcesCUDA.cpp#1 $
-    $Date: 2012/12/13 $
-    $Revision: #1 $
-    $Author: tlorach $
-    $Change: 14584735 $
 */
 //#   define  LOGI(...)  { nvFX::printf(__VA_ARGS__); printf("\n"); }
 //#   define  LOGE(...)  { nvFX::printf(">>Error : "); printf(__VA_ARGS__); printf("\n"); }

@@ -24,12 +24,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLibCUDA/FxCUDA.h#3 $
-    $Date: 2013/06/20 $
-    $Revision: #3 $
-    $Author: tlorach $
-    $Change: 16301413 $
 */
 #ifndef __FXCUDA_H__
 #define __FXCUDA_H__

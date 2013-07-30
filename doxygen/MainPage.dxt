@@ -5,14 +5,6 @@ Effect container layer.
 
 \section VersionInfo Version informations
 
-\code
-$Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/doxygen/MainPage.dxt#2 $
-$Date: 2013/06/20 $
-$Revision: #2 $
-$Author: tlorach $
-$Change: 16301413 $
-\endcode
-
 \section A What is nvFX
 
 Historically, this effect layer is pretty much the continuity of what we have under CgFX or GLSLFx. However the approach here is intended to be generic (despite the fact that the current version is more OpenGL-centric).

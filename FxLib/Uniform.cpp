@@ -24,12 +24,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLib/Uniform.cpp#13 $
-    $Date: 2013/07/10 $
-    $Revision: #13 $
-    $Author: tlorach $
-    $Change: 16429334 $
 */
 #include <fstream>
 #include <assert.h>

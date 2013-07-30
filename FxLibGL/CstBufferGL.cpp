@@ -24,12 +24,6 @@
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
-
-    $Id: //sw/devrel/Playpen/tristan/GitHub/nvFX/FxLibGL/CstBufferGL.cpp#9 $
-    $Date: 2013/07/10 $
-    $Revision: #9 $
-    $Author: tlorach $
-    $Change: 16429334 $
 */
 #ifdef WIN32
 #include <windows.h> // for OutputDebugString
