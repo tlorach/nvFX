@@ -126,7 +126,7 @@
         yyin  =  fopen(  filename,  "r"  );
         if(!yyin)
         {
-            LOGE("Error : %s file not found\n", filename);
+            //LOGE("Error : %s file not found\n", filename);
             return false;
         }
         file_name = std::string(filename);

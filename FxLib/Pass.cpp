@@ -117,8 +117,7 @@ bool PassState::setShaders(Type type, IShader **progs, int numProgs)
         return false;
     }
     m_type = type;
-#pragma MESSAGE("m_shaders.clear() ???")
-    //m_shaders.clear();
+    m_shaders.clear();
     for(int i=0; i<numProgs; i++)
     {
         m_shaders.push_back(static_cast<Shader*>(progs[i]));
@@ -1147,8 +1146,8 @@ bool Pass::validate()
                     delete m_pBaseStatesLayer->program;
                     m_pBaseStatesLayer->program = NULL;
                 }
-            } // non-separable case
-            else {
+            } else // Separable Shader case:
+			{
 //#else
                 //
                 // take care of the base layer
@@ -1370,6 +1369,7 @@ bool Pass::validate()
             }
 #endif
 //#ifdef USE_OLDPROGRAM
+				// NON separable shader case:
                 if(m_container->separateShadersEnabled() == false)
                 {
                     #pragma MESSAGE("WARNING: not using Compute, GS, TCS and TES in Old program (non-separable) mode")
@@ -1473,7 +1473,7 @@ bool Pass::validate()
                         sl.program = NULL;
                     }
                 }
-//#else
+//#else			// Separable shader case:
                 else {
                     //
                     // send them to the program
@@ -2350,6 +2350,8 @@ IPassState* Pass::createState(IPassState::Type type, IShader **shd, int numShade
     // consistent.
     if(groupName)
         p = static_cast<PassState*>(findState(groupName, -1));
+	if(p) // if already existing: let's return NULL : we can't create it a second time
+		return NULL;
     if(p && (p->getType() != type))
         return NULL;
     if(!p)
@@ -3052,18 +3054,23 @@ bool Pass::setupOverrides(IPass **dest, int numPasses)
             case IPassState::TTESShader:
             case IPassState::TComputeShader:
                 {
-                    IShader** shaders =  new IShader*[pSrcPassState->m_shaders.size()];
-                    for(int s=0; s<(int)pSrcPassState->m_shaders.size(); s++)
-                        shaders[s] = pSrcPassState->m_shaders[s];
-                    // QUESTION: should we let createState() invalidate the pass by default ?
+                    // We ONLY create an instance if this group name is used
                     IPassState* pDstPassState = pDestPass->findState(pSrcPassState->m_name.c_str(), 0);
                     // Create only if we found the same group name in the base layer
                     if(pDstPassState)
                     {
+						IShader** shaders =  new IShader*[pSrcPassState->m_shaders.size()];
+						for(int s=0; s<(int)pSrcPassState->m_shaders.size(); s++)
+							shaders[s] = pSrcPassState->m_shaders[s];
                         pDestPass->setActiveProgramLayer(m_overrideID, true);
-                        pDestPass->createState(t, shaders, (int)pSrcPassState->m_shaders.size(), pSrcPassState->m_name.c_str(),true);
+                        if(! pDestPass->createState(t, shaders, (int)pSrcPassState->m_shaders.size(), pSrcPassState->m_name.c_str(),true) )
+						{	// NOTE: this case can happen *when* a technique was included in another one:
+							// the included technique might already have been used for instanciation of pass-states
+							// thus we would encounter this redundancy
+							// LOGI("NOTE: pass-state Override %s already created for pass %s\n", pSrcPassState->m_name.c_str(), m_name.c_str() );
+						}
+						delete [] shaders;
                     }
-                    delete [] shaders;
                 }
                 break;
             // typically used for samplers overriding

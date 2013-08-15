@@ -1,7 +1,7 @@
 #################
 ## nvFX
 #################
-cmake_built
+build*
 doxygen/html
 doxygen/perlmod
 doxygen/nvFX.chm

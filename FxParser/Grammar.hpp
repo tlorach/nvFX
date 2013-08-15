@@ -35,7 +35,7 @@
 /* "%code requires" blocks.  */
 
 /* Line 1676 of yacc.c  */
-#line 205 "Grammar.ypp"
+#line 199 "Grammar.ypp"
 
     #include  <vector>
     #include  <string>
@@ -601,7 +601,7 @@ typedef union YYSTYPE
 {
 
 /* Line 1676 of yacc.c  */
-#line 407 "Grammar.ypp"
+#line 401 "Grammar.ypp"
 
     bool            bval;
     bool*           pbval;
