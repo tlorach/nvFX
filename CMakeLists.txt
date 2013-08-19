@@ -10,7 +10,7 @@ set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation d
 
 if(WIN32)
   SET( USE_NSIGHT OFF CACHE BOOL "Use NSight" )
-  SET( MEMORY_LEAKS_CHECK OFF CACHE BOOL "Check for Memory leaks" )
+  SET( MEMORY_LEAKS_CHECK OFF CACHE BOOL "Build the project for Memory leaks check" )
 endif(WIN32)
 SET( BUILD_SAMPLES ON CACHE BOOL "Build the test samples" )
 SET( USE_CUDA OFF CACHE BOOL "Use CUDA" )
