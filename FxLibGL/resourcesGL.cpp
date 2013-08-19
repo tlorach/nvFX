@@ -223,6 +223,7 @@ Resource(pCont, name)
 }
 ResourceGL::~ResourceGL()
 {
+    invalidate();
 }
 
 /*************************************************************************/ /**
@@ -565,6 +566,20 @@ bool        ResourceGL::validationNeeded()
  ** FrameBufferObject FrameBufferObject FrameBufferObject FrameBufferObject
  **
  *************************************************************************/ 
+FrameBufferObject::~FrameBufferObject()
+{
+    // No reference counter to decrement... not used here
+    m_dst = NULL;
+    int i=0;
+    for(; i<(int)m_colors.size(); i++)
+    {
+        m_colors[i] = NULL;
+    }
+    if(m_fboID)
+        glDeleteFramebuffers(1, &m_fboID);
+    m_fboID = 0;
+}
+
 bool checkFramebufferStatus()
 {
     GLenum status;

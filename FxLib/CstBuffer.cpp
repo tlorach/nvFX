@@ -41,6 +41,13 @@ using namespace nvFX;
  **/ /*************************************************************************/ 
 CstBuffer::~CstBuffer()
 {
+    for(int i=0; i<(int)m_uniforms.size(); i++)
+    {
+        if(m_uniforms[i])
+        {
+            delete_Uniform(m_uniforms[i]);
+        }
+    }
 }
 CstBuffer::CstBuffer(const char* name) : 
 ICstBufferEx()
@@ -76,17 +83,6 @@ bool		CstBuffer::offsetBufferBlock(int n)
 **/ /*************************************************************************/
 ICstBuffer*    CstBuffer::setGLBuffer(int buffer)
 {
-    if(m_bufferId == buffer)
-        return this;
-    m_bufferId = buffer;
-    int tsz = (int)m_targets.size();
-    for(int i=0; i<tsz;i++)
-        m_targets[i].dirty = true;
-    //update(NULL, true);
-    //
-    // NOTE: subsequent uniforms of this buffer are then dirty for this target
-    // TODO: walk through them and mark them
-    //
     return this;
 }
 

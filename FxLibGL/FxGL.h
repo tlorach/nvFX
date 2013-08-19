@@ -95,6 +95,7 @@ namespace nvFX
         virtual CstBuffer*  update2(Pass *pass, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
         virtual CstBuffer*  updateForTarget(STarget &t, bool bBindProgram);
         virtual int         buildGLBuffer(BufferUsageGL usage, int sizeMultiplier);
+        virtual bool        removeGLBuffer();
 
 		virtual int         bufferSizeAndData(char *pData, int *sz=NULL);
         int                 bufferSizeAndData(char *pData, Uniform* pU, int &szBytes, int &pk);
@@ -178,7 +179,7 @@ namespace nvFX
     {
     public:
         GLSLShader(const char *name = NULL, IContainer* pCont = NULL);
-        ~GLSLShader();
+        virtual ~GLSLShader();
 
         void    cleanupShader();
         /// \arg \b type can be 0 to 4 (FX_VTXPROG FX_GEOMPROG FX_FRAGPROG FX_TCSPROG FX_TESPROG)

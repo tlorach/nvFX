@@ -470,10 +470,11 @@ void keyboard(unsigned char key, int x, int y)
         case 0x1b:
 #ifdef NOGLUT
             PostQuitMessage(0);
-#endif
+#else
             shutdownBase();
             shutdown();
             exit(0);
+#endif
             break;
         case 'a':
             g_scale[g_curMesh] *= 0.5f;
@@ -805,8 +806,10 @@ bool validateAndCreateSceneInstances()
     //
     int Sz = fx_EffectMaterial->getNumTechniques();
     nvFX::ITechnique** techs = new nvFX::ITechnique*[Sz];
-    for(int t=0; t<Sz ; t++)
+    for(int t=0; t<Sz ; t++) {
         techs[t] = fx_EffectMaterial->findTechnique(t);
+        LOGI("Setup overrides for technique %s\n", techs[t]->getName());
+    }
     //
     // validate scene-level techniques
     //
@@ -816,6 +819,7 @@ bool validateAndCreateSceneInstances()
         scTech = fx_EffectScene->findTechnique(t);
         if(scTech == NULL)
             break;
+        LOGI("Checking overrides from technique %s\n", scTech->getName());
         bool bRes = scTech->validate();
         if(!bRes)
         {
@@ -1418,9 +1422,9 @@ void removeEffectParamsUI()
     int n = g_pUniforms->GetNumItems();
     for(int i=0; i<n; i++)
     {
-        IWindow* pWin = g_pUniforms->GetItemNum(0);
-        pWin->Destroy();
-        g_pWinHandler->Destroy(pWin->GetID());
+        //IWindow* pWin = g_pUniforms->GetItemNum(0);
+        //pWin->Destroy();
+        //g_pWinHandler->Destroy(pWin->GetID());
     }
 }
 #endif

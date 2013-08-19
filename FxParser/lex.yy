@@ -35,6 +35,30 @@
 %{
 	#define yylval FxParserlval //hack, if not it does not compile
     #pragma warning(disable:4996)
+
+	#ifdef MEMORY_LEAKS_CHECK
+	#pragma message("build will Check for Memory Leaks!")
+	#define _CRTDBG_MAP_ALLOC
+	#include <stdlib.h>
+	#include <crtdbg.h>
+    inline void* operator new(size_t size, const char *file, int line)
+    {
+       return ::operator new(size, 1, file, line);
+    }
+
+    inline void __cdecl operator delete(void *ptr, const char *file, int line) 
+    {
+       ::operator delete(ptr, _NORMAL_BLOCK, file, line);
+    }
+
+    #define DEBUG_NEW new( __FILE__, __LINE__)
+    #define MALLOC_DBG(x) _malloc_dbg(x, 1, __FILE__, __LINE__);
+    #define malloc(x) MALLOC_DBG(x)
+    #define new DEBUG_NEW
+	#else
+	#include <stdlib.h>
+	#endif
+
     #include  <math.h>
     #include  <string>
     #include  <stack>

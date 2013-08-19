@@ -27,7 +27,6 @@
 */
 #include <fstream>
 #include <assert.h>
-#include <stdlib.h>
 #include "Fx.h"
 #pragma warning(disable:4996)
 using namespace nvFX;

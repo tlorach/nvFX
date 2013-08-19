@@ -25,12 +25,25 @@
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
 */
-//#define MEMORY_LEAKS_CHECK
 #ifdef MEMORY_LEAKS_CHECK
-#   pragma message("build will Check for Memory Leaks!")
-#   define _CRTDBG_MAP_ALLOC
-#   include <stdlib.h>
-#   include <crtdbg.h>
+	#pragma message("build will Check for Memory Leaks!")
+	#define _CRTDBG_MAP_ALLOC
+	#include <stdlib.h>
+	#include <crtdbg.h>
+    inline void* operator new(size_t size, const char *file, int line)
+    {
+       return ::operator new(size, 1, file, line);
+    }
+
+    inline void __cdecl operator delete(void *ptr, const char *file, int line) 
+    {
+       ::operator delete(ptr, _NORMAL_BLOCK, file, line);
+    }
+
+    #define DEBUG_NEW new( __FILE__, __LINE__)
+    #define MALLOC_DBG(x) _malloc_dbg(x, 1, __FILE__, __LINE__);
+    #define malloc(x) MALLOC_DBG(x)
+    #define new DEBUG_NEW
 #endif
 
 #if defined(__APPLE__)
@@ -442,6 +455,10 @@ int WINAPI WinMain(    HINSTANCE hInstance,
                     LPSTR     lpCmdLine,
                     int       nCmdShow )
 {
+#ifdef MEMORY_LEAKS_CHECK
+    _CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF); 
+    _CrtSetReportMode ( _CRT_ERROR, _CRTDBG_MODE_DEBUG|_CRTDBG_MODE_WNDW);
+#endif
     //initNSight();
 
     WNDCLASSEX winClass;
@@ -515,6 +532,9 @@ int WINAPI WinMain(    HINSTANCE hInstance,
     shutdownBase();
     UnregisterClass( "MY_WINDOWS_CLASS", hInstance );
 
+#ifdef MEMORY_LEAKS_CHECK
+    _CrtDumpMemoryLeaks();
+#endif
     return (int)uMsg.wParam;
 }
 #else

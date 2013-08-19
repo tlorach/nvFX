@@ -29,7 +29,6 @@
 #include <windows.h>
 #endif
 #include <fstream>
-#include <stdlib.h>
 #include <assert.h>
 #include "Fx.h"
 #include "FxGL.h"

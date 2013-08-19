@@ -412,10 +412,11 @@ void keyboard(unsigned char key, int x, int y)
         case 0x1b:
 #ifdef NOGLUT
             PostQuitMessage(0);
-#endif
+#else
             shutdownBase();
             shutdown();
             exit(0);
+#endif
             break;
         case 'a':
             g_scale *= 0.5f;

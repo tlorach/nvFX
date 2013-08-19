@@ -458,6 +458,7 @@ class ICstBuffer : public IBaseInterface<ICstBufferEx>
 protected:
     ICstBuffer() {}
 public:
+	virtual ~ICstBuffer() {}
     virtual IAnnotation *annotations() = 0;
     virtual const char* getName() = 0;
     /// \name methods when we assign an existing buffer created from outside
@@ -522,6 +523,7 @@ class IUniform : public IBaseInterface<IUniformEx>
 protected:
     IUniform() {}
 public:
+	virtual ~IUniform() {}
     enum Type {
         TUndefined = 0,
         TInt, TInt2, TInt3, TInt4,
@@ -724,6 +726,7 @@ public:
 class IStateGroupRaster : public IBaseInterface<IStateGroupRasterEx>
 {
 public:
+	virtual ~IStateGroupRaster() {}
     struct State
     {
         GLenum state;
@@ -751,6 +754,7 @@ public:
 class IStateGroupCS : public IBaseInterface<IStateGroupCSEx>
 {
 public:
+	virtual ~IStateGroupCS() {}
     struct State
     {
         GLenum state;
@@ -784,6 +788,7 @@ public:
 class IStateGroupDST : public IBaseInterface<IStateGroupDSTEx>
 {
 public:
+	virtual ~IStateGroupDST() {}
     struct State
     {
         GLenum state;
@@ -811,6 +816,7 @@ public:
 class IStateGroupPath : public IBaseInterface<IStateGroupPathEx>
 {
 public:
+	virtual ~IStateGroupPath() {}
     struct State
     {
         GLenum state;
@@ -843,6 +849,7 @@ public:
 class ISamplerState : public IBaseInterface<ISamplerStateEx>
 {
 public:
+	virtual ~ISamplerState() {}
     struct State
     {
         GLenum sstate;
@@ -871,6 +878,7 @@ public:
 class IContainer : public IBaseInterface<IContainerEx>
 {
 public:
+	virtual ~IContainer() {}
     virtual IAnnotation *   annotations() = 0;
     /// \brief set/get container name
     virtual const char*     getName() = 0;
@@ -954,6 +962,7 @@ public:
 class ITechnique : public IBaseInterface<ITechniqueEx>
 {
 public:
+	virtual ~ITechnique() {}
     virtual IAnnotation *   annotations() = 0;
     virtual const char*     getName() = 0;
     /// \name pass access
@@ -998,6 +1007,7 @@ public:
 class IPassState : public IBaseInterface<IPassStateEx>
 {
 public:
+	virtual ~IPassState() {}
     /// \brief type of pass-state
     /// \todo add more types for more shader units etc.
     enum Type
@@ -1065,6 +1075,7 @@ public:
 class IPass : public IBaseInterface<IPassEx>
 {
 public:
+	virtual ~IPass() {}
     virtual IAnnotation *   annotations() = 0;
     /// \brief returns the pass name
     virtual const char*     getName() = 0;
@@ -1133,6 +1144,7 @@ public:
 class IShader : public IBaseInterface<IShaderEx>
 {
 public:
+	virtual ~IShader() {}
     virtual const char* getName() = 0;
     virtual TargetType  getType() = 0;
     virtual const char* getShaderCode() = 0;
@@ -1147,6 +1159,7 @@ public:
 class IProgramPipeline : public IBaseInterface<IProgramPipelineEx>
 {
 public:
+	virtual ~IProgramPipeline() {}
     virtual /*IShaderProgram*/IProgram* getShaderProgram(int i) = 0;
     virtual int                         getProgramShaderFlags() = 0;
 };
@@ -1173,6 +1186,7 @@ public:
 class IProgram : public IBaseInterface<IProgramEx>
 {
 public:
+	virtual ~IProgram() {}
     //TODO: geom, tess...
     virtual IShader*    getShader(int n, ShaderType *t = NULL) = 0; ///< \brief 
     virtual IShader*    getShader(IShader *pShader, ShaderType *t = NULL) = 0; ///< \brief 
@@ -1200,6 +1214,7 @@ public:
 class IAnnotation : public IBaseInterface<IAnnotationEx>
 {
 public:
+	virtual ~IAnnotation() {}
     virtual const char * getAnnotationString(const char *annotName) = 0;
     virtual float        getAnnotationFloat(const char *annotName) = 0;
     virtual int          getAnnotationInt(const char *annotName) = 0;
@@ -1265,6 +1280,7 @@ public:
 class IResource : public IBaseInterface<IResourceEx>
 {
 public:
+	virtual ~IResource() {}
     /// \brief returns the interface for annotations
     virtual IAnnotation *annotations() = 0;
     virtual const char* getName() = 0;
@@ -1308,6 +1324,7 @@ public:
 class IFrameBufferObject : public IBaseInterface<IFrameBufferObjectEx>
 {
 public:
+	virtual ~IFrameBufferObject() {}
     /// \brief returns the interface for annotations
     virtual IAnnotation*    annotations() = 0;
     virtual const char*     getName() = 0;
@@ -1328,6 +1345,7 @@ public:
 class IFrameBufferObjectsRepository : public IBaseInterface<IFrameBufferObjectsRepositoryEx>
 {
 public:
+	virtual ~IFrameBufferObjectsRepository() {}
     virtual IFrameBufferObject*      find(const char * fboName) = 0;
     virtual IFrameBufferObject*      find(int i) = 0;
     virtual int gatherFromAnnotation(IFrameBufferObject** &pp, const char *annotationName, const char* value=NULL) = 0;
@@ -1351,6 +1369,7 @@ public:
 class IResourceRepository : public IBaseInterface<IResourceRepositoryEx>
 {
 public:
+	virtual ~IResourceRepository() {}
     /// \brief (\b Invokes \b GFX \b API)
     /// \arg \e backbuffer is either a FBO Id; 0 for the backbuffer; or a D3D render target
     /// \arg \e x,y,w,h is the viewport of this backbuffer. It will allow some resources to be allocated accordingly to this
@@ -1375,6 +1394,7 @@ public:
 class ICstBufferRepository : public IBaseInterface<ICstBufferRepositoryEx>
 {
 public:
+	virtual ~ICstBufferRepository() {}
     virtual ICstBuffer*  find(ICstBuffer* p) = 0;
     virtual ICstBuffer*  find(const char * Name) = 0;
     virtual int gatherFromAnnotation(ICstBuffer** &pp, const char *annotationName, const char* value=NULL) = 0;
@@ -1391,6 +1411,7 @@ public:
 class IUniformRepository : public IBaseInterface<IUniformRepositoryEx>
 {
 public:
+	virtual ~IUniformRepository() {}
     virtual IUniform*  find(IUniform* p) = 0;
     virtual IUniform*  find(const char * Name) = 0;
     virtual int gatherFromAnnotation(IUniform** &pp, const char *annotationName, const char* value=NULL) = 0;
@@ -1412,6 +1433,7 @@ public:
 class IShaderModuleRepository : public IBaseInterface<IShaderModuleRepositoryEx>
 {
 public:
+	virtual ~IShaderModuleRepository() {}
     /// \name methods to search for items
     /// @{
     /// \brief finds back a shader from its name

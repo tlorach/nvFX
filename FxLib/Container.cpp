@@ -108,7 +108,8 @@ Container::~Container()
             if(pCRep->find(*i4)) // if in global area, could be still used by some other effects
             {
                 if(pCRep->releaseCstBuffer(*i4) > 0)
-                    CHECK_TRUE_MSG(false,"TODO: (*i4)->deleteTarget(...);");
+                    LOGE(__FILE__"(111): TODO (*i4)->deleteTarget(...);");
+                    //CHECK_TRUE_MSG(false,"TODO: (*i4)->deleteTarget(...);");
             } else
                 delete_CstBuffer(*i4);
         }
@@ -126,7 +127,8 @@ Container::~Container()
             if(pURep->find(i5->second))
             {
                 if(pURep->releaseUniform(i5->second) > 0)
-                    CHECK_TRUE_MSG(false,"TODO: (*i4)->deleteTarget(...);");
+                    LOGE(__FILE__"(130): TODO (*i4)->deleteTarget(...);");
+                    //CHECK_TRUE_MSG(false,"TODO: (*i4)->deleteTarget(...);");
             } else
                 delete_Uniform(i5->second);
         }

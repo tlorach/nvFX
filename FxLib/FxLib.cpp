@@ -33,7 +33,6 @@
 #include <fstream>
 #include <set>
 #include <assert.h>
-#include <stdlib.h>
 #include "Fx.h"
 #pragma warning(disable:4996)
 using namespace nvFX;
@@ -229,6 +228,21 @@ ProgramPipeline::ProgramPipeline(Container *pCont)
     m_validated = false;
     m_shaderFlags = 0;
 }
+
+/*************************************************************************/ /**
+ ** 
+ ** 
+ **/ /*************************************************************************/ 
+ProgramPipeline::~ProgramPipeline()
+{
+    std::vector</*ShaderProgram*/Program*>::iterator iP = m_progShaders.begin();
+    for(; iP != m_progShaders.end(); iP++)
+    {
+        ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
+        pShdRep->releaseProgram(*iP);
+    }
+    m_progShaders.clear();
+}
 /*************************************************************************/ /**
  ** 
  ** 
@@ -372,6 +386,10 @@ void ProgramPipeline::unbind()
  ** ShaderModuleRepository
  **
  *************************************************************************/
+ShaderModuleRepository::~ShaderModuleRepository()
+{
+}
+
 ICstBufferRepository* nvFX::getCstBufferRepositorySingleton()
 {
     static CstBufferRepository repository;

@@ -29,7 +29,6 @@
 #include <windows.h> // for OutputDebugString
 #endif
 #include <fstream>
-#include <stdlib.h>
 #include <assert.h>
 #include "Fx.h"
 #include "FxGL.h"
@@ -51,6 +50,7 @@ CstBufferGL::CstBufferGL(const char* name) :
 
 CstBufferGL::~CstBufferGL()
 {
+    removeGLBuffer();
 }
 
 /*************************************************************************
@@ -383,7 +383,7 @@ int CstBufferGL::bufferSizeAndData(char *pData, int *sz)
     return szBytes + (pk > 0 ? (16 - pk) : 0);
 }
 /*************************************************************************/ /**
-** \brief build a D3D buffer for you
+** \brief build an OpenGL buffer for you
 **
 **/ /*************************************************************************/
 int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultiplier)
@@ -420,6 +420,7 @@ int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultipl
         return NULL;
     }
     setGLBuffer(buf);
+    m_ownBufferId = true;
     //
     // The creation did write existing values from the sub-uniforms
     // we need to set dirty flag to false
@@ -440,12 +441,53 @@ int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultipl
 }
 
 /*************************************************************************/ /**
+** \brief  destroys the buffer if owned
+**
+**/ /*************************************************************************/
+bool CstBufferGL::removeGLBuffer()
+{
+    NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_RED, 11);
+	m_sizeMultiplier = 1;
+#ifndef OGLES2
+    m_sizeOfCstBuffer = 0;
+    if(m_bufferId && m_ownBufferId)
+        glDeleteBuffers(1, &m_bufferId);
+    m_bufferId = 0;
+    m_ownBufferId = false;
+    for(int u=0; u<(int)m_uniforms.size(); u++)
+    {
+        Uniform* pU = m_uniforms[u];
+        pU->setDirty(true, NULL);
+    }
+    int tsz = (int)m_targets.size();
+    for(int i=0; i<tsz; i++)
+        m_targets[i].dirty = true;
+    return true;
+#else
+    return false;
+#endif
+}
+/*************************************************************************/ /**
 ** \brief  assigns the ptr... BUT does not increase the reference count (D3D overidden part will do) !
 **
 **/ /*************************************************************************/
 ICstBuffer*    CstBufferGL::setGLBuffer(int buffer)
 {
-    CstBuffer::setGLBuffer(buffer);
+    if(m_bufferId == buffer)
+        return this;
+    if(m_bufferId)
+        removeGLBuffer();
+
+    m_bufferId = buffer;
+    m_ownBufferId = false;
+    int tsz = (int)m_targets.size();
+    for(int i=0; i<tsz;i++)
+        m_targets[i].dirty = true;
+    //update(NULL, true);
+    //
+    // NOTE: subsequent uniforms of this buffer are then dirty for this target
+    // TODO: walk through them and mark them
+    //
     return this;
 }
 

@@ -529,6 +529,8 @@ GLSLProgramPipeline::GLSLProgramPipeline(Container *pCont) : ProgramPipeline(pCo
 }
 GLSLProgramPipeline::~GLSLProgramPipeline()
 {
+    if(m_pipelineID)
+        glDeleteProgramPipelines(1, &m_pipelineID);
 }
 /*************************************************************************/ /**
  ** 

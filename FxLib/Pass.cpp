@@ -3136,7 +3136,7 @@ bool Pass::releaseOverrides(IPass **dest, int numPasses)
         Pass *pDestPass = static_cast<Pass*>(dest[i]);
         pDestPass->removeProgramLayer(m_overrideID);
     }
-    return false;
+    return true;
 }
 
 /*********************************************************************************************

@@ -5298,6 +5298,30 @@ char *yytext;
 #line 36 "lex.yy"
 	#define yylval FxParserlval //hack, if not it does not compile
     #pragma warning(disable:4996)
+
+	#ifdef MEMORY_LEAKS_CHECK
+	#pragma message("build will Check for Memory Leaks!")
+	#define _CRTDBG_MAP_ALLOC
+	#include <stdlib.h>
+	#include <crtdbg.h>
+    inline void* operator new(size_t size, const char *file, int line)
+    {
+       return ::operator new(size, 1, file, line);
+    }
+
+    inline void __cdecl operator delete(void *ptr, const char *file, int line) 
+    {
+       ::operator delete(ptr, _NORMAL_BLOCK, file, line);
+    }
+
+    #define DEBUG_NEW new( __FILE__, __LINE__)
+    #define MALLOC_DBG(x) _malloc_dbg(x, 1, __FILE__, __LINE__);
+    #define malloc(x) MALLOC_DBG(x)
+    #define new DEBUG_NEW
+	#else
+	#include <stdlib.h>
+	#endif
+
     #include  <math.h>
     #include  <string>
     #include  <stack>
@@ -5359,7 +5383,7 @@ char *yytext;
 #define resource 19
 #define resource1 20
 
-#line 5363 "C:/p4/GitHub/nvFX/FxParser/lex.cpp"
+#line 5387 "C:/p4/GitHub/nvFX/FxParser/lex.cpp"
 
 /* Macros after this point can all be overridden by user definitions in
  * section 1.
@@ -5510,12 +5534,12 @@ YY_DECL
 	register char *yy_cp, *yy_bp;
 	register int yy_act;
 
-#line 84 "lex.yy"
+#line 108 "lex.yy"
 
     int  comment_caller;
     char  string_buf[MAX_STR_CONST];
 
-#line 5519 "C:/p4/GitHub/nvFX/FxParser/lex.cpp"
+#line 5543 "C:/p4/GitHub/nvFX/FxParser/lex.cpp"
 
 	if ( yy_init )
 		{
@@ -5597,18 +5621,18 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 89 "lex.yy"
+#line 113 "lex.yy"
 return GLOBAL;
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 90 "lex.yy"
+#line 114 "lex.yy"
 return LOCAL;
 	YY_BREAK
 
 case 3:
 YY_RULE_SETUP
-#line 93 "lex.yy"
+#line 117 "lex.yy"
 {
     bracket_level = 0;
     return NAMESPACE;
@@ -5619,7 +5643,7 @@ YY_RULE_SETUP
     */
 case 4:
 YY_RULE_SETUP
-#line 101 "lex.yy"
+#line 125 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(fbo1);
@@ -5632,7 +5656,7 @@ YY_RULE_SETUP
     */
 case 5:
 YY_RULE_SETUP
-#line 110 "lex.yy"
+#line 134 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5641,7 +5665,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 115 "lex.yy"
+#line 139 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5650,7 +5674,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 120 "lex.yy"
+#line 144 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5662,7 +5686,7 @@ YY_RULE_SETUP
     */
 case 8:
 YY_RULE_SETUP
-#line 128 "lex.yy"
+#line 152 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5671,7 +5695,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 133 "lex.yy"
+#line 157 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5680,7 +5704,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 138 "lex.yy"
+#line 162 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5689,7 +5713,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 143 "lex.yy"
+#line 167 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5698,7 +5722,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 148 "lex.yy"
+#line 172 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5707,7 +5731,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 153 "lex.yy"
+#line 177 "lex.yy"
 {
     bracket_level = 0;
     yy_push_state(resource1);
@@ -5716,7 +5740,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 158 "lex.yy"
+#line 182 "lex.yy"
 {
     comment_caller  =  INITIAL;
     bracket_level = 0;
@@ -5726,7 +5750,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 164 "lex.yy"
+#line 188 "lex.yy"
 {
     comment_caller  =  INITIAL;
     bracket_level = 0;
@@ -5736,7 +5760,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 170 "lex.yy"
+#line 194 "lex.yy"
 {
     comment_caller  =  INITIAL;
     bracket_level = 0;
@@ -5746,7 +5770,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 176 "lex.yy"
+#line 200 "lex.yy"
 {
     comment_caller  =  INITIAL;
     bracket_level = 0;
@@ -5756,7 +5780,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 182 "lex.yy"
+#line 206 "lex.yy"
 {
     comment_caller  =  INITIAL;
     bracket_level = 0;
@@ -5766,7 +5790,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 188 "lex.yy"
+#line 212 "lex.yy"
 {
     comment_caller  =  INITIAL;
     bracket_level = 0;
@@ -5776,7 +5800,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 194 "lex.yy"
+#line 218 "lex.yy"
 {
     comment_caller  =  INITIAL;
     bracket_level = 0;
@@ -5786,7 +5810,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 200 "lex.yy"
+#line 224 "lex.yy"
 {
     yy_push_state(sampler_state);
     return SAMPLER_STATE;
@@ -5794,7 +5818,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 204 "lex.yy"
+#line 228 "lex.yy"
 {
     yy_push_state(dst_state);
     return DST_STATE;
@@ -5802,7 +5826,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 208 "lex.yy"
+#line 232 "lex.yy"
 {
     yy_push_state(pr_state);
     return PR_STATE;
@@ -5810,7 +5834,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 212 "lex.yy"
+#line 236 "lex.yy"
 {
     yy_push_state(color_sample_state);
     return COLOR_SAMPLE_STATE;
@@ -5818,7 +5842,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 216 "lex.yy"
+#line 240 "lex.yy"
 {
     yy_push_state(color_sample_state);
     return COLOR_SAMPLE_STATE;
@@ -5826,7 +5850,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 220 "lex.yy"
+#line 244 "lex.yy"
 {
     yy_push_state(rasterization_state);
     return RASTERIZATION_STATE;
@@ -5834,7 +5858,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 224 "lex.yy"
+#line 248 "lex.yy"
 {
     yy_push_state(technique);
     return TECHNIQUE;
@@ -5845,7 +5869,7 @@ YY_RULE_SETUP
     */
 case 28:
 YY_RULE_SETUP
-#line 231 "lex.yy"
+#line 255 "lex.yy"
 {
     yy_push_state(cstbuffer);
     return CSTBUFFER;
@@ -5853,14 +5877,14 @@ YY_RULE_SETUP
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 236 "lex.yy"
+#line 260 "lex.yy"
 {
     return EXTENSION;
 }
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 240 "lex.yy"
+#line 264 "lex.yy"
 {
     return SEPARATE_SHADER;
 }
@@ -5871,110 +5895,110 @@ YY_RULE_SETUP
     */
 case 31:
 YY_RULE_SETUP
-#line 248 "lex.yy"
+#line 272 "lex.yy"
 return OPTIX_CONTEXT;
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 249 "lex.yy"
+#line 273 "lex.yy"
 return OPTIX_CONTEXT_ENTRY;
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 250 "lex.yy"
+#line 274 "lex.yy"
 return RAY_GENERATION_PROGRAM;
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 251 "lex.yy"
+#line 275 "lex.yy"
 return EXCEPTION_PROGRAM;
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 252 "lex.yy"
+#line 276 "lex.yy"
 return INTERSECTION_PROGRAM;
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 253 "lex.yy"
+#line 277 "lex.yy"
 return BOUNDING_BOX_PROGRAM;
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 254 "lex.yy"
+#line 278 "lex.yy"
 return MISS_PROGRAM;
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 255 "lex.yy"
+#line 279 "lex.yy"
 return DEFAULT_MATERIAL;
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 256 "lex.yy"
+#line 280 "lex.yy"
 return STACK_SIZE;
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 257 "lex.yy"
+#line 281 "lex.yy"
 return OUTPUT_BUFFER;
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 259 "lex.yy"
+#line 283 "lex.yy"
 return OPTIX_MATERIAL;
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 260 "lex.yy"
+#line 284 "lex.yy"
 return CLOSEST_HIT_PROGRAM;
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 261 "lex.yy"
+#line 285 "lex.yy"
 return ANY_HIT_PROGRAM;
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 263 "lex.yy"
+#line 287 "lex.yy"
 return OPTIX_BUFFER;
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 264 "lex.yy"
+#line 288 "lex.yy"
 return RESOURCESIZE;    /*could be later used by other parts of the grammar*/
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 265 "lex.yy"
+#line 289 "lex.yy"
 return RESOURCEFORMAT;
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 267 "lex.yy"
+#line 291 "lex.yy"
 return PTX_PROGRAM_FROM_FILE; /* not only for Optix*/
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 268 "lex.yy"
+#line 292 "lex.yy"
 return FILE_NAME;
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
-#line 269 "lex.yy"
+#line 293 "lex.yy"
 return ENTRY_POINT;
 	YY_BREAK
 
 case 50:
 YY_RULE_SETUP
-#line 273 "lex.yy"
+#line 297 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 51:
 YY_RULE_SETUP
-#line 276 "lex.yy"
+#line 300 "lex.yy"
 {
         //yy_pop_state();
         return yytext[0];
@@ -5984,202 +6008,202 @@ YY_RULE_SETUP
 
 case 52:
 YY_RULE_SETUP
-#line 282 "lex.yy"
+#line 306 "lex.yy"
 return VOID_TYPE;
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
-#line 283 "lex.yy"
+#line 307 "lex.yy"
 return UNSIGNED;
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
-#line 284 "lex.yy"
+#line 308 "lex.yy"
 return FLOAT_TYPE;
 	YY_BREAK
 case 55:
 YY_RULE_SETUP
-#line 285 "lex.yy"
+#line 309 "lex.yy"
 return FLOAT2_TYPE;
 	YY_BREAK
 case 56:
 YY_RULE_SETUP
-#line 286 "lex.yy"
+#line 310 "lex.yy"
 return FLOAT3_TYPE;
 	YY_BREAK
 case 57:
 YY_RULE_SETUP
-#line 287 "lex.yy"
+#line 311 "lex.yy"
 return FLOAT4_TYPE;
 	YY_BREAK
 case 58:
 YY_RULE_SETUP
-#line 288 "lex.yy"
+#line 312 "lex.yy"
 return FLOAT2_TYPE;
 	YY_BREAK
 case 59:
 YY_RULE_SETUP
-#line 289 "lex.yy"
+#line 313 "lex.yy"
 return FLOAT3_TYPE;
 	YY_BREAK
 case 60:
 YY_RULE_SETUP
-#line 290 "lex.yy"
+#line 314 "lex.yy"
 return FLOAT4_TYPE;
 	YY_BREAK
 case 61:
 YY_RULE_SETUP
-#line 291 "lex.yy"
+#line 315 "lex.yy"
 return MAT2_TYPE;
 	YY_BREAK
 case 62:
 YY_RULE_SETUP
-#line 292 "lex.yy"
+#line 316 "lex.yy"
 return MAT3_TYPE;
 	YY_BREAK
 case 63:
 YY_RULE_SETUP
-#line 293 "lex.yy"
+#line 317 "lex.yy"
 return MAT4_TYPE;
 	YY_BREAK
 case 64:
 YY_RULE_SETUP
-#line 294 "lex.yy"
+#line 318 "lex.yy"
 return MAT2_TYPE;
 	YY_BREAK
 case 65:
 YY_RULE_SETUP
-#line 295 "lex.yy"
+#line 319 "lex.yy"
 return MAT3_TYPE;
 	YY_BREAK
 case 66:
 YY_RULE_SETUP
-#line 296 "lex.yy"
+#line 320 "lex.yy"
 return MAT4_TYPE;
 	YY_BREAK
 case 67:
 YY_RULE_SETUP
-#line 297 "lex.yy"
+#line 321 "lex.yy"
 return BOOL_TYPE;
 	YY_BREAK
 case 68:
 YY_RULE_SETUP
-#line 298 "lex.yy"
+#line 322 "lex.yy"
 return BOOL2_TYPE;
 	YY_BREAK
 case 69:
 YY_RULE_SETUP
-#line 299 "lex.yy"
+#line 323 "lex.yy"
 return BOOL3_TYPE;
 	YY_BREAK
 case 70:
 YY_RULE_SETUP
-#line 300 "lex.yy"
+#line 324 "lex.yy"
 return BOOL4_TYPE;
 	YY_BREAK
 case 71:
 YY_RULE_SETUP
-#line 301 "lex.yy"
+#line 325 "lex.yy"
 return INT_TYPE;
 	YY_BREAK
 case 72:
 YY_RULE_SETUP
-#line 302 "lex.yy"
+#line 326 "lex.yy"
 return INT2_TYPE;
 	YY_BREAK
 case 73:
 YY_RULE_SETUP
-#line 303 "lex.yy"
+#line 327 "lex.yy"
 return INT3_TYPE;
 	YY_BREAK
 case 74:
 YY_RULE_SETUP
-#line 304 "lex.yy"
+#line 328 "lex.yy"
 return INT4_TYPE;
 	YY_BREAK
 case 75:
 YY_RULE_SETUP
-#line 305 "lex.yy"
+#line 329 "lex.yy"
 return INT2_TYPE;
 	YY_BREAK
 case 76:
 YY_RULE_SETUP
-#line 306 "lex.yy"
+#line 330 "lex.yy"
 return INT3_TYPE;
 	YY_BREAK
 case 77:
 YY_RULE_SETUP
-#line 307 "lex.yy"
+#line 331 "lex.yy"
 return INT4_TYPE;
 	YY_BREAK
 case 78:
 YY_RULE_SETUP
-#line 308 "lex.yy"
+#line 332 "lex.yy"
 return UNIFORM;
 	YY_BREAK
 case 79:
 YY_RULE_SETUP
-#line 309 "lex.yy"
+#line 333 "lex.yy"
 return MEDIUMP;
 	YY_BREAK
 case 80:
 YY_RULE_SETUP
-#line 310 "lex.yy"
+#line 334 "lex.yy"
 return HIGHP;
 	YY_BREAK
 case 81:
 YY_RULE_SETUP
-#line 311 "lex.yy"
+#line 335 "lex.yy"
 return LOWP;
 	YY_BREAK
 case 82:
 YY_RULE_SETUP
-#line 312 "lex.yy"
+#line 336 "lex.yy"
 return TEXTURE1D_TYPE;
 	YY_BREAK
 case 83:
 YY_RULE_SETUP
-#line 313 "lex.yy"
+#line 337 "lex.yy"
 return TEXTURE2D_TYPE;
 	YY_BREAK
 case 84:
 YY_RULE_SETUP
-#line 314 "lex.yy"
+#line 338 "lex.yy"
 return TEXTURE2DRECT_TYPE;
 	YY_BREAK
 case 85:
 YY_RULE_SETUP
-#line 315 "lex.yy"
+#line 339 "lex.yy"
 return TEXTURE3D_TYPE;
 	YY_BREAK
 case 86:
 YY_RULE_SETUP
-#line 316 "lex.yy"
+#line 340 "lex.yy"
 return TEXTURECUBE_TYPE;
 	YY_BREAK
 case 87:
 YY_RULE_SETUP
-#line 317 "lex.yy"
+#line 341 "lex.yy"
 return SAMPLER1D_TYPE;
 	YY_BREAK
 case 88:
 YY_RULE_SETUP
-#line 318 "lex.yy"
+#line 342 "lex.yy"
 return SAMPLER2D_TYPE;
 	YY_BREAK
 case 89:
 YY_RULE_SETUP
-#line 319 "lex.yy"
+#line 343 "lex.yy"
 return SAMPLER2DRECT_TYPE;
 	YY_BREAK
 case 90:
 YY_RULE_SETUP
-#line 320 "lex.yy"
+#line 344 "lex.yy"
 return SAMPLER3D_TYPE;
 	YY_BREAK
 case 91:
 YY_RULE_SETUP
-#line 321 "lex.yy"
+#line 345 "lex.yy"
 return SAMPLERCUBE_TYPE;
 	YY_BREAK
 
@@ -6189,7 +6213,7 @@ return SAMPLERCUBE_TYPE;
 
 case 92:
 YY_RULE_SETUP
-#line 327 "lex.yy"
+#line 351 "lex.yy"
 {
         yylval.ival = atoi(yytext);
         return FX_INT;
@@ -6197,7 +6221,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 93:
 YY_RULE_SETUP
-#line 331 "lex.yy"
+#line 355 "lex.yy"
 {
         sscanf(yytext, "0x%x", &yylval.ival);
         return FX_INT;
@@ -6205,7 +6229,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 94:
 YY_RULE_SETUP
-#line 335 "lex.yy"
+#line 359 "lex.yy"
 {
         yylval.fval = (float)atof(yytext);
         return FX_FLOAT;
@@ -6218,42 +6242,42 @@ YY_RULE_SETUP
 
 case 95:
 YY_RULE_SETUP
-#line 344 "lex.yy"
+#line 368 "lex.yy"
 return FX_TRUE;
 	YY_BREAK
 case 96:
 YY_RULE_SETUP
-#line 345 "lex.yy"
+#line 369 "lex.yy"
 return FX_FALSE;
 	YY_BREAK
 case 97:
 YY_RULE_SETUP
-#line 346 "lex.yy"
+#line 370 "lex.yy"
 return FX_TRUE;
 	YY_BREAK
 case 98:
 YY_RULE_SETUP
-#line 347 "lex.yy"
+#line 371 "lex.yy"
 return FX_FALSE;
 	YY_BREAK
 case 99:
 YY_RULE_SETUP
-#line 348 "lex.yy"
+#line 372 "lex.yy"
 return FX_TRUE;
 	YY_BREAK
 case 100:
 YY_RULE_SETUP
-#line 349 "lex.yy"
+#line 373 "lex.yy"
 return FX_FALSE;
 	YY_BREAK
 case 101:
 YY_RULE_SETUP
-#line 350 "lex.yy"
+#line 374 "lex.yy"
 return FX_TRUE;
 	YY_BREAK
 case 102:
 YY_RULE_SETUP
-#line 351 "lex.yy"
+#line 375 "lex.yy"
 return FX_FALSE;
 	YY_BREAK
 
@@ -6263,396 +6287,396 @@ return FX_FALSE;
 
 case 103:
 YY_RULE_SETUP
-#line 357 "lex.yy"
+#line 381 "lex.yy"
 yylval.glenum=GLACCUM; return GLACCUM;
 	YY_BREAK
 case 104:
 YY_RULE_SETUP
-#line 358 "lex.yy"
+#line 382 "lex.yy"
 yylval.glenum=GLLOAD; return GLLOAD;
 	YY_BREAK
 case 105:
 YY_RULE_SETUP
-#line 359 "lex.yy"
+#line 383 "lex.yy"
 yylval.glenum=GLRETURN; return GLRETURN;
 	YY_BREAK
 case 106:
 YY_RULE_SETUP
-#line 360 "lex.yy"
+#line 384 "lex.yy"
 yylval.glenum=GLMULT; return GLMULT;
 	YY_BREAK
 case 107:
 YY_RULE_SETUP
-#line 361 "lex.yy"
+#line 385 "lex.yy"
 yylval.glenum=GLADD; return GLADD;
 	YY_BREAK
 case 108:
 YY_RULE_SETUP
-#line 362 "lex.yy"
+#line 386 "lex.yy"
 yylval.glenum=GLNEVER; return GLNEVER;
 	YY_BREAK
 case 109:
 YY_RULE_SETUP
-#line 363 "lex.yy"
+#line 387 "lex.yy"
 yylval.glenum=GLLESS; return GLLESS;
 	YY_BREAK
 case 110:
 YY_RULE_SETUP
-#line 364 "lex.yy"
+#line 388 "lex.yy"
 yylval.glenum=GLEQUAL; return GLEQUAL;
 	YY_BREAK
 case 111:
 YY_RULE_SETUP
-#line 365 "lex.yy"
+#line 389 "lex.yy"
 yylval.glenum=GLGREATER; return GLGREATER;
 	YY_BREAK
 case 112:
 YY_RULE_SETUP
-#line 366 "lex.yy"
+#line 390 "lex.yy"
 yylval.glenum=GLNOTEQUAL; return GLNOTEQUAL;
 	YY_BREAK
 case 113:
 YY_RULE_SETUP
-#line 367 "lex.yy"
+#line 391 "lex.yy"
 yylval.glenum=GLALWAYS; return GLALWAYS;
 	YY_BREAK
 case 114:
 YY_RULE_SETUP
-#line 368 "lex.yy"
+#line 392 "lex.yy"
 yylval.glenum=GLLEQUAL; return GLLEQUAL;
 	YY_BREAK
 case 115:
 YY_RULE_SETUP
-#line 369 "lex.yy"
+#line 393 "lex.yy"
 yylval.glenum=GLGEQUAL; return GLGEQUAL;
 	YY_BREAK
 case 116:
 YY_RULE_SETUP
-#line 370 "lex.yy"
+#line 394 "lex.yy"
 yylval.glenum=GLKEEP; return GLKEEP;
 	YY_BREAK
 case 117:
 YY_RULE_SETUP
-#line 371 "lex.yy"
+#line 395 "lex.yy"
 yylval.glenum=GLREPLACE; return GLREPLACE;
 	YY_BREAK
 case 118:
 YY_RULE_SETUP
-#line 372 "lex.yy"
+#line 396 "lex.yy"
 yylval.glenum=GLINCR; return GLINCR;
 	YY_BREAK
 case 119:
 YY_RULE_SETUP
-#line 373 "lex.yy"
+#line 397 "lex.yy"
 yylval.glenum=GLDECR; return GLDECR;
 	YY_BREAK
 case 120:
 YY_RULE_SETUP
-#line 374 "lex.yy"
+#line 398 "lex.yy"
 yylval.glenum=GLUPPERLEFT; return GLUPPERLEFT;
 	YY_BREAK
 case 121:
 YY_RULE_SETUP
-#line 375 "lex.yy"
+#line 399 "lex.yy"
 yylval.glenum=GLLOWERLEFT; return GLLOWERLEFT;
 	YY_BREAK
 case 122:
 YY_RULE_SETUP
-#line 376 "lex.yy"
+#line 400 "lex.yy"
 yylval.glenum=GLFRONTLEFT; return GLFRONTLEFT;
 	YY_BREAK
 case 123:
 YY_RULE_SETUP
-#line 377 "lex.yy"
+#line 401 "lex.yy"
 yylval.glenum=GLFRONTRIGHT; return GLFRONTRIGHT;
 	YY_BREAK
 case 124:
 YY_RULE_SETUP
-#line 378 "lex.yy"
+#line 402 "lex.yy"
 yylval.glenum=GLBACKLEFT; return GLBACKLEFT;
 	YY_BREAK
 case 125:
 YY_RULE_SETUP
-#line 379 "lex.yy"
+#line 403 "lex.yy"
 yylval.glenum=GLBACKRIGHT; return GLBACKRIGHT;
 	YY_BREAK
 case 126:
 YY_RULE_SETUP
-#line 380 "lex.yy"
+#line 404 "lex.yy"
 yylval.glenum=GLFRONT; return GLFRONT;
 	YY_BREAK
 case 127:
 YY_RULE_SETUP
-#line 381 "lex.yy"
+#line 405 "lex.yy"
 yylval.glenum=GLBACK; return GLBACK;
 	YY_BREAK
 case 128:
 YY_RULE_SETUP
-#line 382 "lex.yy"
+#line 406 "lex.yy"
 yylval.glenum=GLLEFT; return GLLEFT;
 	YY_BREAK
 case 129:
 YY_RULE_SETUP
-#line 383 "lex.yy"
+#line 407 "lex.yy"
 yylval.glenum=GLRIGHT; return GLRIGHT;
 	YY_BREAK
 case 130:
 YY_RULE_SETUP
-#line 384 "lex.yy"
+#line 408 "lex.yy"
 yylval.glenum=GLFRONTANDBACK; return GLFRONTANDBACK;
 	YY_BREAK
 case 131:
 YY_RULE_SETUP
-#line 385 "lex.yy"
+#line 409 "lex.yy"
 yylval.glenum=GLCCW; return GLCCW;
 	YY_BREAK
 case 132:
 YY_RULE_SETUP
-#line 386 "lex.yy"
+#line 410 "lex.yy"
 yylval.glenum=GLCCW; return GLCCW;
 	YY_BREAK
 case 133:
 YY_RULE_SETUP
-#line 387 "lex.yy"
+#line 411 "lex.yy"
 yylval.glenum=GLPOINT; return GLPOINT;
 	YY_BREAK
 case 134:
 YY_RULE_SETUP
-#line 388 "lex.yy"
+#line 412 "lex.yy"
 yylval.glenum=GLLINE; return GLLINE;
 	YY_BREAK
 case 135:
 YY_RULE_SETUP
-#line 389 "lex.yy"
+#line 413 "lex.yy"
 yylval.glenum=GLFILL; return GLFILL;
 	YY_BREAK
 case 136:
 YY_RULE_SETUP
-#line 390 "lex.yy"
+#line 414 "lex.yy"
 yylval.glenum=GLZERO; return GLZERO;
 	YY_BREAK
 case 137:
 YY_RULE_SETUP
-#line 391 "lex.yy"
+#line 415 "lex.yy"
 yylval.glenum=GLONE; return GLONE;
 	YY_BREAK
 case 138:
 YY_RULE_SETUP
-#line 392 "lex.yy"
+#line 416 "lex.yy"
 yylval.glenum=GLSRCCOLOR; return GLSRCCOLOR;
 	YY_BREAK
 case 139:
 YY_RULE_SETUP
-#line 393 "lex.yy"
+#line 417 "lex.yy"
 yylval.glenum=GLONEMINUSSRCCOLOR; return GLONEMINUSSRCCOLOR;
 	YY_BREAK
 case 140:
 YY_RULE_SETUP
-#line 394 "lex.yy"
+#line 418 "lex.yy"
 yylval.glenum=GLSRCALPHA; return GLSRCALPHA;
 	YY_BREAK
 case 141:
 YY_RULE_SETUP
-#line 395 "lex.yy"
+#line 419 "lex.yy"
 yylval.glenum=GLONEMINUSSRCALPHA; return GLONEMINUSSRCALPHA;
 	YY_BREAK
 case 142:
 YY_RULE_SETUP
-#line 396 "lex.yy"
+#line 420 "lex.yy"
 yylval.glenum=GLDSTALPHA; return GLDSTALPHA;
 	YY_BREAK
 case 143:
 YY_RULE_SETUP
-#line 397 "lex.yy"
+#line 421 "lex.yy"
 yylval.glenum=GLONEMINUSDSTALPHA; return GLONEMINUSDSTALPHA;
 	YY_BREAK
 case 144:
 YY_RULE_SETUP
-#line 398 "lex.yy"
+#line 422 "lex.yy"
 yylval.glenum=GLDSTCOLOR; return GLDSTCOLOR;
 	YY_BREAK
 case 145:
 YY_RULE_SETUP
-#line 399 "lex.yy"
+#line 423 "lex.yy"
 yylval.glenum=GLONEMINUSDSTCOLOR; return GLONEMINUSDSTCOLOR;
 	YY_BREAK
 case 146:
 YY_RULE_SETUP
-#line 400 "lex.yy"
+#line 424 "lex.yy"
 yylval.glenum=GLSRCALPHASATURATE; return GLSRCALPHASATURATE;
 	YY_BREAK
 case 147:
 YY_RULE_SETUP
-#line 401 "lex.yy"
+#line 425 "lex.yy"
 yylval.glenum=GLCONSTANTCOLOR; return GLCONSTANTCOLOR;
 	YY_BREAK
 case 148:
 YY_RULE_SETUP
-#line 402 "lex.yy"
+#line 426 "lex.yy"
 yylval.glenum=GLONEMINUSCONSTANTCOLOR; return GLONEMINUSCONSTANTCOLOR;
 	YY_BREAK
 case 149:
 YY_RULE_SETUP
-#line 403 "lex.yy"
+#line 427 "lex.yy"
 yylval.glenum=GLCONSTANTALPHA; return GLCONSTANTALPHA;
 	YY_BREAK
 case 150:
 YY_RULE_SETUP
-#line 404 "lex.yy"
+#line 428 "lex.yy"
 yylval.glenum=GLONEMINUSCONSTANTALPHA; return GLONEMINUSCONSTANTALPHA;
 	YY_BREAK
 case 151:
 YY_RULE_SETUP
-#line 405 "lex.yy"
+#line 429 "lex.yy"
 yylval.glenum=GLBLENDCOLOR; return GLBLENDCOLOR;
 	YY_BREAK
 case 152:
 YY_RULE_SETUP
-#line 406 "lex.yy"
+#line 430 "lex.yy"
 yylval.glenum=GLFUNCADD; return GLFUNCADD;
 	YY_BREAK
 case 153:
 YY_RULE_SETUP
-#line 407 "lex.yy"
+#line 431 "lex.yy"
 yylval.glenum=GLMIN; return GLMIN;
 	YY_BREAK
 case 154:
 YY_RULE_SETUP
-#line 408 "lex.yy"
+#line 432 "lex.yy"
 yylval.glenum=GLMAX; return GLMAX;
 	YY_BREAK
 case 155:
 YY_RULE_SETUP
-#line 409 "lex.yy"
+#line 433 "lex.yy"
 yylval.glenum=GLFUNCSUBTRACT; return GLFUNCSUBTRACT;
 	YY_BREAK
 case 156:
 YY_RULE_SETUP
-#line 410 "lex.yy"
+#line 434 "lex.yy"
 yylval.glenum=GLFUNCREVERSESUBTRACT; return GLFUNCREVERSESUBTRACT;
 	YY_BREAK
 case 157:
 YY_RULE_SETUP
-#line 411 "lex.yy"
+#line 435 "lex.yy"
 yylval.glenum=GLCLEAR; return GLCLEAR;
 	YY_BREAK
 case 158:
 YY_RULE_SETUP
-#line 412 "lex.yy"
+#line 436 "lex.yy"
 yylval.glenum=GLSET; return GLSET;
 	YY_BREAK
 case 159:
 YY_RULE_SETUP
-#line 413 "lex.yy"
+#line 437 "lex.yy"
 yylval.glenum=GLCOPY; return GLCOPY;
 	YY_BREAK
 case 160:
 YY_RULE_SETUP
-#line 414 "lex.yy"
+#line 438 "lex.yy"
 yylval.glenum=GLCOPYINVERTED; return GLCOPYINVERTED;
 	YY_BREAK
 case 161:
 YY_RULE_SETUP
-#line 415 "lex.yy"
+#line 439 "lex.yy"
 yylval.glenum=GLNOOP; return GLNOOP;
 	YY_BREAK
 case 162:
 YY_RULE_SETUP
-#line 416 "lex.yy"
+#line 440 "lex.yy"
 yylval.glenum=GLINVERT; return GLINVERT;
 	YY_BREAK
 case 163:
 YY_RULE_SETUP
-#line 417 "lex.yy"
+#line 441 "lex.yy"
 yylval.glenum=GLAND; return GLAND;
 	YY_BREAK
 case 164:
 YY_RULE_SETUP
-#line 418 "lex.yy"
+#line 442 "lex.yy"
 yylval.glenum=GLNAND; return GLNAND;
 	YY_BREAK
 case 165:
 YY_RULE_SETUP
-#line 419 "lex.yy"
+#line 443 "lex.yy"
 yylval.glenum=GLOR; return GLOR;
 	YY_BREAK
 case 166:
 YY_RULE_SETUP
-#line 420 "lex.yy"
+#line 444 "lex.yy"
 yylval.glenum=GLNOR; return GLNOR;
 	YY_BREAK
 case 167:
 YY_RULE_SETUP
-#line 421 "lex.yy"
+#line 445 "lex.yy"
 yylval.glenum=GLXOR; return GLXOR;
 	YY_BREAK
 case 168:
 YY_RULE_SETUP
-#line 422 "lex.yy"
+#line 446 "lex.yy"
 yylval.glenum=GLEQUIV; return GLEQUIV;
 	YY_BREAK
 case 169:
 YY_RULE_SETUP
-#line 423 "lex.yy"
+#line 447 "lex.yy"
 yylval.glenum=GLANDREVERSE; return GLANDREVERSE;
 	YY_BREAK
 case 170:
 YY_RULE_SETUP
-#line 424 "lex.yy"
+#line 448 "lex.yy"
 yylval.glenum=GLANDINVERTED; return GLANDINVERTED;
 	YY_BREAK
 case 171:
 YY_RULE_SETUP
-#line 425 "lex.yy"
+#line 449 "lex.yy"
 yylval.glenum=GLORREVERSE; return GLORREVERSE;
 	YY_BREAK
 case 172:
 YY_RULE_SETUP
-#line 426 "lex.yy"
+#line 450 "lex.yy"
 yylval.glenum=GLORINVERTED; return GLORINVERTED;
 	YY_BREAK
 case 173:
 YY_RULE_SETUP
-#line 427 "lex.yy"
+#line 451 "lex.yy"
 yylval.glenum=GLLUMINANCE; return GLLUMINANCE;
 	YY_BREAK
 case 174:
 YY_RULE_SETUP
-#line 428 "lex.yy"
+#line 452 "lex.yy"
 yylval.glenum=GLALPHA; return GLALPHA;
 	YY_BREAK
 case 175:
 YY_RULE_SETUP
-#line 429 "lex.yy"
+#line 453 "lex.yy"
 yylval.glenum=GLINTENSITY; return GLINTENSITY;
 	YY_BREAK
 case 176:
 YY_RULE_SETUP
-#line 430 "lex.yy"
+#line 454 "lex.yy"
 yylval.glenum=GLLUMINANCEALPHA; return GLLUMINANCEALPHA;
 	YY_BREAK
 case 177:
 YY_RULE_SETUP
-#line 431 "lex.yy"
+#line 455 "lex.yy"
 yylval.glenum=GLRGB; return GLRGB;
 	YY_BREAK
 case 178:
 YY_RULE_SETUP
-#line 432 "lex.yy"
+#line 456 "lex.yy"
 yylval.glenum=GLRGBA; return GLRGBA;
 	YY_BREAK
 
 
 case 179:
 YY_RULE_SETUP
-#line 435 "lex.yy"
+#line 459 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 180:
 YY_RULE_SETUP
-#line 438 "lex.yy"
+#line 462 "lex.yy"
 {
         //yy_pop_state();
         return yytext[0];
@@ -6660,127 +6684,127 @@ YY_RULE_SETUP
 	YY_BREAK
 case 181:
 YY_RULE_SETUP
-#line 442 "lex.yy"
+#line 466 "lex.yy"
 yylval.glenum=GLPOINTSIZE; return GLPOINTSIZE;
 	YY_BREAK
 case 182:
 YY_RULE_SETUP
-#line 443 "lex.yy"
+#line 467 "lex.yy"
 yylval.glenum=GLPOINTSMOOTH; return GLPOINTSMOOTH;
 	YY_BREAK
 case 183:
 YY_RULE_SETUP
-#line 444 "lex.yy"
+#line 468 "lex.yy"
 yylval.glenum=GLPOINTSPRITE; return GLPOINTSPRITE;
 	YY_BREAK
 case 184:
 YY_RULE_SETUP
-#line 445 "lex.yy"
+#line 469 "lex.yy"
 yylval.glenum=GLPOINTSPRITECOORDORIGIN; return GLPOINTSPRITECOORDORIGIN;
 	YY_BREAK
 case 185:
 YY_RULE_SETUP
-#line 446 "lex.yy"
+#line 470 "lex.yy"
 yylval.glenum=GLLINEWIDTH; return GLLINEWIDTH;
 	YY_BREAK
 case 186:
 YY_RULE_SETUP
-#line 447 "lex.yy"
+#line 471 "lex.yy"
 yylval.glenum=GLLINESMOOTH; return GLLINESMOOTH;
 	YY_BREAK
 /*COMBINED_LINE_STIPPLE_NV yylval.glenum=GLCOMBINEDLINESTIPPLENV; return GLCOMBINEDLINESTIPPLENV;*/
 case 187:
 YY_RULE_SETUP
-#line 449 "lex.yy"
+#line 473 "lex.yy"
 yylval.glenum=GLLINESTIPPLEPATTERN; return GLLINESTIPPLEPATTERN;
 	YY_BREAK
 case 188:
 YY_RULE_SETUP
-#line 450 "lex.yy"
+#line 474 "lex.yy"
 yylval.glenum=GLLINESTIPPLEREPEAT; return GLLINESTIPPLEREPEAT;
 	YY_BREAK
 case 189:
 YY_RULE_SETUP
-#line 451 "lex.yy"
+#line 475 "lex.yy"
 yylval.glenum=GLLINESTIPPLE; return GLLINESTIPPLE;
 	YY_BREAK
 case 190:
 YY_RULE_SETUP
-#line 452 "lex.yy"
+#line 476 "lex.yy"
 yylval.glenum=GLCULLFACE; return GLCULLFACE;
 	YY_BREAK
 case 191:
 YY_RULE_SETUP
-#line 453 "lex.yy"
+#line 477 "lex.yy"
 yylval.glenum=GLCULLFACEMODE; return GLCULLFACEMODE;
 	YY_BREAK
 case 192:
 YY_RULE_SETUP
-#line 454 "lex.yy"
+#line 478 "lex.yy"
 yylval.glenum=GLFRONTFACE; return GLFRONTFACE;
 	YY_BREAK
 case 193:
 YY_RULE_SETUP
-#line 455 "lex.yy"
+#line 479 "lex.yy"
 yylval.glenum=GLPOLYGONSMOOTH; return GLPOLYGONSMOOTH;
 	YY_BREAK
 case 194:
 YY_RULE_SETUP
-#line 456 "lex.yy"
+#line 480 "lex.yy"
 yylval.glenum=GLPOLYGONMODE; return GLPOLYGONMODE;
 	YY_BREAK
 case 195:
 YY_RULE_SETUP
-#line 457 "lex.yy"
+#line 481 "lex.yy"
 yylval.glenum=GLPOLYGONOFFSETFACTOR; return GLPOLYGONOFFSETFACTOR;
 	YY_BREAK
 case 196:
 YY_RULE_SETUP
-#line 458 "lex.yy"
+#line 482 "lex.yy"
 yylval.glenum=GLPOLYGONOFFSETUNITS; return GLPOLYGONOFFSETUNITS;
 	YY_BREAK
 case 197:
 YY_RULE_SETUP
-#line 459 "lex.yy"
+#line 483 "lex.yy"
 yylval.glenum=GLPOLYGONOFFSETPOINT; return GLPOLYGONOFFSETPOINT;
 	YY_BREAK
 case 198:
 YY_RULE_SETUP
-#line 460 "lex.yy"
+#line 484 "lex.yy"
 yylval.glenum=GLPOLYGONOFFSETLINE; return GLPOLYGONOFFSETLINE;
 	YY_BREAK
 case 199:
 YY_RULE_SETUP
-#line 461 "lex.yy"
+#line 485 "lex.yy"
 yylval.glenum=GLPOLYGONOFFSETFILL; return GLPOLYGONOFFSETFILL;
 	YY_BREAK
 case 200:
 YY_RULE_SETUP
-#line 462 "lex.yy"
+#line 486 "lex.yy"
 return GLPOLYGONOFFSET;
 	YY_BREAK
 case 201:
 YY_RULE_SETUP
-#line 463 "lex.yy"
+#line 487 "lex.yy"
 yylval.glenum=GLPOLYGONSTIPPLEBIT; return GLPOLYGONSTIPPLEBIT;
 	YY_BREAK
 case 202:
 YY_RULE_SETUP
-#line 464 "lex.yy"
+#line 488 "lex.yy"
 yylval.glenum=GLRASTERIZERDISCARD; return GLRASTERIZERDISCARD;
 	YY_BREAK
 
 
 case 203:
 YY_RULE_SETUP
-#line 467 "lex.yy"
+#line 491 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 204:
 YY_RULE_SETUP
-#line 470 "lex.yy"
+#line 494 "lex.yy"
 {
         //yy_pop_state();
         return yytext[0];
@@ -6788,89 +6812,89 @@ YY_RULE_SETUP
 	YY_BREAK
 case 205:
 YY_RULE_SETUP
-#line 474 "lex.yy"
+#line 498 "lex.yy"
 yylval.glenum=GLALPHATEST; return GLALPHATEST;
 	YY_BREAK
 case 206:
 YY_RULE_SETUP
-#line 475 "lex.yy"
+#line 499 "lex.yy"
 yylval.glenum=GLALPHATESTFUNC; return GLALPHATESTFUNC;
 	YY_BREAK
 case 207:
 YY_RULE_SETUP
-#line 476 "lex.yy"
+#line 500 "lex.yy"
 yylval.glenum=GLALPHATESTREF; return GLALPHATESTREF;
 	YY_BREAK
 case 208:
 YY_RULE_SETUP
-#line 477 "lex.yy"
+#line 501 "lex.yy"
 return GLALPHAFUNC;
 	YY_BREAK
 case 209:
 YY_RULE_SETUP
-#line 478 "lex.yy"
+#line 502 "lex.yy"
 yylval.glenum=GLBLEND; return GLBLEND;
 	YY_BREAK
 case 210:
 YY_RULE_SETUP
-#line 479 "lex.yy"
+#line 503 "lex.yy"
 return GLBLENDFUNCSEPARATE;
 	YY_BREAK
 case 211:
 YY_RULE_SETUP
-#line 480 "lex.yy"
+#line 504 "lex.yy"
 return GLBLENDFUNC;
 	YY_BREAK
 case 212:
 YY_RULE_SETUP
-#line 481 "lex.yy"
+#line 505 "lex.yy"
 yylval.glenum=GLBLENDSRC; return GLBLENDSRC;
 	YY_BREAK
 case 213:
 YY_RULE_SETUP
-#line 482 "lex.yy"
+#line 506 "lex.yy"
 yylval.glenum=GLBLENDSRCRGB; return GLBLENDSRCRGB;
 	YY_BREAK
 case 214:
 YY_RULE_SETUP
-#line 483 "lex.yy"
+#line 507 "lex.yy"
 yylval.glenum=GLBLENDSRCALPHA; return GLBLENDSRCALPHA;
 	YY_BREAK
 case 215:
 YY_RULE_SETUP
-#line 484 "lex.yy"
+#line 508 "lex.yy"
 yylval.glenum=GLBLENDDST; return GLBLENDDST;
 	YY_BREAK
 case 216:
 YY_RULE_SETUP
-#line 485 "lex.yy"
+#line 509 "lex.yy"
 yylval.glenum=GLBLENDDSTRGB; return GLBLENDDSTRGB;
 	YY_BREAK
 case 217:
 YY_RULE_SETUP
-#line 486 "lex.yy"
+#line 510 "lex.yy"
 yylval.glenum=GLBLENDDSTALPHA; return GLBLENDDSTALPHA;
 	YY_BREAK
 /*BLEND_EQUATION_RGBA_NV yylval.glenum=GLBLENDEQUATIONRGBANV; return GLBLENDEQUATIONRGBANV;*/
 case 218:
 YY_RULE_SETUP
-#line 488 "lex.yy"
+#line 512 "lex.yy"
 yylval.glenum=GLBLENDEQUATIONRGB; return GLBLENDEQUATIONRGB;
 	YY_BREAK
 case 219:
 YY_RULE_SETUP
-#line 489 "lex.yy"
+#line 513 "lex.yy"
 yylval.glenum=GLBLENDEQUATIONALPHA; return GLBLENDEQUATIONALPHA;
 	YY_BREAK
 case 220:
 YY_RULE_SETUP
-#line 490 "lex.yy"
+#line 514 "lex.yy"
 return GLBLENDEQUATION;
 	YY_BREAK
 /*BlendEquationSeparate return GLBLENDEQUATIONSEPARATE;*/
 case 221:
 YY_RULE_SETUP
-#line 492 "lex.yy"
+#line 516 "lex.yy"
 return GLBLENDEQUATION;
 	YY_BREAK
 /*PER_DRAW_BUFFER_BLEND_FUNCTION_NV yylval.glenum=GLPERDRAWBUFFERBLENDFUNCTIONNV; return GLPERDRAWBUFFERBLENDFUNCTIONNV;
@@ -6880,71 +6904,71 @@ return GLBLENDEQUATION;
 /*BLEND_COLOR yylval.glenum=GLBLENDCOLOR; return GLBLENDCOLOR;*/
 case 222:
 YY_RULE_SETUP
-#line 498 "lex.yy"
+#line 522 "lex.yy"
 yylval.glenum=GLFRAMEBUFFERSRGB; return GLFRAMEBUFFERSRGB;
 	YY_BREAK
 case 223:
 YY_RULE_SETUP
-#line 499 "lex.yy"
+#line 523 "lex.yy"
 yylval.glenum=GLDITHER; return GLDITHER;
 	YY_BREAK
 case 224:
 YY_RULE_SETUP
-#line 500 "lex.yy"
+#line 524 "lex.yy"
 yylval.glenum=GLCOLORLOGICOP; return GLCOLORLOGICOP;
 	YY_BREAK
 case 225:
 YY_RULE_SETUP
-#line 501 "lex.yy"
+#line 525 "lex.yy"
 yylval.glenum=GLLOGICOPMODE; return GLLOGICOPMODE;
 	YY_BREAK
 case 226:
 YY_RULE_SETUP
-#line 502 "lex.yy"
+#line 526 "lex.yy"
 yylval.glenum=GLLOGICOPMODE; return GLLOGICOPMODE;
 	YY_BREAK
 case 227:
 YY_RULE_SETUP
-#line 503 "lex.yy"
+#line 527 "lex.yy"
 yylval.glenum=GLCOLORWRITEMASK; return GLCOLORWRITEMASK;
 	YY_BREAK
 case 228:
 YY_RULE_SETUP
-#line 504 "lex.yy"
+#line 528 "lex.yy"
 yylval.glenum=GLMULTISAMPLE; return GLMULTISAMPLE;
 	YY_BREAK
 case 229:
 YY_RULE_SETUP
-#line 505 "lex.yy"
+#line 529 "lex.yy"
 yylval.glenum=GLSAMPLEMASK; return GLSAMPLEMASK;
 	YY_BREAK
 case 230:
 YY_RULE_SETUP
-#line 506 "lex.yy"
+#line 530 "lex.yy"
 yylval.glenum=GLSAMPLEMASKVALUE; return GLSAMPLEMASKVALUE;
 	YY_BREAK
 case 231:
 YY_RULE_SETUP
-#line 507 "lex.yy"
+#line 531 "lex.yy"
 yylval.glenum=GLSAMPLEALPHATOONE; return GLSAMPLEALPHATOONE;
 	YY_BREAK
 case 232:
 YY_RULE_SETUP
-#line 508 "lex.yy"
+#line 532 "lex.yy"
 yylval.glenum=GLSAMPLEALPHATOCOVERAGE; return GLSAMPLEALPHATOCOVERAGE;
 	YY_BREAK
 
 
 case 233:
 YY_RULE_SETUP
-#line 511 "lex.yy"
+#line 535 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 234:
 YY_RULE_SETUP
-#line 514 "lex.yy"
+#line 538 "lex.yy"
 {
         //yy_pop_state();
         return yytext[0];
@@ -6952,72 +6976,72 @@ YY_RULE_SETUP
 	YY_BREAK
 case 235:
 YY_RULE_SETUP
-#line 518 "lex.yy"
+#line 542 "lex.yy"
 yylval.glenum=GLDEPTHTEST; return GLDEPTHTEST;
 	YY_BREAK
 case 236:
 YY_RULE_SETUP
-#line 519 "lex.yy"
+#line 543 "lex.yy"
 yylval.glenum=GLDEPTHFUNC; return GLDEPTHFUNC;
 	YY_BREAK
 case 237:
 YY_RULE_SETUP
-#line 520 "lex.yy"
+#line 544 "lex.yy"
 yylval.glenum=GLDEPTHWRITEMASK; return GLDEPTHWRITEMASK;
 	YY_BREAK
 case 238:
 YY_RULE_SETUP
-#line 521 "lex.yy"
+#line 545 "lex.yy"
 yylval.glenum=GLDEPTHCLAMP; return GLDEPTHCLAMP;
 	YY_BREAK
 case 239:
 YY_RULE_SETUP
-#line 522 "lex.yy"
+#line 546 "lex.yy"
 yylval.glenum=GLDEPTHBOUNDSTESTEXT; return GLDEPTHBOUNDSTESTEXT;
 	YY_BREAK
 case 240:
 YY_RULE_SETUP
-#line 523 "lex.yy"
+#line 547 "lex.yy"
 yylval.glenum=GLDEPTHBOUNDSEXT; return GLDEPTHBOUNDSEXT;
 	YY_BREAK
 case 241:
 YY_RULE_SETUP
-#line 524 "lex.yy"
+#line 548 "lex.yy"
 yylval.glenum=GLSTENCILTEST; return GLSTENCILTEST;
 	YY_BREAK
 case 242:
 YY_RULE_SETUP
-#line 525 "lex.yy"
+#line 549 "lex.yy"
 yylval.glenum=GLSTENCILFUNC; return GLSTENCILFUNC;
 	YY_BREAK
 case 243:
 YY_RULE_SETUP
-#line 526 "lex.yy"
+#line 550 "lex.yy"
 yylval.glenum=GLSTENCILVALUEMASK; return GLSTENCILVALUEMASK;
 	YY_BREAK
 case 244:
 YY_RULE_SETUP
-#line 527 "lex.yy"
+#line 551 "lex.yy"
 yylval.glenum=GLSTENCILREF; return GLSTENCILREF;
 	YY_BREAK
 case 245:
 YY_RULE_SETUP
-#line 528 "lex.yy"
+#line 552 "lex.yy"
 yylval.glenum=GLSTENCILFAIL; return GLSTENCILFAIL;
 	YY_BREAK
 case 246:
 YY_RULE_SETUP
-#line 529 "lex.yy"
+#line 553 "lex.yy"
 yylval.glenum=GLSTENCILPASSDEPTHFAIL; return GLSTENCILPASSDEPTHFAIL;
 	YY_BREAK
 case 247:
 YY_RULE_SETUP
-#line 530 "lex.yy"
+#line 554 "lex.yy"
 yylval.glenum=GLSTENCILPASSDEPTHPASS; return GLSTENCILPASSDEPTHPASS;
 	YY_BREAK
 case 248:
 YY_RULE_SETUP
-#line 531 "lex.yy"
+#line 555 "lex.yy"
 yylval.glenum=GLSTENCILWRITEMASK; return GLSTENCILWRITEMASK;
 	YY_BREAK
 /*STENCIL_FRONT_FUNC yylval.glenum=GLSTENCILFRONTFUNC; return GLSTENCILFRONTFUNC;*/
@@ -7029,57 +7053,57 @@ yylval.glenum=GLSTENCILWRITEMASK; return GLSTENCILWRITEMASK;
 /*STENCIL_FRONT_WRITEMASK yylval.glenum=GLSTENCILFRONTWRITEMASK; return GLSTENCILFRONTWRITEMASK;*/
 case 249:
 YY_RULE_SETUP
-#line 539 "lex.yy"
+#line 563 "lex.yy"
 yylval.glenum=GLSTENCILBACKFUNC; return GLSTENCILBACKFUNC;
 	YY_BREAK
 case 250:
 YY_RULE_SETUP
-#line 540 "lex.yy"
+#line 564 "lex.yy"
 yylval.glenum=GLSTENCILBACKVALUEMASK; return GLSTENCILBACKVALUEMASK;
 	YY_BREAK
 case 251:
 YY_RULE_SETUP
-#line 541 "lex.yy"
+#line 565 "lex.yy"
 yylval.glenum=GLSTENCILBACKREF; return GLSTENCILBACKREF;
 	YY_BREAK
 case 252:
 YY_RULE_SETUP
-#line 542 "lex.yy"
+#line 566 "lex.yy"
 yylval.glenum=GLSTENCILBACKFAIL; return GLSTENCILBACKFAIL;
 	YY_BREAK
 case 253:
 YY_RULE_SETUP
-#line 543 "lex.yy"
+#line 567 "lex.yy"
 yylval.glenum=GLSTENCILBACKPASSDEPTHFAIL; return GLSTENCILBACKPASSDEPTHFAIL;
 	YY_BREAK
 case 254:
 YY_RULE_SETUP
-#line 544 "lex.yy"
+#line 568 "lex.yy"
 yylval.glenum=GLSTENCILBACKPASSDEPTHPASS; return GLSTENCILBACKPASSDEPTHPASS;
 	YY_BREAK
 case 255:
 YY_RULE_SETUP
-#line 545 "lex.yy"
+#line 569 "lex.yy"
 yylval.glenum=GLSTENCILBACKWRITEMASK; return GLSTENCILBACKWRITEMASK;
 	YY_BREAK
 case 256:
 YY_RULE_SETUP
-#line 546 "lex.yy"
+#line 570 "lex.yy"
 return GLSTENCILFUNCSEPARATE;
 	YY_BREAK
 case 257:
 YY_RULE_SETUP
-#line 547 "lex.yy"
+#line 571 "lex.yy"
 return GLSTENCILOP;
 	YY_BREAK
 case 258:
 YY_RULE_SETUP
-#line 548 "lex.yy"
+#line 572 "lex.yy"
 return GLSTENCILOPSEPARATE;
 	YY_BREAK
 case 259:
 YY_RULE_SETUP
-#line 549 "lex.yy"
+#line 573 "lex.yy"
 return GLSTENCILBACKOP;
 	YY_BREAK
 
@@ -7089,133 +7113,133 @@ return GLSTENCILBACKOP;
 
 case 260:
 YY_RULE_SETUP
-#line 555 "lex.yy"
+#line 579 "lex.yy"
 yylval.glenum=GLFOGCOORDINATE; return GLFOGCOORDINATE;
 	YY_BREAK
 case 261:
 YY_RULE_SETUP
-#line 556 "lex.yy"
+#line 580 "lex.yy"
 yylval.glenum=GLFRAGMENTDEPTH; return GLFRAGMENTDEPTH;
 	YY_BREAK
 case 262:
 YY_RULE_SETUP
-#line 557 "lex.yy"
+#line 581 "lex.yy"
 yylval.glenum=GLOBJECTLINEAR; return GLOBJECTLINEAR;
 	YY_BREAK
 case 263:
 YY_RULE_SETUP
-#line 558 "lex.yy"
+#line 582 "lex.yy"
 yylval.glenum=GLPATHOBJECTBOUNDINGBOX; return GLPATHOBJECTBOUNDINGBOX;
 	YY_BREAK
 case 264:
 YY_RULE_SETUP
-#line 559 "lex.yy"
+#line 583 "lex.yy"
 yylval.glenum=GLEYELINEAR; return GLEYELINEAR;
 	YY_BREAK
 case 265:
 YY_RULE_SETUP
-#line 560 "lex.yy"
+#line 584 "lex.yy"
 yylval.glenum=GLFLAT; return GLFLAT;
 	YY_BREAK
 case 266:
 YY_RULE_SETUP
-#line 561 "lex.yy"
+#line 585 "lex.yy"
 yylval.glenum=GLSQUARE; return GLSQUARE;
 	YY_BREAK
 case 267:
 YY_RULE_SETUP
-#line 562 "lex.yy"
+#line 586 "lex.yy"
 yylval.glenum=GLROUND; return GLROUND;
 	YY_BREAK
 case 268:
 YY_RULE_SETUP
-#line 563 "lex.yy"
+#line 587 "lex.yy"
 yylval.glenum=GLTRIANGULAR; return GLTRIANGULAR;
 	YY_BREAK
 case 269:
 YY_RULE_SETUP
-#line 564 "lex.yy"
+#line 588 "lex.yy"
 yylval.glenum=GLMITERREVERT; return GLMITERREVERT;
 	YY_BREAK
 case 270:
 YY_RULE_SETUP
-#line 565 "lex.yy"
+#line 589 "lex.yy"
 yylval.glenum=GLMITERTRUNCATE; return GLMITERTRUNCATE;
 	YY_BREAK
 case 271:
 YY_RULE_SETUP
-#line 566 "lex.yy"
+#line 590 "lex.yy"
 yylval.glenum=GLBEVEL; return GLBEVEL;
 	YY_BREAK
 case 272:
 YY_RULE_SETUP
-#line 567 "lex.yy"
+#line 591 "lex.yy"
 yylval.glenum=GLMOVETORESET; return GLMOVETORESET;
 	YY_BREAK
 case 273:
 YY_RULE_SETUP
-#line 568 "lex.yy"
+#line 592 "lex.yy"
 yylval.glenum=GLMOVETOCONTINUES; return GLMOVETOCONTINUES;
 	YY_BREAK
 case 274:
 YY_RULE_SETUP
-#line 569 "lex.yy"
+#line 593 "lex.yy"
 yylval.glenum=GLCOUNTUP; return GLCOUNTUP;
 	YY_BREAK
 /*INVERT                 yylval.glenum=GLINVERT; return GLINVERT;*/
 case 275:
 YY_RULE_SETUP
-#line 571 "lex.yy"
+#line 595 "lex.yy"
 yylval.glenum=GLCOUNTDOWN; return GLCOUNTDOWN;
 	YY_BREAK
 case 276:
 YY_RULE_SETUP
-#line 572 "lex.yy"
+#line 596 "lex.yy"
 yylval.glenum=GLBOUNDINGBOX; return GLBOUNDINGBOX;
 	YY_BREAK
 case 277:
 YY_RULE_SETUP
-#line 573 "lex.yy"
+#line 597 "lex.yy"
 yylval.glenum=GLCONVEXHULL; return GLCONVEXHULL;
 	YY_BREAK
 case 278:
 YY_RULE_SETUP
-#line 574 "lex.yy"
+#line 598 "lex.yy"
 yylval.glenum=GLTRANSLATE2D; return GLTRANSLATE2D;
 	YY_BREAK
 case 279:
 YY_RULE_SETUP
-#line 575 "lex.yy"
+#line 599 "lex.yy"
 yylval.glenum=GLTRANSLATEX; return GLTRANSLATEX;
 	YY_BREAK
 case 280:
 YY_RULE_SETUP
-#line 576 "lex.yy"
+#line 600 "lex.yy"
 yylval.glenum=GLTRANSLATEY; return GLTRANSLATEY;
 	YY_BREAK
 case 281:
 YY_RULE_SETUP
-#line 577 "lex.yy"
+#line 601 "lex.yy"
 yylval.glenum=GLTRANSLATE3D; return GLTRANSLATE3D;
 	YY_BREAK
 case 282:
 YY_RULE_SETUP
-#line 578 "lex.yy"
+#line 602 "lex.yy"
 yylval.glenum=GLAFFINE2D; return GLAFFINE2D;
 	YY_BREAK
 case 283:
 YY_RULE_SETUP
-#line 579 "lex.yy"
+#line 603 "lex.yy"
 yylval.glenum=GLAFFINE3D; return GLAFFINE3D;
 	YY_BREAK
 case 284:
 YY_RULE_SETUP
-#line 580 "lex.yy"
+#line 604 "lex.yy"
 yylval.glenum=GLTRANSPOSEAFFINE2D; return GLTRANSPOSEAFFINE2D;
 	YY_BREAK
 case 285:
 YY_RULE_SETUP
-#line 581 "lex.yy"
+#line 605 "lex.yy"
 yylval.glenum=GLTRANSPOSEAFFINE3D; return GLTRANSPOSEAFFINE3D;
 	YY_BREAK
 
@@ -7228,136 +7252,136 @@ yylval.glenum=GLTRANSPOSEAFFINE3D; return GLTRANSPOSEAFFINE3D;
 
 case 286:
 YY_RULE_SETUP
-#line 590 "lex.yy"
+#line 614 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 287:
 YY_RULE_SETUP
-#line 593 "lex.yy"
+#line 617 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 288:
 YY_RULE_SETUP
-#line 596 "lex.yy"
+#line 620 "lex.yy"
 yylval.glenum= GLPATHSTENCILDEPTHOFFSET; return GLPATHSTENCILDEPTHOFFSET;
 	YY_BREAK
 case 289:
 YY_RULE_SETUP
-#line 597 "lex.yy"
+#line 621 "lex.yy"
 yylval.glenum= GLPATHSTENCILFUNC; return GLPATHSTENCILFUNC;
 	YY_BREAK
 case 290:
 YY_RULE_SETUP
-#line 598 "lex.yy"
+#line 622 "lex.yy"
 yylval.glenum= GLPATHFOGGEN; return GLPATHFOGGEN;
 	YY_BREAK
 case 291:
 YY_RULE_SETUP
-#line 599 "lex.yy"
+#line 623 "lex.yy"
 yylval.glenum= GLPATHTEXGEN; return GLPATHTEXGEN;
 	YY_BREAK
 case 292:
 YY_RULE_SETUP
-#line 600 "lex.yy"
+#line 624 "lex.yy"
 yylval.glenum= GLPATHCOLORGEN; return GLPATHCOLORGEN;
 	YY_BREAK
 case 293:
 YY_RULE_SETUP
-#line 601 "lex.yy"
+#line 625 "lex.yy"
 yylval.glenum= GLPATHCOVERDEPTHFUNC; return GLPATHCOVERDEPTHFUNC;
 	YY_BREAK
 case 294:
 YY_RULE_SETUP
-#line 602 "lex.yy"
+#line 626 "lex.yy"
 yylval.glenum= GLPATHSTROKEWIDTH; return GLPATHSTROKEWIDTH;
 	YY_BREAK
 case 295:
 YY_RULE_SETUP
-#line 603 "lex.yy"
+#line 627 "lex.yy"
 yylval.glenum= GLPATHINITIALENDCAP; return GLPATHINITIALENDCAP;
 	YY_BREAK
 case 296:
 YY_RULE_SETUP
-#line 604 "lex.yy"
+#line 628 "lex.yy"
 yylval.glenum= GLPATHTERMINALENDCAP; return GLPATHTERMINALENDCAP;
 	YY_BREAK
 case 297:
 YY_RULE_SETUP
-#line 605 "lex.yy"
+#line 629 "lex.yy"
 yylval.glenum= GLPATHINITIALDASHCAP; return GLPATHINITIALDASHCAP;
 	YY_BREAK
 case 298:
 YY_RULE_SETUP
-#line 606 "lex.yy"
+#line 630 "lex.yy"
 yylval.glenum= GLPATHTERMINALDASHCAP; return GLPATHTERMINALDASHCAP;
 	YY_BREAK
 case 299:
 YY_RULE_SETUP
-#line 607 "lex.yy"
+#line 631 "lex.yy"
 yylval.glenum= GLPATHJOINSTYLE; return GLPATHJOINSTYLE;
 	YY_BREAK
 case 300:
 YY_RULE_SETUP
-#line 608 "lex.yy"
+#line 632 "lex.yy"
 yylval.glenum= GLPATHMITERLIMIT; return GLPATHMITERLIMIT;
 	YY_BREAK
 case 301:
 YY_RULE_SETUP
-#line 609 "lex.yy"
+#line 633 "lex.yy"
 yylval.glenum= GLPATHDASHOFFSET; return GLPATHDASHOFFSET;
 	YY_BREAK
 case 302:
 YY_RULE_SETUP
-#line 610 "lex.yy"
+#line 634 "lex.yy"
 yylval.glenum= GLPATHDASHOFFSETRESET; return GLPATHDASHOFFSETRESET;
 	YY_BREAK
 case 303:
 YY_RULE_SETUP
-#line 611 "lex.yy"
+#line 635 "lex.yy"
 yylval.glenum= GLPATHCLIENTLENGTH; return GLPATHCLIENTLENGTH;
 	YY_BREAK
 case 304:
 YY_RULE_SETUP
-#line 612 "lex.yy"
+#line 636 "lex.yy"
 yylval.glenum= GLPATHFILLMODE; return GLPATHFILLMODE;
 	YY_BREAK
 case 305:
 YY_RULE_SETUP
-#line 613 "lex.yy"
+#line 637 "lex.yy"
 yylval.glenum= GLPATHFILLMASK; return GLPATHFILLMASK;
 	YY_BREAK
 case 306:
 YY_RULE_SETUP
-#line 614 "lex.yy"
+#line 638 "lex.yy"
 yylval.glenum= GLPATHFILLCOVERMODE; return GLPATHFILLCOVERMODE;
 	YY_BREAK
 case 307:
 YY_RULE_SETUP
-#line 615 "lex.yy"
+#line 639 "lex.yy"
 yylval.glenum= GLPATHSTROKECOVERMODE; return GLPATHSTROKECOVERMODE;
 	YY_BREAK
 case 308:
 YY_RULE_SETUP
-#line 616 "lex.yy"
+#line 640 "lex.yy"
 yylval.glenum= GLPATHSTROKEMASK; return GLPATHSTROKEMASK;
 	YY_BREAK
 case 309:
 YY_RULE_SETUP
-#line 617 "lex.yy"
+#line 641 "lex.yy"
 yylval.glenum= GLPATHSTROKEREFERENCE; return GLPATHSTROKEREFERENCE;
 	YY_BREAK
 case 310:
 YY_RULE_SETUP
-#line 618 "lex.yy"
+#line 642 "lex.yy"
 yylval.glenum= GLPATHTRANSFORMTYPE; return GLPATHTRANSFORMTYPE;
 	YY_BREAK
 case 311:
 YY_RULE_SETUP
-#line 619 "lex.yy"
+#line 643 "lex.yy"
 yylval.glenum= GLPATHTRANSFORM; return GLPATHTRANSFORM;
 	YY_BREAK
 
@@ -7368,7 +7392,7 @@ yylval.glenum= GLPATHTRANSFORM; return GLPATHTRANSFORM;
 
 case 312:
 YY_RULE_SETUP
-#line 626 "lex.yy"
+#line 650 "lex.yy"
 string_buf_ptr  =  string_buf;  yy_push_state(str);
 	YY_BREAK
 
@@ -7381,7 +7405,7 @@ string_buf_ptr  =  string_buf;  yy_push_state(str);
     */
 case 313:
 YY_RULE_SETUP
-#line 636 "lex.yy"
+#line 660 "lex.yy"
 {
     comment_caller  =  INITIAL;
     yy_push_state(comment);
@@ -7389,7 +7413,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 314:
 YY_RULE_SETUP
-#line 641 "lex.yy"
+#line 665 "lex.yy"
 {
     comment_caller  =  INITIAL;
     yy_push_state(comment2);
@@ -7398,34 +7422,34 @@ YY_RULE_SETUP
 
 case 315:
 YY_RULE_SETUP
-#line 647 "lex.yy"
+#line 671 "lex.yy"
 /*  eat  anything  that's  not  a  '*'  */
 	YY_BREAK
 case 316:
 YY_RULE_SETUP
-#line 648 "lex.yy"
+#line 672 "lex.yy"
 /*  eat  up  '*'s  not  followed  by  '/'s  */
 	YY_BREAK
 case 317:
 YY_RULE_SETUP
-#line 649 "lex.yy"
+#line 673 "lex.yy"
 ++line_num;
 	YY_BREAK
 case 318:
 YY_RULE_SETUP
-#line 650 "lex.yy"
+#line 674 "lex.yy"
 yy_pop_state();//BEGIN(comment_caller);
 	YY_BREAK
 
 
 case 319:
 YY_RULE_SETUP
-#line 654 "lex.yy"
+#line 678 "lex.yy"
 
 	YY_BREAK
 case 320:
 YY_RULE_SETUP
-#line 655 "lex.yy"
+#line 679 "lex.yy"
 ++line_num;  yy_pop_state();//BEGIN(comment_caller);
 	YY_BREAK
 
@@ -7435,7 +7459,7 @@ YY_RULE_SETUP
 
 case 321:
 YY_RULE_SETUP
-#line 662 "lex.yy"
+#line 686 "lex.yy"
 {  /*  saw  closing  quote  -  all  done  */
         yy_pop_state();//BEGIN(INITIAL);
         *string_buf_ptr  =  '\0';
@@ -7445,7 +7469,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 322:
 YY_RULE_SETUP
-#line 668 "lex.yy"
+#line 692 "lex.yy"
 {
         fprintf(stderr,"\nunterminated  string  constant at line %d\n", line_num);
         yyterminate();
@@ -7453,7 +7477,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 323:
 YY_RULE_SETUP
-#line 672 "lex.yy"
+#line 696 "lex.yy"
 {
         /*  octal  escape  sequence  */
         int  result;
@@ -7465,7 +7489,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 324:
 YY_RULE_SETUP
-#line 680 "lex.yy"
+#line 704 "lex.yy"
 {
         /*  generate  error  -  bad  escape  sequence;  something
         *  like  '\48'  or  '\0777777'
@@ -7474,37 +7498,37 @@ YY_RULE_SETUP
 	YY_BREAK
 case 325:
 YY_RULE_SETUP
-#line 685 "lex.yy"
+#line 709 "lex.yy"
 *string_buf_ptr++  =  '\n';
 	YY_BREAK
 case 326:
 YY_RULE_SETUP
-#line 686 "lex.yy"
+#line 710 "lex.yy"
 *string_buf_ptr++  =  '\t';
 	YY_BREAK
 case 327:
 YY_RULE_SETUP
-#line 687 "lex.yy"
+#line 711 "lex.yy"
 *string_buf_ptr++  =  '\r';
 	YY_BREAK
 case 328:
 YY_RULE_SETUP
-#line 688 "lex.yy"
+#line 712 "lex.yy"
 *string_buf_ptr++  =  '\b';
 	YY_BREAK
 case 329:
 YY_RULE_SETUP
-#line 689 "lex.yy"
+#line 713 "lex.yy"
 *string_buf_ptr++  =  '\f';
 	YY_BREAK
 case 330:
 YY_RULE_SETUP
-#line 690 "lex.yy"
+#line 714 "lex.yy"
 *string_buf_ptr++  =  yytext[1];
 	YY_BREAK
 case 331:
 YY_RULE_SETUP
-#line 691 "lex.yy"
+#line 715 "lex.yy"
 {
         char  *yptr  =  yytext;
         while  (  *yptr  )
@@ -7518,7 +7542,7 @@ YY_RULE_SETUP
 
 case 332:
 YY_RULE_SETUP
-#line 702 "lex.yy"
+#line 726 "lex.yy"
 {
         bracket_level = 1; // must be one...
         string_buf_ptr  =  string_buf;
@@ -7529,7 +7553,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 333:
 YY_RULE_SETUP
-#line 709 "lex.yy"
+#line 733 "lex.yy"
 {
         // TODO create and REGISTER the variable in a table
         yylval.s = new std::string(yytext);
@@ -7546,7 +7570,7 @@ YY_RULE_SETUP
 
 case 334:
 YY_RULE_SETUP
-#line 722 "lex.yy"
+#line 746 "lex.yy"
 {
         bracket_level++;
         *string_buf_ptr++  =  yytext[0];
@@ -7554,7 +7578,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 335:
 YY_RULE_SETUP
-#line 726 "lex.yy"
+#line 750 "lex.yy"
 {
         bracket_level--;
         if((bracket_level) == 0)
@@ -7581,7 +7605,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 336:
 YY_RULE_SETUP
-#line 749 "lex.yy"
+#line 773 "lex.yy"
 {  /*copy the GLSL data*/
         char  *yptr  =  yytext;
         while  (  *yptr  )
@@ -7591,7 +7615,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 337:
 YY_RULE_SETUP
-#line 755 "lex.yy"
+#line 779 "lex.yy"
 {  /*copy the GLSL data*/
         char  *yptr  =  yytext;
         while  (  *yptr  )
@@ -7605,7 +7629,7 @@ YY_RULE_SETUP
 
 case 338:
 YY_RULE_SETUP
-#line 765 "lex.yy"
+#line 789 "lex.yy"
 {
         comment_caller  =  INITIAL;
         yy_push_state(pass);
@@ -7614,14 +7638,14 @@ YY_RULE_SETUP
 	YY_BREAK
 case 339:
 YY_RULE_SETUP
-#line 770 "lex.yy"
+#line 794 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 340:
 YY_RULE_SETUP
-#line 773 "lex.yy"
+#line 797 "lex.yy"
 {
         //yy_pop_state();//BEGIN(INITIAL);
         return yytext[0];
@@ -7629,12 +7653,12 @@ YY_RULE_SETUP
 	YY_BREAK
 case 341:
 YY_RULE_SETUP
-#line 777 "lex.yy"
+#line 801 "lex.yy"
 return TECHNIQUE;
 	YY_BREAK
 case 342:
 YY_RULE_SETUP
-#line 778 "lex.yy"
+#line 802 "lex.yy"
 return OFF;
 	YY_BREAK
 
@@ -7651,30 +7675,30 @@ return OFF;
     }*/
 case 343:
 YY_RULE_SETUP
-#line 791 "lex.yy"
+#line 815 "lex.yy"
 return OPTIX_CONTEXT;
 	YY_BREAK
 case 344:
 YY_RULE_SETUP
-#line 792 "lex.yy"
+#line 816 "lex.yy"
 return OPTIX_CONTEXT_ENTRY;
 	YY_BREAK
 case 345:
 YY_RULE_SETUP
-#line 793 "lex.yy"
+#line 817 "lex.yy"
 return VERTEXPROGRAM;
 	YY_BREAK
 /*VertexShader        return VERTEXPROGRAM;*/
 case 346:
 YY_RULE_SETUP
-#line 795 "lex.yy"
+#line 819 "lex.yy"
 return FRAGMENTPROGRAM;
 	YY_BREAK
 /*FragmentShader      return FRAGMENTPROGRAM;*/
 /*PixelShader         return FRAGMENTPROGRAM;*/
 case 347:
 YY_RULE_SETUP
-#line 798 "lex.yy"
+#line 822 "lex.yy"
 return GEOMETRYPROGRAM;
 	YY_BREAK
 /*GeometryShader      return GEOMETRYPROGRAM;*/
@@ -7682,7 +7706,7 @@ return GEOMETRYPROGRAM;
 /*TCSShader           return HULLPROGRAM;*/
 case 348:
 YY_RULE_SETUP
-#line 802 "lex.yy"
+#line 826 "lex.yy"
 return HULLPROGRAM;
 	YY_BREAK
 /*EvalShader          return EVALPROGRAM;*/
@@ -7690,36 +7714,36 @@ return HULLPROGRAM;
 /*TESShader           return EVALPROGRAM;*/
 case 349:
 YY_RULE_SETUP
-#line 806 "lex.yy"
+#line 830 "lex.yy"
 return EVALPROGRAM;
 	YY_BREAK
 case 350:
 YY_RULE_SETUP
-#line 807 "lex.yy"
+#line 831 "lex.yy"
 return COMPUTEPROGRAM;
 	YY_BREAK
 /*ComputeShader       return COMPUTEPROGRAM;*/
 case 351:
 YY_RULE_SETUP
-#line 809 "lex.yy"
+#line 833 "lex.yy"
 return PATHSOURCE;
 	YY_BREAK
 case 352:
 YY_RULE_SETUP
-#line 811 "lex.yy"
+#line 835 "lex.yy"
 return VERTEXPROGRAMOVERRIDE;
 	YY_BREAK
 /*VertexShaderOverride    return VERTEXPROGRAMOVERRIDE;*/
 case 353:
 YY_RULE_SETUP
-#line 813 "lex.yy"
+#line 837 "lex.yy"
 return FRAGMENTPROGRAMOVERRIDE;
 	YY_BREAK
 /*FragmentShaderOverride  return FRAGMENTPROGRAMOVERRIDE;*/
 /*PixelShaderOverride     return FRAGMENTPROGRAMOVERRIDE;*/
 case 354:
 YY_RULE_SETUP
-#line 816 "lex.yy"
+#line 840 "lex.yy"
 return GEOMETRYPROGRAMOVERRIDE;
 	YY_BREAK
 /*GeometryShaderOverride  return GEOMETRYPROGRAMOVERRIDE;*/
@@ -7727,162 +7751,162 @@ return GEOMETRYPROGRAMOVERRIDE;
 /*EvalShaderOverride      return EVALPROGRAMOVERRIDE;*/
 case 355:
 YY_RULE_SETUP
-#line 820 "lex.yy"
+#line 844 "lex.yy"
 return HULLPROGRAMOVERRIDE;
 	YY_BREAK
 case 356:
 YY_RULE_SETUP
-#line 821 "lex.yy"
+#line 845 "lex.yy"
 return EVALPROGRAMOVERRIDE;
 	YY_BREAK
 case 357:
 YY_RULE_SETUP
-#line 822 "lex.yy"
+#line 846 "lex.yy"
 return COMPUTEPROGRAMOVERRIDE;
 	YY_BREAK
 case 358:
 YY_RULE_SETUP
-#line 823 "lex.yy"
+#line 847 "lex.yy"
 return COMPUTEPROGRAMOVERRIDE;
 	YY_BREAK
 case 359:
 YY_RULE_SETUP
-#line 825 "lex.yy"
+#line 849 "lex.yy"
 return SHDPROFILE;
 	YY_BREAK
 case 360:
 YY_RULE_SETUP
-#line 826 "lex.yy"
+#line 850 "lex.yy"
 return IMAGEACCESS;
 	YY_BREAK
 case 361:
 YY_RULE_SETUP
-#line 827 "lex.yy"
+#line 851 "lex.yy"
 return IMAGELAYER;
 	YY_BREAK
 case 362:
 YY_RULE_SETUP
-#line 828 "lex.yy"
+#line 852 "lex.yy"
 return IMAGELAYERED;
 	YY_BREAK
 case 363:
 YY_RULE_SETUP
-#line 829 "lex.yy"
+#line 853 "lex.yy"
 return WRITE_ONLY;
 	YY_BREAK
 case 364:
 YY_RULE_SETUP
-#line 830 "lex.yy"
+#line 854 "lex.yy"
 return READ_ONLY;
 	YY_BREAK
 case 365:
 YY_RULE_SETUP
-#line 831 "lex.yy"
+#line 855 "lex.yy"
 return READ_WRITE;
 	YY_BREAK
 case 366:
 YY_RULE_SETUP
-#line 832 "lex.yy"
+#line 856 "lex.yy"
 return IMAGERESOURCE;
 	YY_BREAK
 case 367:
 YY_RULE_SETUP
-#line 833 "lex.yy"
+#line 857 "lex.yy"
 return UNIFORM;
 	YY_BREAK
 case 368:
 YY_RULE_SETUP
-#line 834 "lex.yy"
+#line 858 "lex.yy"
 return IMAGEUNIT;
 	YY_BREAK
 case 369:
 YY_RULE_SETUP
-#line 835 "lex.yy"
+#line 859 "lex.yy"
 return TEXTURERESOURCE;
 	YY_BREAK
 case 370:
 YY_RULE_SETUP
-#line 836 "lex.yy"
+#line 860 "lex.yy"
 return SAMPLERRESOURCE;
 	YY_BREAK
 case 371:
 YY_RULE_SETUP
-#line 837 "lex.yy"
+#line 861 "lex.yy"
 return SAMPLERTEXUNIT;
 	YY_BREAK
 case 372:
 YY_RULE_SETUP
-#line 838 "lex.yy"
+#line 862 "lex.yy"
 return SETSAMPLERSTATE;
 	YY_BREAK
 case 373:
 YY_RULE_SETUP
-#line 839 "lex.yy"
+#line 863 "lex.yy"
 return SETDSTSTATE;
 	YY_BREAK
 case 374:
 YY_RULE_SETUP
-#line 840 "lex.yy"
+#line 864 "lex.yy"
 return SETRASTERIZATIONSTATE;
 	YY_BREAK
 case 375:
 YY_RULE_SETUP
-#line 841 "lex.yy"
+#line 865 "lex.yy"
 return SETCOLORSAMPLESTATE;
 	YY_BREAK
 case 376:
 YY_RULE_SETUP
-#line 843 "lex.yy"
+#line 867 "lex.yy"
 return IMAGEACCESSOVERRIDE;
 	YY_BREAK
 case 377:
 YY_RULE_SETUP
-#line 844 "lex.yy"
+#line 868 "lex.yy"
 return IMAGELAYEROVERRIDE;
 	YY_BREAK
 case 378:
 YY_RULE_SETUP
-#line 845 "lex.yy"
+#line 869 "lex.yy"
 return IMAGELAYEREDOVERRIDE;
 	YY_BREAK
 case 379:
 YY_RULE_SETUP
-#line 846 "lex.yy"
+#line 870 "lex.yy"
 return IMAGERESOURCEOVERRIDE;
 	YY_BREAK
 case 380:
 YY_RULE_SETUP
-#line 847 "lex.yy"
+#line 871 "lex.yy"
 return UNIFORMOVERRIDE;
 	YY_BREAK
 case 381:
 YY_RULE_SETUP
-#line 848 "lex.yy"
+#line 872 "lex.yy"
 return IMAGEUNITOVERRIDE;
 	YY_BREAK
 case 382:
 YY_RULE_SETUP
-#line 849 "lex.yy"
+#line 873 "lex.yy"
 return TEXTURERESOURCEOVERRIDE;
 	YY_BREAK
 case 383:
 YY_RULE_SETUP
-#line 850 "lex.yy"
+#line 874 "lex.yy"
 return SAMPLERRESOURCEOVERRIDE;
 	YY_BREAK
 case 384:
 YY_RULE_SETUP
-#line 851 "lex.yy"
+#line 875 "lex.yy"
 return SAMPLERTEXUNITOVERRIDE;
 	YY_BREAK
 case 385:
 YY_RULE_SETUP
-#line 852 "lex.yy"
+#line 876 "lex.yy"
 return SETSAMPLERSTATEOVERRIDE;
 	YY_BREAK
 case 386:
 YY_RULE_SETUP
-#line 854 "lex.yy"
+#line 878 "lex.yy"
 {
         yy_push_state(rendermode);
         return RENDERMODE;
@@ -7890,77 +7914,77 @@ YY_RULE_SETUP
 	YY_BREAK
 case 387:
 YY_RULE_SETUP
-#line 858 "lex.yy"
+#line 882 "lex.yy"
 return RENDERGROUP;
 	YY_BREAK
 case 388:
 YY_RULE_SETUP
-#line 859 "lex.yy"
+#line 883 "lex.yy"
 return BLITFBOTOACTIVETARGET;
 	YY_BREAK
 case 389:
 YY_RULE_SETUP
-#line 860 "lex.yy"
+#line 884 "lex.yy"
 return CLEARCOLOR;
 	YY_BREAK
 case 390:
 YY_RULE_SETUP
-#line 861 "lex.yy"
+#line 885 "lex.yy"
 return CURRENTTARGET;
 	YY_BREAK
 case 391:
 YY_RULE_SETUP
-#line 862 "lex.yy"
+#line 886 "lex.yy"
 return VIEWPORT;
 	YY_BREAK
 case 392:
 YY_RULE_SETUP
-#line 863 "lex.yy"
+#line 887 "lex.yy"
 return SWAPRESOURCES;
 	YY_BREAK
 case 393:
 YY_RULE_SETUP
-#line 865 "lex.yy"
+#line 889 "lex.yy"
 return LOOP;
 	YY_BREAK
 case 394:
 YY_RULE_SETUP
-#line 866 "lex.yy"
+#line 890 "lex.yy"
 return ACTIVE;
 	YY_BREAK
 case 395:
 YY_RULE_SETUP
-#line 868 "lex.yy"
+#line 892 "lex.yy"
 return CUDAMODULE;
 	YY_BREAK
 case 396:
 YY_RULE_SETUP
-#line 869 "lex.yy"
+#line 893 "lex.yy"
 return CUDAKERNEL;
 	YY_BREAK
 case 397:
 YY_RULE_SETUP
-#line 870 "lex.yy"
+#line 894 "lex.yy"
 return CUDASHAREDMEMORY;
 	YY_BREAK
 case 398:
 YY_RULE_SETUP
-#line 871 "lex.yy"
+#line 895 "lex.yy"
 return CUDAGRID;
 	YY_BREAK
 case 399:
 YY_RULE_SETUP
-#line 872 "lex.yy"
+#line 896 "lex.yy"
 return CUDABLOCK;
 	YY_BREAK
 case 400:
 YY_RULE_SETUP
-#line 874 "lex.yy"
+#line 898 "lex.yy"
 return COMPUTEGROUPS;
 	YY_BREAK
 case 401:
 YY_RULE_SETUP
-#line 875 "lex.yy"
+#line 899 "lex.yy"
 {
         yy_push_state(clearmode);
         return CLEARMODE;
@@ -7970,261 +7994,261 @@ YY_RULE_SETUP
 
 case 402:
 YY_RULE_SETUP
-#line 881 "lex.yy"
+#line 905 "lex.yy"
 return '=';
 	YY_BREAK
 case 403:
 YY_RULE_SETUP
-#line 882 "lex.yy"
+#line 906 "lex.yy"
 { yy_pop_state(); return ';'; }
 	YY_BREAK
 case 404:
 YY_RULE_SETUP
-#line 883 "lex.yy"
+#line 907 "lex.yy"
 return '|';
 	YY_BREAK
 case 405:
 YY_RULE_SETUP
-#line 884 "lex.yy"
+#line 908 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_none; return CLEAR_ENUM; }
 	YY_BREAK
 case 406:
 YY_RULE_SETUP
-#line 885 "lex.yy"
+#line 909 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_all; return CLEAR_ENUM; }
 	YY_BREAK
 case 407:
 YY_RULE_SETUP
-#line 886 "lex.yy"
+#line 910 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_color; return CLEAR_ENUM; }
 	YY_BREAK
 case 408:
 YY_RULE_SETUP
-#line 887 "lex.yy"
+#line 911 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_depth; return CLEAR_ENUM; }
 	YY_BREAK
 case 409:
 YY_RULE_SETUP
-#line 888 "lex.yy"
+#line 912 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_stencil; return CLEAR_ENUM; }
 	YY_BREAK
 case 410:
 YY_RULE_SETUP
-#line 889 "lex.yy"
+#line 913 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_color; return CLEAR_ENUM; }
 	YY_BREAK
 case 411:
 YY_RULE_SETUP
-#line 890 "lex.yy"
+#line 914 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_depth; return CLEAR_ENUM; }
 	YY_BREAK
 case 412:
 YY_RULE_SETUP
-#line 891 "lex.yy"
+#line 915 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_stencil; return CLEAR_ENUM; }
 	YY_BREAK
 case 413:
 YY_RULE_SETUP
-#line 892 "lex.yy"
+#line 916 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_color_depth; return CLEAR_ENUM; }
 	YY_BREAK
 case 414:
 YY_RULE_SETUP
-#line 893 "lex.yy"
+#line 917 "lex.yy"
 { yylval.clear_mode = nvFX::Clear_depth_stencil; return CLEAR_ENUM; }
 	YY_BREAK
 
 
 case 415:
 YY_RULE_SETUP
-#line 896 "lex.yy"
+#line 920 "lex.yy"
 return '=';
 	YY_BREAK
 case 416:
 YY_RULE_SETUP
-#line 897 "lex.yy"
+#line 921 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_OPTIX; return RENDERMODE_ENUM; }
 	YY_BREAK
 case 417:
 YY_RULE_SETUP
-#line 898 "lex.yy"
+#line 922 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SCENEGRAPH_SHADED; return RENDERMODE_ENUM; }
 	YY_BREAK
 case 418:
 YY_RULE_SETUP
-#line 899 "lex.yy"
+#line 923 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SCENEGRAPH_NOSHADING; return RENDERMODE_ENUM; }
 	YY_BREAK
 case 419:
 YY_RULE_SETUP
-#line 900 "lex.yy"
+#line 924 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_FULLSCREEN_QUAD;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 420:
 YY_RULE_SETUP
-#line 901 "lex.yy"
+#line 925 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SCENEGRAPH_SHADED_OPAQUE_ONLY;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 421:
 YY_RULE_SETUP
-#line 902 "lex.yy"
+#line 926 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SCENEGRAPH_SHADED_TRANSPARENT_ONLY;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 422:
 YY_RULE_SETUP
-#line 903 "lex.yy"
+#line 927 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SCENEGRAPH_NOSHADING_OPAQUE_ONLY;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 423:
 YY_RULE_SETUP
-#line 904 "lex.yy"
+#line 928 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SCENEGRAPH_NOSHADING_TRANSPARENT_ONLY;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 424:
 YY_RULE_SETUP
-#line 905 "lex.yy"
+#line 929 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SCENEGRAPH_OUTLINES_ONLY;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 425:
 YY_RULE_SETUP
-#line 906 "lex.yy"
+#line 930 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_DEBUG_QUAD0;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 426:
 YY_RULE_SETUP
-#line 907 "lex.yy"
+#line 931 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_DEBUG_QUAD1;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 427:
 YY_RULE_SETUP
-#line 908 "lex.yy"
+#line 932 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_DEBUG_QUAD2;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 428:
 YY_RULE_SETUP
-#line 909 "lex.yy"
+#line 933 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_DEBUG_QUAD3;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 429:
 YY_RULE_SETUP
-#line 910 "lex.yy"
+#line 934 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_DEBUG_SCENE;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 430:
 YY_RULE_SETUP
-#line 911 "lex.yy"
+#line 935 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_DEBUG_SCENE_LINES;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 431:
 YY_RULE_SETUP
-#line 912 "lex.yy"
+#line 936 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::DO_NOTHING;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 432:
 YY_RULE_SETUP
-#line 913 "lex.yy"
+#line 937 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_OPTIX_REFLECTION;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 433:
 YY_RULE_SETUP
-#line 914 "lex.yy"
+#line 938 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_OPTIX_SHADOW;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 434:
 YY_RULE_SETUP
-#line 915 "lex.yy"
+#line 939 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_OPTIX_REFLECTION_AND_SHADOW;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 435:
 YY_RULE_SETUP
-#line 916 "lex.yy"
+#line 940 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_OPTIX;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 436:
 YY_RULE_SETUP
-#line 917 "lex.yy"
+#line 941 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RUN_CUDA;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 437:
 YY_RULE_SETUP
-#line 918 "lex.yy"
+#line 942 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RUN_GLSLCOMPUTE;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 438:
 YY_RULE_SETUP
-#line 919 "lex.yy"
+#line 943 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM0;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 439:
 YY_RULE_SETUP
-#line 920 "lex.yy"
+#line 944 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM1;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 440:
 YY_RULE_SETUP
-#line 921 "lex.yy"
+#line 945 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM2;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 441:
 YY_RULE_SETUP
-#line 922 "lex.yy"
+#line 946 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM3;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 442:
 YY_RULE_SETUP
-#line 923 "lex.yy"
+#line 947 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM4;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 443:
 YY_RULE_SETUP
-#line 924 "lex.yy"
+#line 948 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM5;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 444:
 YY_RULE_SETUP
-#line 925 "lex.yy"
+#line 949 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM6;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 445:
 YY_RULE_SETUP
-#line 926 "lex.yy"
+#line 950 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM7;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 446:
 YY_RULE_SETUP
-#line 927 "lex.yy"
+#line 951 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM8;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 447:
 YY_RULE_SETUP
-#line 928 "lex.yy"
+#line 952 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_CUSTOM9;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 448:
 YY_RULE_SETUP
-#line 929 "lex.yy"
+#line 953 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_STENCILFILLPATH;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 449:
 YY_RULE_SETUP
-#line 930 "lex.yy"
+#line 954 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_STENCILSTROKEPATH;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 450:
 YY_RULE_SETUP
-#line 931 "lex.yy"
+#line 955 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_COVERFILLPATH;return RENDERMODE_ENUM; }
 	YY_BREAK
 case 451:
 YY_RULE_SETUP
-#line 932 "lex.yy"
+#line 956 "lex.yy"
 { yy_pop_state(); yylval.render_mode = nvFX::RENDER_COVERSTROKEPATH;return RENDERMODE_ENUM; }
 	YY_BREAK
 
 
 case 452:
 YY_RULE_SETUP
-#line 935 "lex.yy"
+#line 959 "lex.yy"
 return ATTRIBUTE;
 	YY_BREAK
 
@@ -8234,7 +8258,7 @@ return ATTRIBUTE;
 
 case 453:
 YY_RULE_SETUP
-#line 941 "lex.yy"
+#line 965 "lex.yy"
 {
         yy_push_state(fbo); //leads to 'fbo' (fbo1 is a fast transition part)
         return yytext[0];
@@ -8242,7 +8266,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 454:
 YY_RULE_SETUP
-#line 945 "lex.yy"
+#line 969 "lex.yy"
 {
         yy_pop_state();
         return yytext[0];
@@ -8255,14 +8279,14 @@ YY_RULE_SETUP
 
 case 455:
 YY_RULE_SETUP
-#line 954 "lex.yy"
+#line 978 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 456:
 YY_RULE_SETUP
-#line 957 "lex.yy"
+#line 981 "lex.yy"
 {
         //yy_pop_state(); // back to resource1
         //yy_pop_state(); // back to the one before resource1
@@ -8271,12 +8295,12 @@ YY_RULE_SETUP
 	YY_BREAK
 case 457:
 YY_RULE_SETUP
-#line 962 "lex.yy"
+#line 986 "lex.yy"
 return COLORTARGETS;
 	YY_BREAK
 case 458:
 YY_RULE_SETUP
-#line 963 "lex.yy"
+#line 987 "lex.yy"
 return DSTTARGET;
 	YY_BREAK
 
@@ -8286,7 +8310,7 @@ return DSTTARGET;
 
 case 459:
 YY_RULE_SETUP
-#line 969 "lex.yy"
+#line 993 "lex.yy"
 {
         yy_push_state(resource); //leads to resource' (resource1 is a fast transition part)
         return yytext[0];
@@ -8299,14 +8323,14 @@ YY_RULE_SETUP
 
 case 460:
 YY_RULE_SETUP
-#line 978 "lex.yy"
+#line 1002 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 461:
 YY_RULE_SETUP
-#line 981 "lex.yy"
+#line 1005 "lex.yy"
 {
         //yy_pop_state(); // back to resource1
         //yy_pop_state(); // back to the one before resource1
@@ -8315,247 +8339,247 @@ YY_RULE_SETUP
 	YY_BREAK
 case 462:
 YY_RULE_SETUP
-#line 986 "lex.yy"
+#line 1010 "lex.yy"
 return SETSAMPLERSTATE;
 	YY_BREAK
 case 463:
 YY_RULE_SETUP
-#line 987 "lex.yy"
+#line 1011 "lex.yy"
 return APPDEFINED;
 	YY_BREAK
 case 464:
 YY_RULE_SETUP
-#line 988 "lex.yy"
+#line 1012 "lex.yy"
 return APPDEFINED;
 	YY_BREAK
 case 465:
 YY_RULE_SETUP
-#line 989 "lex.yy"
+#line 1013 "lex.yy"
 return RESOURCEMSAA;
 	YY_BREAK
 case 466:
 YY_RULE_SETUP
-#line 990 "lex.yy"
+#line 1014 "lex.yy"
 return RESOURCEFORMAT;
 	YY_BREAK
 case 467:
 YY_RULE_SETUP
-#line 991 "lex.yy"
+#line 1015 "lex.yy"
 return RESOURCESIZE;
 	YY_BREAK
 case 468:
 YY_RULE_SETUP
-#line 992 "lex.yy"
+#line 1016 "lex.yy"
 return RESOURCESIZEFACTOR;
 	YY_BREAK
 case 469:
 YY_RULE_SETUP
-#line 993 "lex.yy"
+#line 1017 "lex.yy"
 return RESOURCERESOLVETARGET;
 	YY_BREAK
 case 470:
 YY_RULE_SETUP
-#line 994 "lex.yy"
+#line 1018 "lex.yy"
 yylval.resource_format = FMT_RGBA8; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 471:
 YY_RULE_SETUP
-#line 995 "lex.yy"
+#line 1019 "lex.yy"
 yylval.resource_format = FMT_RGBA16F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 472:
 YY_RULE_SETUP
-#line 996 "lex.yy"
+#line 1020 "lex.yy"
 yylval.resource_format = FMT_RGBA32F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 473:
 YY_RULE_SETUP
-#line 997 "lex.yy"
+#line 1021 "lex.yy"
 yylval.resource_format = FMT_INTENSITY8; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 474:
 YY_RULE_SETUP
-#line 998 "lex.yy"
+#line 1022 "lex.yy"
 yylval.resource_format = FMT_INTENSITY16F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 475:
 YY_RULE_SETUP
-#line 999 "lex.yy"
+#line 1023 "lex.yy"
 yylval.resource_format = FMT_INTENSITY32F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 476:
 YY_RULE_SETUP
-#line 1000 "lex.yy"
+#line 1024 "lex.yy"
 yylval.resource_format = FMT_LUMINANCE_ALPHA8; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 477:
 YY_RULE_SETUP
-#line 1001 "lex.yy"
+#line 1025 "lex.yy"
 yylval.resource_format = FMT_RG16F_NV; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 478:
 YY_RULE_SETUP
-#line 1002 "lex.yy"
+#line 1026 "lex.yy"
 yylval.resource_format = FMT_LUMINANCE_ALPHA16F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 479:
 YY_RULE_SETUP
-#line 1003 "lex.yy"
+#line 1027 "lex.yy"
 yylval.resource_format = FMT_LUMINANCE_ALPHA32F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 480:
 YY_RULE_SETUP
-#line 1004 "lex.yy"
+#line 1028 "lex.yy"
 yylval.resource_format = FMT_RG32F_NV; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 481:
 YY_RULE_SETUP
-#line 1005 "lex.yy"
+#line 1029 "lex.yy"
 yylval.resource_format = FMT_RGB8; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 482:
 YY_RULE_SETUP
-#line 1006 "lex.yy"
+#line 1030 "lex.yy"
 yylval.resource_format = FMT_RGB16F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 483:
 YY_RULE_SETUP
-#line 1007 "lex.yy"
+#line 1031 "lex.yy"
 yylval.resource_format = FMT_RGB32F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 484:
 YY_RULE_SETUP
-#line 1008 "lex.yy"
+#line 1032 "lex.yy"
 yylval.resource_format = FMT_DEPTH24STENCIL8; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 485:
 YY_RULE_SETUP
-#line 1009 "lex.yy"
+#line 1033 "lex.yy"
 yylval.resource_format = FMT_DEPTH_COMPONENT32F; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 486:
 YY_RULE_SETUP
-#line 1010 "lex.yy"
+#line 1034 "lex.yy"
 yylval.resource_format = FMT_DEPTH32F_STENCIL8; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 487:
 YY_RULE_SETUP
-#line 1011 "lex.yy"
+#line 1035 "lex.yy"
 yylval.resource_format = FMT_RGBA8UI; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 488:
 YY_RULE_SETUP
-#line 1012 "lex.yy"
+#line 1036 "lex.yy"
 yylval.resource_format = FMT_FLOATRGBA16NV; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 489:
 YY_RULE_SETUP
-#line 1013 "lex.yy"
+#line 1037 "lex.yy"
 yylval.resource_format = FMT_RG                  ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 490:
 YY_RULE_SETUP
-#line 1014 "lex.yy"
+#line 1038 "lex.yy"
 yylval.resource_format = FMT_RG_INTEGER          ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 491:
 YY_RULE_SETUP
-#line 1015 "lex.yy"
+#line 1039 "lex.yy"
 yylval.resource_format = FMT_R8                  ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 492:
 YY_RULE_SETUP
-#line 1016 "lex.yy"
+#line 1040 "lex.yy"
 yylval.resource_format = FMT_R16                 ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 493:
 YY_RULE_SETUP
-#line 1017 "lex.yy"
+#line 1041 "lex.yy"
 yylval.resource_format = FMT_RG8                 ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 494:
 YY_RULE_SETUP
-#line 1018 "lex.yy"
+#line 1042 "lex.yy"
 yylval.resource_format = FMT_RG16                ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 495:
 YY_RULE_SETUP
-#line 1019 "lex.yy"
+#line 1043 "lex.yy"
 yylval.resource_format = FMT_R16F                ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 496:
 YY_RULE_SETUP
-#line 1020 "lex.yy"
+#line 1044 "lex.yy"
 yylval.resource_format = FMT_R32F                ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 497:
 YY_RULE_SETUP
-#line 1021 "lex.yy"
+#line 1045 "lex.yy"
 yylval.resource_format = FMT_RG16F               ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 498:
 YY_RULE_SETUP
-#line 1022 "lex.yy"
+#line 1046 "lex.yy"
 yylval.resource_format = FMT_RG32F               ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 499:
 YY_RULE_SETUP
-#line 1023 "lex.yy"
+#line 1047 "lex.yy"
 yylval.resource_format = FMT_R8I                 ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 500:
 YY_RULE_SETUP
-#line 1024 "lex.yy"
+#line 1048 "lex.yy"
 yylval.resource_format = FMT_R8UI                ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 501:
 YY_RULE_SETUP
-#line 1025 "lex.yy"
+#line 1049 "lex.yy"
 yylval.resource_format = FMT_R16I                ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 502:
 YY_RULE_SETUP
-#line 1026 "lex.yy"
+#line 1050 "lex.yy"
 yylval.resource_format = FMT_R16UI               ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 503:
 YY_RULE_SETUP
-#line 1027 "lex.yy"
+#line 1051 "lex.yy"
 yylval.resource_format = FMT_R32I                ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 504:
 YY_RULE_SETUP
-#line 1028 "lex.yy"
+#line 1052 "lex.yy"
 yylval.resource_format = FMT_R32UI               ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 505:
 YY_RULE_SETUP
-#line 1029 "lex.yy"
+#line 1053 "lex.yy"
 yylval.resource_format = FMT_RG8I                ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 506:
 YY_RULE_SETUP
-#line 1030 "lex.yy"
+#line 1054 "lex.yy"
 yylval.resource_format = FMT_RG8UI               ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 507:
 YY_RULE_SETUP
-#line 1031 "lex.yy"
+#line 1055 "lex.yy"
 yylval.resource_format = FMT_RG16I               ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 508:
 YY_RULE_SETUP
-#line 1032 "lex.yy"
+#line 1056 "lex.yy"
 yylval.resource_format = FMT_RG16UI              ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 509:
 YY_RULE_SETUP
-#line 1033 "lex.yy"
+#line 1057 "lex.yy"
 yylval.resource_format = FMT_RG32I               ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 case 510:
 YY_RULE_SETUP
-#line 1034 "lex.yy"
+#line 1058 "lex.yy"
 yylval.resource_format = FMT_RG32UI              ; return RESOURCEFORMAT_ENUM;
 	YY_BREAK
 
@@ -8565,14 +8589,14 @@ yylval.resource_format = FMT_RG32UI              ; return RESOURCEFORMAT_ENUM;
 
 case 511:
 YY_RULE_SETUP
-#line 1040 "lex.yy"
+#line 1064 "lex.yy"
 {
         return yytext[0];
     }
 	YY_BREAK
 case 512:
 YY_RULE_SETUP
-#line 1043 "lex.yy"
+#line 1067 "lex.yy"
 {
         //yy_pop_state();
         return yytext[0];
@@ -8580,27 +8604,27 @@ YY_RULE_SETUP
 	YY_BREAK
 case 513:
 YY_RULE_SETUP
-#line 1047 "lex.yy"
+#line 1071 "lex.yy"
 yylval.glenum=GLTEXTUREMINFILTER; return GLTEXTUREMINFILTER;
 	YY_BREAK
 case 514:
 YY_RULE_SETUP
-#line 1048 "lex.yy"
+#line 1072 "lex.yy"
 yylval.glenum=GLTEXTUREMAGFILTER; return GLTEXTUREMAGFILTER;
 	YY_BREAK
 case 515:
 YY_RULE_SETUP
-#line 1049 "lex.yy"
+#line 1073 "lex.yy"
 yylval.glenum=GLTEXTUREWRAPS; return GLTEXTUREWRAPS;
 	YY_BREAK
 case 516:
 YY_RULE_SETUP
-#line 1050 "lex.yy"
+#line 1074 "lex.yy"
 yylval.glenum=GLTEXTUREWRAPT; return GLTEXTUREWRAPT;
 	YY_BREAK
 case 517:
 YY_RULE_SETUP
-#line 1051 "lex.yy"
+#line 1075 "lex.yy"
 yylval.glenum=GLTEXTUREWRAPR; return GLTEXTUREWRAPR;
 	YY_BREAK
 /* D3D keywords
@@ -8612,42 +8636,42 @@ yylval.glenum=GLTEXTUREWRAPR; return GLTEXTUREWRAPR;
     AddressW                          yylval.glenum=GLTEXTUREWRAPR; return GLTEXTUREWRAPR;*/
 case 518:
 YY_RULE_SETUP
-#line 1059 "lex.yy"
+#line 1083 "lex.yy"
 yylval.glenum=GLLINEARMIPMAPLINEAR; return GLLINEARMIPMAPLINEAR;
 	YY_BREAK
 case 519:
 YY_RULE_SETUP
-#line 1060 "lex.yy"
+#line 1084 "lex.yy"
 yylval.glenum=GLLINEAR; return GLLINEAR;
 	YY_BREAK
 case 520:
 YY_RULE_SETUP
-#line 1061 "lex.yy"
+#line 1085 "lex.yy"
 yylval.glenum=GLCLAMP; return GLCLAMP;
 	YY_BREAK
 case 521:
 YY_RULE_SETUP
-#line 1062 "lex.yy"
+#line 1086 "lex.yy"
 yylval.glenum=GLCLAMPTOEDGE; return GLCLAMPTOEDGE;
 	YY_BREAK
 case 522:
 YY_RULE_SETUP
-#line 1063 "lex.yy"
+#line 1087 "lex.yy"
 yylval.glenum=GLREPEAT; return GLREPEAT;
 	YY_BREAK
 case 523:
 YY_RULE_SETUP
-#line 1064 "lex.yy"
+#line 1088 "lex.yy"
 yylval.glenum=GLNEAREST; return GLNEAREST;
 	YY_BREAK
 case 524:
 YY_RULE_SETUP
-#line 1065 "lex.yy"
+#line 1089 "lex.yy"
 yylval.glenum=GLMIRROREDREPEAT; return GLMIRROREDREPEAT;
 	YY_BREAK
 case 525:
 YY_RULE_SETUP
-#line 1066 "lex.yy"
+#line 1090 "lex.yy"
 yylval.glenum=GLMIRROREDREPEAT; return GLMIRROREDREPEAT;
 	YY_BREAK
 
@@ -8656,7 +8680,7 @@ yylval.glenum=GLMIRROREDREPEAT; return GLMIRROREDREPEAT;
     */
 case 526:
 YY_RULE_SETUP
-#line 1072 "lex.yy"
+#line 1096 "lex.yy"
 {
     // TODO create and REGISTER the variable in a table
     yylval.s = new std::string(yytext);
@@ -8674,7 +8698,7 @@ YY_RULE_SETUP
     */
 case 527:
 YY_RULE_SETUP
-#line 1086 "lex.yy"
+#line 1110 "lex.yy"
 {
 }
 	YY_BREAK
@@ -8683,7 +8707,7 @@ YY_RULE_SETUP
     */
 case 528:
 YY_RULE_SETUP
-#line 1091 "lex.yy"
+#line 1115 "lex.yy"
 {
     ++line_num;
     /*return yytext[0];*/
@@ -8694,7 +8718,7 @@ YY_RULE_SETUP
     */
 case 529:
 YY_RULE_SETUP
-#line 1098 "lex.yy"
+#line 1122 "lex.yy"
 {
     if((yytext[0] >= 33) && (yytext[0] <= 126))
         return yytext[0];
@@ -8714,17 +8738,17 @@ YY_RULE_SETUP
     */
 case 530:
 YY_RULE_SETUP
-#line 1114 "lex.yy"
+#line 1138 "lex.yy"
 BEGIN(incl);
 	YY_BREAK
 case 531:
 YY_RULE_SETUP
-#line 1115 "lex.yy"
+#line 1139 "lex.yy"
 /*  eat  the  whitespace and " or < as often in #include */
 	YY_BREAK
 case 532:
 YY_RULE_SETUP
-#line 1116 "lex.yy"
+#line 1140 "lex.yy"
 {  /*  got  the  include  file  name  */
     char * s = strchr(yytext, '\"'); // get rid of the quote or >
     if(!s) s = strchr(yytext, '>');
@@ -8782,7 +8806,7 @@ case YY_STATE_EOF(color_sample_state):
 case YY_STATE_EOF(rasterization_state):
 case YY_STATE_EOF(resource):
 case YY_STATE_EOF(resource1):
-#line 1151 "lex.yy"
+#line 1175 "lex.yy"
 {
     if(include_stack.empty())//(  --include_stack_ptr  <  0  )
     {
@@ -8803,10 +8827,10 @@ case YY_STATE_EOF(resource1):
 	YY_BREAK
 case 533:
 YY_RULE_SETUP
-#line 1169 "lex.yy"
+#line 1193 "lex.yy"
 ECHO;
 	YY_BREAK
-#line 8810 "C:/p4/GitHub/nvFX/FxParser/lex.cpp"
+#line 8834 "C:/p4/GitHub/nvFX/FxParser/lex.cpp"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -9691,4 +9715,4 @@ int main()
 	return 0;
 	}
 #endif
-#line 1169 "lex.yy"
+#line 1193 "lex.yy"

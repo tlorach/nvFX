@@ -31,7 +31,6 @@
 #include <ctype.h>
 #include <fstream>
 #include <assert.h>
-#include <stdlib.h>
 #include "Fx.h"
 #include "FxGL.h"
 

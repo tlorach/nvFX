@@ -25,7 +25,6 @@
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
 */
-//#define MEMORY_LEAKS_CHECK
 #ifdef MEMORY_LEAKS_CHECK
 #   pragma message("build will Check for Memory Leaks!")
 #   define _CRTDBG_MAP_ALLOC
@@ -425,6 +424,10 @@ void keyboard(unsigned char key, int x, int y)
         case 0x1b:
 #ifdef NOGLUT
             PostQuitMessage(0);
+#else
+            shutdownBase();
+            shutdown();
+            exit(0);
 #endif
             break;
         case 'w':

@@ -10,6 +10,7 @@ set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation d
 
 if(WIN32)
   SET( USE_NSIGHT OFF CACHE BOOL "Use NSight" )
+  SET( MEMORY_LEAKS_CHECK OFF CACHE BOOL "Check for Memory leaks" )
 endif(WIN32)
 SET( BUILD_SAMPLES ON CACHE BOOL "Build the test samples" )
 SET( USE_CUDA OFF CACHE BOOL "Use CUDA" )
@@ -98,7 +99,6 @@ endif()
 if(USE_D3D AND (WIN32))
     find_package(DXSDK MODULE)
 endif()
-
 #=============> Only in OpenGL Case
 if(USE_OPENGL)
   find_package(OpenGL)
@@ -138,6 +138,12 @@ if(USE_OPENGL)
     endif()
   endif()
 endif() # OpenGL
+# ===============> Memory leak check: define
+if( MEMORY_LEAKS_CHECK)
+  add_definitions(
+      -DMEMORY_LEAKS_CHECK
+  )
+endif()
 
 if ("${CMAKE_GENERATOR}" MATCHES "^(Visual Studio).*")
   set (NVFX_CONFIG "$(ConfigurationName)")

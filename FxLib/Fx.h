@@ -27,6 +27,26 @@
 */
 #ifndef __FX_H__
 #define __FX_H__
+#ifdef MEMORY_LEAKS_CHECK
+	#pragma message("build will Check for Memory Leaks!")
+	#define _CRTDBG_MAP_ALLOC
+	#include <stdlib.h>
+	#include <crtdbg.h>
+    inline void* operator new(size_t size, const char *file, int line)
+    {
+       return ::operator new(size, 1, file, line);
+    }
+
+    inline void __cdecl operator delete(void *ptr, const char *file, int line) 
+    {
+       ::operator delete(ptr, _NORMAL_BLOCK, file, line);
+    }
+
+    #define DEBUG_NEW new( __FILE__, __LINE__)
+    #define MALLOC_DBG(x) _malloc_dbg(x, 1, __FILE__, __LINE__);
+    #define malloc(x) MALLOC_DBG(x)
+    #define new DEBUG_NEW
+#endif
 #include <vector>
 #include <map>
 #include <string>
@@ -39,13 +59,6 @@
 #define CHECK_POINTER(a) {if (a == NULL) assert(0);}
 #define CHECK_TRUE_RET(cond) {if (!(cond)) return;}
 #define CHECK_POINTER_RET(ptr) {if (ptr == NULL) return;}
-//#define MEMORY_LEAKS_CHECK
-#ifdef MEMORY_LEAKS_CHECK
-#   pragma message("build will Check for Memory Leaks!")
-#   define _CRTDBG_MAP_ALLOC
-#   include <stdlib.h>
-#   include <crtdbg.h>
-#endif
 #else
 #define CHECK_TRUE(a)
 #define CHECK_TRUE_MSG(cond,msg)
@@ -353,7 +366,7 @@ protected:
     /// @}
 public:
     Shader(const char *name = NULL, IContainer* pCont = NULL);
-    ~Shader();
+    virtual ~Shader();
     virtual const char* getName()               { return m_name.c_str(); }
     virtual void    setName(const char *name)   { m_name = name; }
     virtual IAnnotation *annotations() { return &m_annotations; }
@@ -606,7 +619,9 @@ protected:
     typedef std::vector<Prog>           ProgVec;
     ShdMap          m_shaders;
     ProgVec         m_programs;
+
 public:
+    virtual ~ShaderModuleRepository();
     virtual IShader* findShader(const char * name, TargetType t=TANY);
     int         gatherFromAnnotation(IShader** &ppShaders, const char *annotationName, const char* str, int *ival, float *fval);
     virtual int gatherFromAnnotation(IShader** &ppShaders, const char *annotationName, const char* value=NULL);
@@ -643,7 +658,8 @@ protected:
     StringName              m_name;
     // TODO: write the code when some targets need to be removed
     std::vector<STarget>    m_targets;
-    int                     m_bufferId; ///< typically GLSL buffer Id
+    bool                    m_ownBufferId;
+    unsigned int            m_bufferId; ///< typically GLSL buffer Id
 	int						m_sizeMultiplier; ///< a multiplier, to allocate a bigger buffer for many occurences
 	int						m_sizeOfCstBuffer; ///< a multiplier, to allocate a bigger buffer for many occurences
 	int						m_bufferOffset; ///< offset within the constant buffer attached here
@@ -961,6 +977,7 @@ protected:
     virtual bool    bind();
     virtual void    unbind();
 public:
+    virtual ~ProgramPipeline();
     ProgramPipeline(Container *pCont);
     virtual /*IShaderProgram*/IProgram* getShaderProgram(int i);
     virtual int         getProgramShaderFlags() { return m_shaderFlags; }
@@ -2194,7 +2211,7 @@ protected:
     /// \brief only friends can create it
     FrameBufferObject(FrameBufferObjectsRepository* pOwner, const char *name=NULL) :
         m_w(0), m_h(0), m_dst(NULL), m_fboID(0), m_pOwner(pOwner) { if(name) m_name=name; }
-    virtual ~FrameBufferObject() {}
+    virtual ~FrameBufferObject();
 public:
     /// \brief returns the interface for annotations
     IAnnotation*    annotations() { return &m_annotations; }
