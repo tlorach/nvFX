@@ -406,7 +406,7 @@ public:
 class Program : public IProgramEx
 {
 protected:
-    Container*          m_container; ///< used to call eprintf, for example
+    Container*          m_container;
     /// Keep track of who is using this program
     struct STarget {
         Pass*      pass;
