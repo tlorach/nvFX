@@ -175,34 +175,38 @@ bool D3DShaderProgram::addShader(ShaderType type, IShader* pShader, IContainer* 
             return false;
         m_shaderFlags = FX_VERTEX_SHADER_BIT;
         m_data.shaders[std::string(pShader->getName())] = static_cast<D3DShader*>(pShader);
-        return true;
+        break;
     case FX_FRAGPROG:
         if(m_shaderFlags & (~FX_FRAGMENT_SHADER_BIT))
             return false;
         m_shaderFlags = FX_FRAGMENT_SHADER_BIT;
         m_data.shaders[std::string(pShader->getName())] = static_cast<D3DShader*>(pShader);
-        return true;
+        break;
     case FX_GEOMPROG:
         if(m_shaderFlags & (~FX_GEOMETRY_SHADER_BIT))
             return false;
         m_shaderFlags = FX_GEOMETRY_SHADER_BIT;
         m_data.shaders[std::string(pShader->getName())] = static_cast<D3DShader*>(pShader);
-        return true;
+        break;
     case FX_TCSPROG:
         if(m_shaderFlags & (~FX_TESS_CONTROL_SHADER_BIT))
             return false;
         m_shaderFlags = FX_TESS_CONTROL_SHADER_BIT;
         m_data.shaders[std::string(pShader->getName())] = static_cast<D3DShader*>(pShader);
-        return true;
+        break;
     case FX_TESPROG:
         if(m_shaderFlags & (~FX_TESS_EVALUATION_SHADER_BIT))
             return false;
         m_shaderFlags = FX_TESS_EVALUATION_SHADER_BIT;
         m_data.shaders[std::string(pShader->getName())] = static_cast<D3DShader*>(pShader);
-        return true;
-    }
+        break;
+    default:
 assert(1);
-    return false;
+        return false;
+    }
+    // add in the shader the target reference of this program
+    static_cast<Shader*>(pShader)->addTarget(this);
+    return true;
 }
 /*************************************************************************/ /**
  ** 
@@ -234,6 +238,12 @@ void D3DShaderProgram::cleanup()
         (*icshd)->cleanupShader();
         ++icshd;
     }*/
+    iShd = m_data.shaders.begin();
+    iEnd = m_data.shaders.end();
+    for(;iShd != iEnd; iShd++)
+    {
+        iShd.second->removeTarget(this);
+    }
 #define CLEANUPSHD(shd)\
     if(shd.shader)         shd.shader->Release();\
     if(shd.compiledShader) shd.compiledShader->Release();\

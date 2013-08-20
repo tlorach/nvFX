@@ -49,6 +49,7 @@
 #endif
 #include <vector>
 #include <map>
+#include <set>
 #include <string>
 #include <string.h>
 
@@ -343,6 +344,9 @@ protected:
     Annotation          m_annotations;
     TargetType          m_targetType;
     Container*          m_container; ///< just referenced here to be able to access cgContext :-(
+    /// Keep track of who is using this shader module
+    std::set<Program*>  m_programTargets;
+    ///.keeps track of areas in the shader code to map line # with effect line #
     struct codeInfo {
         codeInfo(int a, int b, int c, const char *s) { lineInFX=a; lineinShader=b; totalLinesInFX=c; if(s) fname = s; }
         int lineInFX;
@@ -350,7 +354,6 @@ protected:
         int totalLinesInFX;
         std::string fname;
     };
-    ///.keeps track of areas in the shader code to map line # with effect line #
     std::vector<codeInfo>  m_startLineNumbers;
     int                 m_totalLines;
     std::string         m_shaderCode; ///< this string will hold shader code until we finally compile it
@@ -387,17 +390,31 @@ public:
     virtual Argument        getArgument(int i);
     virtual const char *    isUsedAsKernel();
     /// @}
+    void    addTarget(Program *program);
+    void    removeTarget(Program *program);
     friend class Container;
     friend class ShaderModuleRepository;
 };
 /*************************************************************************/ /**
- ** 
+ ** a Program is intended to be used through a pass. The pass can either
+ ** have one program (non-separable case) or many programs combined together
+ ** thanks to the "Shader Pipeline"
+ ** if a Program doesn't have anymore any target (m_targets), it means we should
+ ** delete this program since no use anywhere
  ** 
  **/ /*************************************************************************/ 
 class Program : public IProgramEx
 {
 protected:
     Container*          m_container; ///< used to call eprintf, for example
+    /// Keep track of who is using this program
+    struct STarget {
+        Pass*      pass;
+        int         passLayerId; ///< ID of which program to take in the pass
+    };
+    std::vector<STarget>   m_targets;
+    void                addTarget(Pass* p, int layerID);
+    int                 releaseTarget(Pass* p, int layerID);
 public:
     Program(Container *pCont) : m_container(pCont) {}
     ~Program() {}
@@ -405,6 +422,8 @@ public:
     virtual bool        executeKernelEntry(int entryID) { return false; }
     virtual bool execute(int szx, int szy, int szz=1) { return false; }
     virtual bool execute(RenderingMode mode, const PassInfo::PathInfo *p) { return false; }
+
+    friend class Pass;
 };
 
 
@@ -962,10 +981,13 @@ public:
 };
 /*************************************************************************/ /**
  ** \brief 
- ** 
+ ** a program pipeline is what allows OpenGL to use separate shader stages
+ ** and put them together. It would be fake in D3D.
+ ** Note this class is only meant to be used by the Pass Class. So the 'target'
+ ** setup in the Program::addTarget is done in Pass (no need to complicate more)
  ** 
  **/ /*************************************************************************/ 
-class ProgramPipeline : public IProgramPipelineEx
+class ProgramPipeline : public IProgramPipeline//Ex
 {
 protected:
     std::vector</*ShaderProgram*/Program*> m_progShaders;
@@ -982,9 +1004,9 @@ public:
     virtual /*IShaderProgram*/IProgram* getShaderProgram(int i);
     virtual int         getProgramShaderFlags() { return m_shaderFlags; }
 
-    bool            addProgramShader(/*IShaderProgram*/IProgram* pProgShader);
-    bool            removeProgramShader(IProgram* pProgShader);
-    bool            removeProgramShader(int stageFlags);
+    /*virtual*/ bool        addProgramShader(/*IShaderProgram*/IProgram* pProgShader);
+    /*virtual*/ bool        removeProgramShader(IProgram* pProgShader);
+    /*virtual*/ IProgram*   removeProgramShader(int stageFlags);
 
     friend class Pass;
 };
@@ -1563,11 +1585,12 @@ protected:
     void            addCstBuffer(CstBuffer *pC, int target); ///< allows to add a cst buffer and the specific target to the pass that will need it to be updated
     void            addSamplerState(SamplerState *pS, int target); ///< allows to add a sampler state and the specific target to the pass that will need it to be updated
     void            addResource(Resource *pRes, int target); ///< allows to add a resource and the specific target to the pass that will need it to be updated
-    IProgram*       createShaderProgram(std::map<std::string, PassState*> &passStateShader, ShaderType type, ProgramPipeline* &programPipeline);
+    IProgram*       createShaderProgram(std::map<std::string, PassState*> &passStateShader, ShaderType type, ProgramPipeline* &programPipeline, int layerID);
     /// check the texture units of the used-uniforms dedicated to texture sampler
     bool            validateUniformTextureUnits(bool allowUnitAssignment);
     /// check the texture units of the used-uniforms dedicated to texture sampler
     bool            validateUniformTextureUnit(Uniform* pU, bool allowUnitAssignment, int layerID=-1);
+    void            delete_ProgramPipeline(ProgramPipeline* pp, int layerID);
 public:
     virtual ~Pass();
     /// \brief public constructor. Needs the parent container (to find back some uniforms)

@@ -167,6 +167,8 @@ bool GLSLProgram::addShader(ShaderType type, IShader* pShader, IContainer* pCont
             return false;
         break;
     }
+    // add in the shader the target reference of this program
+    static_cast<Shader*>(pShader)->addTarget(this);
     return true;
 }
 
@@ -392,6 +394,7 @@ void GLSLProgram::cleanup()
         {
             //ivshd->second->cleanupShader();
             GLhandleARB o = ivshd->second->getGLSLShaderObj(FX_VTXPROG);
+            ivshd->second->removeTarget(this);
             glDetachShader(m_program, o);
             ++ivshd;
         }
@@ -401,6 +404,7 @@ void GLSLProgram::cleanup()
         {
             //igshd->second->cleanupShader();
             GLhandleARB o = igshd->second->getGLSLShaderObj(FX_GEOMPROG);
+            igshd->second->removeTarget(this);
             glDetachObjectARB(m_program, o);
             ++igshd;
         }
@@ -409,6 +413,7 @@ void GLSLProgram::cleanup()
         {
             //icshd->second->cleanupShader();
             GLhandleARB o = icshd->second->getGLSLShaderObj(FX_TCSPROG);
+            icshd->second->removeTarget(this);
             glDetachObjectARB(m_program, o);
             ++icshd;
         }
@@ -417,6 +422,7 @@ void GLSLProgram::cleanup()
         {
             //ieshd->second->cleanupShader();
             GLhandleARB o = ieshd->second->getGLSLShaderObj(FX_TESPROG);
+            ieshd->second->removeTarget(this);
             glDetachObjectARB(m_program, o);
             ++ieshd;
         }
@@ -426,6 +432,7 @@ void GLSLProgram::cleanup()
         {
             //ifshd->second->cleanupShader();
             GLhandleARB o = ifshd->second->getGLSLShaderObj(FX_FRAGPROG);
+            ifshd->second->removeTarget(this);
 #if 1 //def OGLES2
             glDetachShader(m_program, o);
 #else
@@ -439,6 +446,7 @@ void GLSLProgram::cleanup()
         {
             //icshd->second->cleanupShader();
             GLhandleARB o = icshd->second->getGLSLShaderObj(FX_COMPUTEPROG);
+            icshd->second->removeTarget(this);
             glDetachObjectARB(m_program, o);
             ++icshd;
         }
