@@ -216,12 +216,41 @@ void nvFX::getID(int *ids, int numids)
 //    return true;
 //}
 
+void Program::addTarget(Pass* p, int layerID)
+{
+    for(int i=0; i<m_targets.size(); i++)
+    {
+        STarget& t = m_targets[i];
+        if((t.pass == p) && (t.passLayerId == layerID))
+            return;
+    }
+    STarget t;
+    t.pass = p;
+    t.passLayerId = layerID;
+    m_targets.push_back(t);
+}
+int Program::releaseTarget(Pass* p, int layerID)
+{
+    std::vector<STarget>::iterator it;
+    for(it=m_targets.begin(); it != m_targets.end(); it++)
+    {
+        if((it->pass == p) && (it->passLayerId == layerID))
+        {
+            m_targets.erase(it);
+            return m_targets.size();
+        }
+    }
+    return m_targets.size();
+}
+
 //
 // ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline
 // ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline
 // ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline
 // ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline ProgramPipeline
 //
+
+
 ProgramPipeline::ProgramPipeline(Container *pCont)
 {
     m_container = pCont;
@@ -235,12 +264,6 @@ ProgramPipeline::ProgramPipeline(Container *pCont)
  **/ /*************************************************************************/ 
 ProgramPipeline::~ProgramPipeline()
 {
-    std::vector</*ShaderProgram*/Program*>::iterator iP = m_progShaders.begin();
-    for(; iP != m_progShaders.end(); iP++)
-    {
-        ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
-        pShdRep->releaseProgram(*iP);
-    }
     m_progShaders.clear();
 }
 /*************************************************************************/ /**
@@ -282,18 +305,16 @@ bool ProgramPipeline::removeProgramShader(IProgram* pProgShader)
             int fl = pProgShader->getProgramShaderFlags();
             m_progShaders.erase(iP);
             invalidate(fl);
-            ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
-            pShdRep->releaseProgram(pProgShader);
             return true;
         }
     }
     return false;
 }
 /*************************************************************************/ /**
- ** 
- **
+ ** This is supposed to remove one program by one
+ ** returns the removed program ptr if succeeded. Otherwise NULL
  **/ /*************************************************************************/ 
-bool ProgramPipeline::removeProgramShader(int stageFlags)
+IProgram* ProgramPipeline::removeProgramShader(int stageFlags)
 {
     std::vector</*ShaderProgram*/Program*>::iterator iP = m_progShaders.begin();
     std::vector</*ShaderProgram*/Program*>::iterator iP2;
@@ -304,15 +325,14 @@ bool ProgramPipeline::removeProgramShader(int stageFlags)
         int fl = (*iP)->getProgramShaderFlags();
         if(fl & stageFlags)
         {
+            Program* prog = *iP;
             invalidate(fl);
-            ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
-            pShdRep->releaseProgram(*iP);
             m_progShaders.erase(iP);
-            return true;
+            return prog;
         }
         iP = iP2;
     }
-    return false;
+    return NULL;
 }
 
 /*************************************************************************/ /**
@@ -889,6 +909,19 @@ Shader::~Shader()
     for(unsigned int i=0; i<m_kernelArgs.size(); i++)
         delete [] m_kernelArgs[i].argName;
     m_kernelArgs.clear();
+}
+
+void    Shader::addTarget(Program *program)
+{
+    m_programTargets.insert (program);
+}
+void    Shader::removeTarget(Program *program)
+{
+    std::set<Program*>::iterator it;
+    it = m_programTargets.find(program);
+    if(it == m_programTargets.end())
+        return;
+    m_programTargets.erase(it);
 }
 
 

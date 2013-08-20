@@ -668,14 +668,23 @@ Pass::~Pass()
             ++it;
         }
 //#ifndef USE_OLDPROGRAM
+        ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
         if(sl.programPipeline)
         {
-            delete_ProgramPipeline(sl.programPipeline);
+            delete_ProgramPipeline(sl.programPipeline, iPM->first);
         }
 //#endif
         sl.statesForExecution.clear();
         sl.statesForValidation.clear();
         ++iPM;
+
+        if (NULL!=sl.program)
+        {
+          delete_Program(sl.program);
+          sl.program = NULL;
+          sl.program->releaseTarget(this, iPM->first);
+          pShdRep->releaseProgram(sl.program);
+        }
     }
 
     if (NULL!=m_pBaseStatesLayer->program)
@@ -684,6 +693,20 @@ Pass::~Pass()
       m_pBaseStatesLayer->program = NULL;
     }
     
+}
+
+void Pass::delete_ProgramPipeline(ProgramPipeline* pp, int layerID)
+{
+    // un-register targets for the programs
+    Program* p;
+    int i;
+    ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
+    for(i=0; p = static_cast<Program*>(pp->getShaderProgram(i)); i++)
+    {
+        p->releaseTarget(this, layerID);
+        pShdRep->releaseProgram(p);
+    }
+    ::delete_ProgramPipeline(pp);
 }
 
 /*************************************************************************/ /**
@@ -736,7 +759,7 @@ bool Pass::invalidate()
     return true;
 }
 
-IProgram* Pass::createShaderProgram(std::map<std::string, PassState*> &passStateShader, ShaderType type, ProgramPipeline* &programPipeline)
+IProgram* Pass::createShaderProgram(std::map<std::string, PassState*> &passStateShader, ShaderType type, ProgramPipeline* &programPipeline, int layerID)
 {
     IShader *pShader;
     std::map<std::string, PassState*>::iterator iMPS;
@@ -757,19 +780,22 @@ IProgram* Pass::createShaderProgram(std::map<std::string, PassState*> &passState
             pShaders[sz++] = pShader;
         ++iMPS;
     }
-    /*IShaderProgram*/IProgram* pShdProg = m_container->createShaderProgram(type, sz, pShaders);
+    Program* pShdProg = static_cast<Program*>(m_container->createShaderProgram(type, sz, pShaders));
     // the idea: fill the pointer here only if no shader-pipeline used
     delete [] pShaders;
     if(!pShdProg)
     {
         nvFX::printf("Encountered errors during creation of shader-program\n");
         if(programPipeline)
-            delete_ProgramPipeline(programPipeline);
+            ::delete_ProgramPipeline(programPipeline);
         programPipeline = NULL;
         return NULL;
     }
     if(programPipeline)
+    {
         programPipeline->addProgramShader(pShdProg);
+        pShdProg->addTarget(this, layerID);
+    }
     return pShdProg;
 }
 /*************************************************************************/ /**
@@ -1155,7 +1181,7 @@ bool Pass::validate()
                 if(m_pBaseStatesLayer->programPipeline)
                 {
                     m_container->invalidateTargets(this, 0);
-                    delete_ProgramPipeline(m_pBaseStatesLayer->programPipeline);
+                    Pass::delete_ProgramPipeline(m_pBaseStatesLayer->programPipeline, 0);
                 }
                 //
                 // send them to the program
@@ -1170,7 +1196,7 @@ bool Pass::validate()
                 //
                 if(passStatesBaseLayerVS.size() > 0)
                 {
-                    if(!createShaderProgram(passStatesBaseLayerVS, nvFX::FX_VTXPROG, m_pBaseStatesLayer->programPipeline))
+                    if(!createShaderProgram(passStatesBaseLayerVS, nvFX::FX_VTXPROG, m_pBaseStatesLayer->programPipeline, 0))
                         return false;
                 }
                 //
@@ -1178,7 +1204,7 @@ bool Pass::validate()
                 //
                 if(passStatesBaseLayerGS.size() > 0)
                 {
-                    if(!createShaderProgram(passStatesBaseLayerGS, nvFX::FX_GEOMPROG, m_pBaseStatesLayer->programPipeline))
+                    if(!createShaderProgram(passStatesBaseLayerGS, nvFX::FX_GEOMPROG, m_pBaseStatesLayer->programPipeline, 0))
                         return false;
                 }
                 //
@@ -1186,7 +1212,7 @@ bool Pass::validate()
                 //
                 if(passStatesBaseLayerTCS.size() > 0)
                 {
-                    if(!createShaderProgram(passStatesBaseLayerTCS, nvFX::FX_TCSPROG, m_pBaseStatesLayer->programPipeline))
+                    if(!createShaderProgram(passStatesBaseLayerTCS, nvFX::FX_TCSPROG, m_pBaseStatesLayer->programPipeline, 0))
                         return false;
                 }
                 //
@@ -1194,7 +1220,7 @@ bool Pass::validate()
                 //
                 if(passStatesBaseLayerTES.size() > 0)
                 {
-                    if(!createShaderProgram(passStatesBaseLayerTES, nvFX::FX_TESPROG, m_pBaseStatesLayer->programPipeline))
+                    if(!createShaderProgram(passStatesBaseLayerTES, nvFX::FX_TESPROG, m_pBaseStatesLayer->programPipeline, 0))
                         return false;
                 }
                 //
@@ -1202,7 +1228,7 @@ bool Pass::validate()
                 //
                 if(passStatesBaseLayerPS.size() > 0)
                 {
-                    if(!createShaderProgram(passStatesBaseLayerPS, nvFX::FX_FRAGPROG, m_pBaseStatesLayer->programPipeline))
+                    if(!createShaderProgram(passStatesBaseLayerPS, nvFX::FX_FRAGPROG, m_pBaseStatesLayer->programPipeline, 0))
                         return false;
                 }
                 //
@@ -1210,7 +1236,7 @@ bool Pass::validate()
                 //
                 if(passStatesBaseLayerCS.size() > 0)
                 {
-                    IProgram* pShdProg = createShaderProgram(passStatesBaseLayerCS, nvFX::FX_COMPUTEPROG, m_pBaseStatesLayer->programPipeline);
+                    IProgram* pShdProg = createShaderProgram(passStatesBaseLayerCS, nvFX::FX_COMPUTEPROG, m_pBaseStatesLayer->programPipeline, 0);
                     if(pShdProg == NULL)
                         return false;
                     // in this special Compute case, let's store the only one (there can't be more) program in m_pBaseStatesLayer->program
@@ -1235,7 +1261,7 @@ bool Pass::validate()
                 //
                 if(passStatesBaseLayerPathSource.size() > 0)
                 {
-                    IProgram* pShdProg = createShaderProgram(passStatesBaseLayerPathSource, nvFX::FX_PATHPROG, m_pBaseStatesLayer->programPipeline);
+                    IProgram* pShdProg = createShaderProgram(passStatesBaseLayerPathSource, nvFX::FX_PATHPROG, m_pBaseStatesLayer->programPipeline, 0);
                     if(pShdProg == NULL)
                         return false;
                     // in this special Path-rendering case, let's store the only one (there can't be more) program in m_pBaseStatesLayer->program
@@ -1245,7 +1271,7 @@ bool Pass::validate()
                 //
                 if(m_pBaseStatesLayer->programPipeline && !m_pBaseStatesLayer->programPipeline->validate())
                 {
-                    delete_ProgramPipeline(m_pBaseStatesLayer->programPipeline);
+                    delete_ProgramPipeline(m_pBaseStatesLayer->programPipeline, 0);
                     m_pBaseStatesLayer->programPipeline = NULL;
                     nvFX::printf("Encountered errors during validation of Pass (Shader Linkage) %s\n", m_name.c_str());
                     return false;
@@ -1267,11 +1293,12 @@ bool Pass::validate()
                     ++iSL;
                     continue;
                 }
+                int layerID = iSL->first;
                 StatesLayer &sl = iSL->second;
 //#ifndef USE_OLDPROGRAM
                 if(sl.programPipeline)
                 {
-                    delete_ProgramPipeline(sl.programPipeline);
+                    delete_ProgramPipeline(sl.programPipeline, layerID);
                 }
 //#endif
                 // copy the base maps and overwrite what needs to be overridden
@@ -1485,7 +1512,7 @@ bool Pass::validate()
                     //
                     if(passStatesBaseLayerVS.size() > 0)
                     {
-                        if(!createShaderProgram(passStatesLayerVS, nvFX::FX_VTXPROG, sl.programPipeline))
+                        if(!createShaderProgram(passStatesLayerVS, nvFX::FX_VTXPROG, sl.programPipeline, layerID))
                             return false;
                     }
                     //
@@ -1493,7 +1520,7 @@ bool Pass::validate()
                     //
                     if(passStatesBaseLayerGS.size() > 0)
                     {
-                        if(!createShaderProgram(passStatesLayerGS, nvFX::FX_GEOMPROG, sl.programPipeline))
+                        if(!createShaderProgram(passStatesLayerGS, nvFX::FX_GEOMPROG, sl.programPipeline, layerID))
                             return false;
                     }
                     //
@@ -1501,7 +1528,7 @@ bool Pass::validate()
                     //
                     if(passStatesBaseLayerTCS.size() > 0)
                     {
-                        if(!createShaderProgram(passStatesLayerTCS, nvFX::FX_TCSPROG, sl.programPipeline))
+                        if(!createShaderProgram(passStatesLayerTCS, nvFX::FX_TCSPROG, sl.programPipeline, layerID))
                             return false;
                     }
                     //
@@ -1509,7 +1536,7 @@ bool Pass::validate()
                     //
                     if(passStatesBaseLayerTES.size() > 0)
                     {
-                        if(!createShaderProgram(passStatesLayerTES, nvFX::FX_TESPROG, sl.programPipeline))
+                        if(!createShaderProgram(passStatesLayerTES, nvFX::FX_TESPROG, sl.programPipeline, layerID))
                             return false;
                     }
                     //
@@ -1517,7 +1544,7 @@ bool Pass::validate()
                     //
                     if(passStatesBaseLayerPS.size() > 0)
                     {
-                        if(!createShaderProgram(passStatesLayerPS, nvFX::FX_FRAGPROG, sl.programPipeline))
+                        if(!createShaderProgram(passStatesLayerPS, nvFX::FX_FRAGPROG, sl.programPipeline, layerID))
                             return false;
                     }
                     //
@@ -1525,7 +1552,7 @@ bool Pass::validate()
                     //
                     if(passStatesBaseLayerCS.size() > 0)
                     {
-                        IProgram* pShdProg = createShaderProgram(passStatesLayerCS, nvFX::FX_COMPUTEPROG, sl.programPipeline);
+                        IProgram* pShdProg = createShaderProgram(passStatesLayerCS, nvFX::FX_COMPUTEPROG, sl.programPipeline, layerID);
                         if(pShdProg == NULL)
                             return false;
                         // in this special Compute case, let's store the only one (there can't be more) program in m_pBaseStatesLayer->program
@@ -1536,7 +1563,7 @@ bool Pass::validate()
                     //
                     if(passStatesBaseLayerPathSource.size() > 0)
                     {
-                        IProgram* pShdProg = createShaderProgram(passStatesBaseLayerPathSource, nvFX::FX_PATHPROG, sl.programPipeline);
+                        IProgram* pShdProg = createShaderProgram(passStatesBaseLayerPathSource, nvFX::FX_PATHPROG, sl.programPipeline, layerID);
                         if(pShdProg == NULL)
                             return false;
                         // in this special Path-rendering case, let's store the only one (there can't be more) program in m_pBaseStatesLayer->program
@@ -1547,7 +1574,7 @@ bool Pass::validate()
                     //
                     if(sl.programPipeline && !sl.programPipeline->validate())
                     {
-                        delete_ProgramPipeline(sl.programPipeline);
+                        delete_ProgramPipeline(sl.programPipeline, layerID);
                         sl.program = NULL;
                         nvFX::printf("Encountered errors during validation of Pass (Shader Linkage) %s\n", m_name.c_str());
                         return false;
@@ -2602,15 +2629,25 @@ bool Pass::destroy(IPassState* p)
                     case PassState::TFragmentShader:
                     case PassState::TVertexShader:
                       {
+                        int refs = 1;
         #ifndef USE_OLDPROGRAM
                         if(sl.programPipeline)
-                            sl.programPipeline->removeProgramShader(asShaderFlag(p->getType()));
-                        else 
+                        {
+                            Program *prog = static_cast<Program*>(sl.programPipeline->removeProgramShader(asShaderFlag(p->getType())) );
+                            refs = prog->releaseTarget(this, iSL->first);
+                            ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
+                            pShdRep->releaseProgram(prog);
+                        } else 
         #endif
                         if(sl.program)
                         {
                             ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
                             pShdRep->releaseProgram(sl.program);
+                            refs = sl.program->releaseTarget(this, iSL->first);
+                        }
+                        if(refs == 0) // good to erase this program: not used anymore
+                        {
+
                         }
                         sl.program = NULL;
                         // Invalidate the uniform targets so that we don't update uniforms of a pass that may not be ready yet
@@ -2977,6 +3014,7 @@ void Pass::removeProgramLayer(int id)
     StatesLayerMap::iterator iSL = m_statesLayers.find(id);
     if(iSL == m_statesLayers.end())
         return;
+    int         layerID = iSL->first;
     StatesLayer &sl = iSL->second;
     //
     // Now we need to release things on this level
@@ -2998,7 +3036,7 @@ void Pass::removeProgramLayer(int id)
 //#ifndef USE_OLDPROGRAM
     if(sl.programPipeline)
     {
-        delete_ProgramPipeline(sl.programPipeline);
+        delete_ProgramPipeline(sl.programPipeline, layerID);
     }
 //#endif
     sl.statesForExecution.clear();

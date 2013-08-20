@@ -1156,7 +1156,7 @@ public:
  ** 
  ** 
  **/ /*************************************************************************/ 
-class IProgramPipeline : public IBaseInterface<IProgramPipelineEx>
+class IProgramPipeline //: public IBaseInterface<IProgramPipelineEx>
 {
 public:
 	virtual ~IProgramPipeline() {}

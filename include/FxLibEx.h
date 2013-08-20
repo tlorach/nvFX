@@ -985,22 +985,22 @@ namespace nvFX
     };
     /*************************************************************************/ /**
      ** \brief the extended interface 
-     ** 
+     ** to remove: give some control that would break consistency in nvFX
      **/ /*************************************************************************/ 
-    class IProgramPipelineEx : public IProgramPipeline
-    {
-    public:
-        /// \brief implementation of the virtual method getExInterface()
-        virtual IProgramPipelineEx*       getExInterface() { return this; }
-        IProgramPipelineEx() : IProgramPipeline() {}
-        /// \brief adds any kind of program to the pipeline.
-        virtual bool            addProgramShader(IProgram* pProgShader) = 0;
-        /// \brief remove a specific program from this pipeline
-        virtual bool            removeProgramShader(IProgram* pProgShader) = 0;
-        /// \brief remove any program that contains the specific shader stage type
-        virtual bool            removeProgramShader(int stageFlags) = 0;
-        virtual bool            validate() = 0;
-    };
+    //class IProgramPipelineEx : public IProgramPipeline
+    //{
+    //public:
+    //    /// \brief implementation of the virtual method getExInterface()
+    //    virtual IProgramPipelineEx*       getExInterface() { return this; }
+    //    IProgramPipelineEx() : IProgramPipeline() {}
+    //    /// \brief adds any kind of program to the pipeline.
+    //    virtual bool            addProgramShader(IProgram* pProgShader) = 0;
+    //    /// \brief remove a specific program from this pipeline
+    //    virtual bool            removeProgramShader(IProgram* pProgShader) = 0;
+    //    /// \brief remove any program that contains the specific shader stage type
+    //    virtual IProgram*       removeProgramShader(int stageFlags) = 0;
+    //    virtual bool            validate() = 0;
+    //};
 }//namespace nvFX
 
 #endif //__FXLIBEX_H__
