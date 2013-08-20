@@ -681,8 +681,8 @@ Pass::~Pass()
         if (NULL!=sl.program)
         {
           delete_Program(sl.program);
-          sl.program = NULL;
           sl.program->releaseTarget(this, iPM->first);
+          sl.program = NULL;
           pShdRep->releaseProgram(sl.program);
         }
     }
@@ -1041,7 +1041,7 @@ bool Pass::validate()
             delete_Program(p);
             //
             //
-            // Case where we don't support separate shaders
+            // ====> Case where we don't support separate shaders
             //
             if(m_container->separateShadersEnabled() == false)
             {
@@ -1056,6 +1056,9 @@ bool Pass::validate()
                 //
                 // send them to the program
                 // Note: the passStatesBaseLayerVS order depends on the map sorting (!)
+                // Note that this non-separable shader doesn't really need to work with
+                // programs that would be stored outside to optimize...
+                // in this case, 1 Pass == 1 Program. but this can be improved if needed
                 //
                 m_pBaseStatesLayer->program = new_Program(m_container);
                 std::map<std::string, PassState*>::iterator iMPS = passStatesBaseLayerVS.begin();
@@ -1172,7 +1175,10 @@ bool Pass::validate()
                     delete m_pBaseStatesLayer->program;
                     m_pBaseStatesLayer->program = NULL;
                 }
-            } else // Separable Shader case:
+            } else
+            //
+            // ====> Separable Shader case:
+            //
 			{
 //#else
                 //
@@ -2634,9 +2640,9 @@ bool Pass::destroy(IPassState* p)
                         if(sl.programPipeline)
                         {
                             Program *prog = static_cast<Program*>(sl.programPipeline->removeProgramShader(asShaderFlag(p->getType())) );
-                            refs = prog->releaseTarget(this, iSL->first);
                             ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
                             pShdRep->releaseProgram(prog);
+                            refs = prog->releaseTarget(this, iSL->first);
                         } else 
         #endif
                         if(sl.program)
@@ -2644,10 +2650,6 @@ bool Pass::destroy(IPassState* p)
                             ShaderModuleRepository* pShdRep = static_cast<ShaderModuleRepository*>(nvFX::getShaderModuleRepositorySingleton());
                             pShdRep->releaseProgram(sl.program);
                             refs = sl.program->releaseTarget(this, iSL->first);
-                        }
-                        if(refs == 0) // good to erase this program: not used anymore
-                        {
-
                         }
                         sl.program = NULL;
                         // Invalidate the uniform targets so that we don't update uniforms of a pass that may not be ready yet
