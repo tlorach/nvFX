@@ -237,7 +237,12 @@ int Program::releaseTarget(Pass* p, int layerID)
         if((it->pass == p) && (it->passLayerId == layerID))
         {
             m_targets.erase(it);
-            return m_targets.size();
+            int sz = m_targets.size();
+            if(sz == 0) // the program gets deleted if no target anymore
+            {
+                m_container->removeProgram(this);
+            }
+            return sz;
         }
     }
     return m_targets.size();
