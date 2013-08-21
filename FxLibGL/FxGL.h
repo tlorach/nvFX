@@ -178,7 +178,7 @@ namespace nvFX
     class GLSLShader : public Shader
     {
     public:
-        GLSLShader(const char *name = NULL, IContainer* pCont = NULL);
+        GLSLShader(const char *name = NULL);
         virtual ~GLSLShader();
 
         void    cleanupShader();
@@ -412,7 +412,7 @@ namespace nvFX
     private:
         bool    m_bPostscript;
     public:
-        PathShader(const char *name = NULL, IContainer* pCont = NULL, bool bPostscript=false);
+        PathShader(const char *name = NULL, bool bPostscript=false);
         ~PathShader();
 
         void    cleanupShader();

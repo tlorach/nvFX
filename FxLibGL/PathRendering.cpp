@@ -346,7 +346,7 @@ PathShader::~PathShader()
  ** 
  ** 
  **/ /*************************************************************************/ 
-PathShader::PathShader(const char * name, IContainer* pCont, bool bPostscript) : Shader(name, pCont)
+PathShader::PathShader(const char * name, bool bPostscript) : Shader(name)
 {
     m_bPostscript = bPostscript;
     m_targetType = TPATH;

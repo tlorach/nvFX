@@ -201,21 +201,21 @@ extern void                delete_StateGroupPR(StateGroupPath *p);
 extern Program*            new_Program(Container *pCont);
 extern void                delete_Program(IProgram *pProg);
 
-extern Shader*             new_GLSLShader(const char* name, Container *pCont);
-extern Shader*             new_HLSL10Shader(const char* name, Container *pCont);
-extern Shader*             new_HLSL11Shader(const char* name, Container *pCont);
+extern Shader*             new_GLSLShader(const char* name);
+extern Shader*             new_HLSL10Shader(const char* name);
+extern Shader*             new_HLSL11Shader(const char* name);
 extern void                delete_Shader(IShader *pShd);
 
 extern Program*            new_ProgramPath(Container *pCont);
-extern Shader*             new_ShaderPath(const char* name, Container *pCont, bool bPostscript);
+extern Shader*             new_ShaderPath(const char* name, bool bPostscript);
 
 #ifdef USECUDA
-extern Shader*             new_ShaderCUDA(const char* name, Container *pCont);
+extern Shader*             new_ShaderCUDA(const char* name);
 extern Program*            new_ProgramCUDA(Container *pCont);
 extern void                delete_ShaderCUDA(IShader *pShd);
 extern void                delete_ProgramCUDA(IProgram *pProg);
 #else
-inline Shader*             new_ShaderCUDA(const char* name, Container *pCont) { return NULL; }
+inline Shader*             new_ShaderCUDA(const char* name) { return NULL; }
 inline Program*            new_ProgramCUDA(Container *pCont) { return NULL; }
 inline void                delete_ShaderCUDA(IShader *pShd) {}
 inline void                delete_ProgramCUDA(IProgram *pProg) {}
@@ -343,9 +343,21 @@ protected:
     StringName          m_name;
     Annotation          m_annotations;
     TargetType          m_targetType;
-    Container*          m_container; ///< just referenced here to be able to access cgContext :-(
-    /// Keep track of who is using this shader module
-    std::set<Program*>  m_programTargets;
+    /// Keep track of who is using this shader module.
+    /// two possible users: 1/ the effect, as the owner; 2/ a program used in a pass
+    enum SUserType { User_EffectContainer, User_Program };
+    struct SUser {
+        SUserType type;
+        union {
+            Program*    program;
+            Container*  container;
+        };
+    };
+	struct less	{
+	    bool operator()(const SUser& _Left, const SUser& _Right) const { return (_Left.program < _Right.program); }
+	};
+    typedef std::set<SUser, less> UserSet;
+    UserSet             m_users;
     ///.keeps track of areas in the shader code to map line # with effect line #
     struct codeInfo {
         codeInfo(int a, int b, int c, const char *s) { lineInFX=a; lineinShader=b; totalLinesInFX=c; if(s) fname = s; }
@@ -354,12 +366,12 @@ protected:
         int totalLinesInFX;
         std::string fname;
     };
-    std::vector<codeInfo>  m_startLineNumbers;
-    int                 m_totalLines;
-    std::string         m_shaderCode; ///< this string will hold shader code until we finally compile it
+    std::vector<codeInfo>   m_startLineNumbers;
+    int                     m_totalLines;
+    std::string             m_shaderCode; ///< this string will hold shader code until we finally compile it
     /// a map of GLSL objects sorted with the domain (type) : vertex, fragment...
     typedef std::map<GLenum, GLhandleARB> ShaderObjects;
-    ShaderObjects       m_shaderObjs;
+    ShaderObjects           m_shaderObjs;
     /// \name Kernel specific (CUDA and possible others)
     /// @{
     /// if ever we use this shader code as a kernel code
@@ -367,8 +379,9 @@ protected:
     /// array of arguments, if needed
     std::vector<IShaderEx::Argument>    m_kernelArgs;
     /// @}
+    void    releaseMe();
 public:
-    Shader(const char *name = NULL, IContainer* pCont = NULL);
+    Shader(const char *name = NULL);
     virtual ~Shader();
     virtual const char* getName()               { return m_name.c_str(); }
     virtual void    setName(const char *name)   { m_name = name; }
@@ -390,8 +403,10 @@ public:
     virtual Argument        getArgument(int i);
     virtual const char *    isUsedAsKernel();
     /// @}
-    void    addTarget(Program *program);
-    void    removeTarget(Program *program);
+    void    addUser(Program *program);
+    void    removeUser(Program *program);
+    void    addUser(Container* pCont);
+    void    removeUser(Container* pCont);
     friend class Container;
     friend class ShaderModuleRepository;
 };
@@ -407,7 +422,8 @@ class Program : public IProgramEx
 {
 protected:
     Container*          m_container;
-    /// Keep track of who is using this program
+    /// Keep track of who is using this program.
+    /// the only target for a program is the pass through its layerID
     struct STarget {
         Pass*      pass;
         int         passLayerId; ///< ID of which program to take in the pass
@@ -1241,8 +1257,7 @@ public:
     bool    destroy(IStateGroupPath* p);
 #endif
     bool    destroy(IUniform *p);
-    bool    removeProgram(IProgram* p); ///< \brief called by the nvFX::IProgram::release()
-    bool    removeShader(IShader* p); ///< \brief called by the nvFX::IShader::release()
+    bool    destroy(IProgram* p); ///< \brief called by the nvFX::IProgram::release()
     /// @}
     /// \name Resource Specific
     /// @{

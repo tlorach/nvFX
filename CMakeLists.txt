@@ -12,6 +12,7 @@ if(WIN32)
   SET( USE_NSIGHT OFF CACHE BOOL "Use NSight" )
   SET( MEMORY_LEAKS_CHECK OFF CACHE BOOL "Build the project for Memory leaks check" )
 endif(WIN32)
+SET( NVFXVERBOSE OFF CACHE BOOL "allow the runtime to output lots of debug log messages" )
 SET( BUILD_SAMPLES ON CACHE BOOL "Build the test samples" )
 SET( USE_CUDA OFF CACHE BOOL "Use CUDA" )
 SET( USE_OPTIX OFF CACHE BOOL "Use OPTIX" )
@@ -144,7 +145,14 @@ if( MEMORY_LEAKS_CHECK)
       -DMEMORY_LEAKS_CHECK
   )
 endif()
+# ===============> Other general options
+if( NVFXVERBOSE)
+  add_definitions(
+      -DNVFXVERBOSE
+  )
+endif()
 
+# ===============
 if ("${CMAKE_GENERATOR}" MATCHES "^(Visual Studio).*")
   set (NVFX_CONFIG "$(ConfigurationName)")
 else()

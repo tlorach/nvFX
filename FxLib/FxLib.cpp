@@ -237,15 +237,15 @@ int Program::releaseTarget(Pass* p, int layerID)
         if((it->pass == p) && (it->passLayerId == layerID))
         {
             m_targets.erase(it);
-            int sz = m_targets.size();
+            int sz = (int)m_targets.size();
             if(sz == 0) // the program gets deleted if no target anymore
             {
-                m_container->removeProgram(this);
+                m_container->destroy(this);
             }
             return sz;
         }
     }
-    return m_targets.size();
+    return (int)m_targets.size();
 }
 
 //
@@ -547,7 +547,10 @@ int ShaderModuleRepository::addShader(IShader *p)
         return -1;
     Shd &shd = m_shaders[p->getName()];
     if(shd.p && (shd.p != p))
+    {
+        LOGD("WARNING: Global Repository already has a shader named %s\n", p->getName());
         return -1;
+    }
     shd.p = p;
     LOGD("added Shader %s as Global (refCnt=%d)\n", p->getName(), shd.refCnt+1);
     return ++shd.refCnt;
@@ -824,7 +827,7 @@ bool    Shader::setAsKernel(int nArgs, Argument* args, const char * funcName)
         return false;
     std::string funcHeader;
     m_kernelName = std::string(funcName);
-    unsigned int i=0;
+    int i=0;
 
     for(; i<m_kernelArgs.size(); i++)
         delete [] m_kernelArgs[i].argName;
@@ -902,11 +905,10 @@ const char * Shader::isUsedAsKernel()
  ** 
  ** 
  **/ /*************************************************************************/ 
-Shader::Shader(const char *name, IContainer* pCont)
+Shader::Shader(const char *name)
 {
     if(name) m_name = name;
     m_totalLines = 0;
-    m_container = static_cast<Container*>(pCont);
     m_targetType = TANY;
 }
 Shader::~Shader()
@@ -916,19 +918,58 @@ Shader::~Shader()
     m_kernelArgs.clear();
 }
 
-void    Shader::addTarget(Program *program)
+void    Shader::addUser(Program *program)
 {
-    m_programTargets.insert (program);
+    SUser u = { User_Program, program };
+    m_users.insert (u);
 }
-void    Shader::removeTarget(Program *program)
+void    Shader::removeUser(Program *program)
 {
-    std::set<Program*>::iterator it;
-    it = m_programTargets.find(program);
-    if(it == m_programTargets.end())
+    SUser u = { User_Program, program };
+    UserSet::iterator it;
+    it = m_users.find(u);
+    if(it == m_users.end())
         return;
-    m_programTargets.erase(it);
+    m_users.erase(it);
+    releaseMe();
+}
+void    Shader::addUser(Container* pCont)
+{
+    SUser u;
+    u.type = User_EffectContainer;
+    u.container = pCont;
+    m_users.insert (u);
+}
+void    Shader::removeUser(Container* pCont)
+{
+    SUser u;
+    u.type = User_EffectContainer;
+    u.container = pCont;
+    UserSet::iterator it;
+    it = m_users.find(u);
+    if(it == m_users.end())
+        return;
+    m_users.erase(it);
+    releaseMe();
 }
 
+void Shader::releaseMe()
+{
+    if(m_users.empty())
+    {
+        LOGD("Shader %s no more used... deleting it\n", getName());
+        switch(m_targetType)
+        {
+        case TGLSL:
+        case THLSL:
+            delete_Shader(this);
+            break;
+        case TCUDA:
+            delete_ShaderCUDA(this);
+            break;
+        }
+    }
+}
 
 /*************************************************************************/ /**
  ** 

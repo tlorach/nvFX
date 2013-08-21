@@ -67,7 +67,6 @@ ProgramPipeline*    new_ProgramPipeline(Container *pCont)
 }
 void                delete_ProgramPipeline(ProgramPipeline *p)
 {
-    p->removeProgramShader(-1);
     GLSLProgramPipeline *pP = static_cast<GLSLProgramPipeline *>(p);
     delete pP;
 }
@@ -162,23 +161,23 @@ void delete_Program(IProgram *pProg)
     delete p;
 }
 
-Shader* new_ShaderPath(const char* name, Container *pCont, bool bPostscript)
+Shader* new_ShaderPath(const char* name, bool bPostscript)
 {
 #ifndef OGLES2
-    return new PathShader(name, pCont, bPostscript);
+    return new PathShader(name, bPostscript);
 #else
     return NULL;
 #endif
 }
-Shader* new_GLSLShader(const char* name, Container *pCont)
+Shader* new_GLSLShader(const char* name)
 {
-    return new GLSLShader(name, pCont);
+    return new GLSLShader(name);
 }
-Shader* new_HLSL10Shader(const char* name, Container *pCont)
+Shader* new_HLSL10Shader(const char* name)
 {
     return NULL;
 }
-Shader* new_HLSL11Shader(const char* name, Container *pCont)
+Shader* new_HLSL11Shader(const char* name)
 {
     return NULL;
 }

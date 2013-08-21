@@ -101,7 +101,7 @@ GLSLShader::~GLSLShader()
  ** 
  ** 
  **/ /*************************************************************************/ 
-GLSLShader::GLSLShader(const char * name, IContainer* pCont) : Shader(name, pCont)
+GLSLShader::GLSLShader(const char * name) : Shader(name)
 {
     m_targetType = TGLSL;
 }
