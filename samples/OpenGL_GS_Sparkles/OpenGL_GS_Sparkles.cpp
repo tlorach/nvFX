@@ -571,6 +571,13 @@ void errorCallbackFunc(const char *errMsg)
 #endif
     printf(errMsg);
 }
+void messageCallbackFunc(const char *msg)
+{
+#ifdef WIN32
+    OutputDebugString(msg);
+#endif
+    printf(msg);
+}
 void includeCallbackFunc(const char *incName, FILE *&fp, const char *&buf)
 {
     char fullpath[200];
@@ -1527,6 +1534,7 @@ void initGL()
     // Effects
     //
     nvFX::setErrorCallback(errorCallbackFunc);
+    nvFX::setMessageCallback(messageCallbackFunc);
     nvFX::setIncludeCallback(includeCallbackFunc);
     loadSceneEffect();
     loadMaterialEffect();

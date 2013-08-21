@@ -1186,6 +1186,9 @@ bool Pass::validate()
                 //
                 if(m_pBaseStatesLayer->programPipeline)
                 {
+                    // NOTE: this actually means that validation discards the entire program pipeline
+                    // and possibly related programs to re-create them.
+                    // TODO: we might be able to do more optimal approach instead
                     m_container->invalidateTargets(this, 0);
                     Pass::delete_ProgramPipeline(m_pBaseStatesLayer->programPipeline, 0);
                 }

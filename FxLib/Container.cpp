@@ -211,21 +211,13 @@ Container::~Container()
     {
         if(*i2)
         {
+            // Note: the global repository gets updated when the container adds/removes a shader.
+            // and not when a program adds/removes a shader. Reason: a program always belongs to a container
             int c = pShdRep->releaseShader(*i2);
-            if(c <= 0)
-            {
-                LOGD("Shader %s no more used... deleting it\n", (*i2)->getName());
-                switch((*i2)->getType())
-                {
-                case TGLSL:
-                case THLSL:
-                    delete_Shader(*i2);
-                    break;
-                case TCUDA:
-                    delete_ShaderCUDA(*i2);
-                    break;
-                }
-            }
+            // the container is a 'user' of this shader code: it might have created it from scratch
+            // or referenced it and found it from the global repository
+            // removing as a user might lead to destroying this shader if no more used by anyone
+            (*i2)->removeUser(this);
         }
         ++i2;
     }
@@ -311,7 +303,8 @@ IShader*     Container::createPathShader(const char *name, bool bGlobal, bool bP
             pShdRep->addShader(p); // increments the reference counter
         } else {
             LOGD("Container::createPathShader shader %s created and added as Global...\n", name ? name : "<noname>");
-            p = new_ShaderPath(name, this, bPostscript);
+            p = new_ShaderPath(name, bPostscript);
+            p->addUser(this);
             if(!p)
                 return NULL;
             m_shaders.push_back(p);
@@ -319,7 +312,8 @@ IShader*     Container::createPathShader(const char *name, bool bGlobal, bool bP
         }
     } else {
         LOGD("Container::createPathShader shader %s created locally only...\n", name ? name : "<noname>");
-        p = new_ShaderPath(name, this, bPostscript);
+        p = new_ShaderPath(name, bPostscript);
+        p->addUser(this);
         if(!p)
             return NULL;
         m_shaders.push_back(p);
@@ -352,7 +346,8 @@ IShader*     Container::createGLSLShader(const char *name, bool bGlobal)
             pShdRep->addShader(p); // increments the reference counter
         } else {
             LOGD("Container::createGLSLShader shader %s created and added as Global...\n", name ? name : "<noname>");
-            p = new_GLSLShader(name, this);
+            p = new_GLSLShader(name);
+            p->addUser(this);
             if(!p)
                 return NULL;
             m_shaders.push_back(p);
@@ -360,7 +355,8 @@ IShader*     Container::createGLSLShader(const char *name, bool bGlobal)
         }
     } else {
         LOGD("Container::createGLSLShader shader %s created locally only...\n", name ? name : "<noname>");
-        p = new_GLSLShader(name, this);
+        p = new_GLSLShader(name);
+        p->addUser(this);
         if(!p)
             return NULL;
         m_shaders.push_back(p);
@@ -389,14 +385,16 @@ IShader* Container::createHLSL10Shader(const char *name, bool bGlobal)
             addGLSLShader(p);
             pShdRep->addShader(p); // increments the reference counter
         } else {
-            p = new_HLSL10Shader(name, this);
+            p = new_HLSL10Shader(name);
+            p->addUser(this);
             if(!p)
                 return NULL;
             m_shaders.push_back(p);
             pShdRep->addShader(p);
         }
     } else {
-        p = new_HLSL10Shader(name, this);
+        p = new_HLSL10Shader(name);
+        p->addUser(this);
         if(!p)
             return NULL;
         m_shaders.push_back(p);
@@ -425,14 +423,16 @@ IShader* Container::createHLSL11Shader(const char *name, bool bGlobal)
             addGLSLShader(p);
             pShdRep->addShader(p); // increments the reference counter
         } else {
-            p = new_HLSL11Shader(name, this);
+            p = new_HLSL11Shader(name);
+            p->addUser(this);
             if(!p)
                 return NULL;
             m_shaders.push_back(p);
             pShdRep->addShader(p);
         }
     } else {
-        p = new_HLSL11Shader(name, this);
+        p = new_HLSL11Shader(name);
+        p->addUser(this);
         if(!p)
             return NULL;
         m_shaders.push_back(p);
@@ -462,7 +462,8 @@ IShader* Container::createCUDAShader(const char *name, bool bGlobal)
             addCUDAShader(p);
             pShdRep->addShader(p); // increments the reference counter
         } else {
-            p = new_ShaderCUDA(name, this);
+            p = new_ShaderCUDA(name);
+            p->addUser(this);
             if(!p)
                 return NULL;
             m_shaders.push_back(p);
@@ -470,6 +471,7 @@ IShader* Container::createCUDAShader(const char *name, bool bGlobal)
         }
     } else {
         p = new_ShaderCUDA(name, this);
+        p->addUser(this);
         if(!p)
             return NULL;
         m_shaders.push_back(p);
@@ -491,6 +493,7 @@ bool Container::addCUDAShader(IShader* p)
         ++i2;
     }
     m_shaders.push_back(p2);
+    p2->addUser(this);
     return true;
 }
 
@@ -505,6 +508,7 @@ bool    Container::addGLSLShader(IShader* p)
         ++i2;
     }
     m_shaders.push_back(p2);
+    p2->addUser(this);
     return true;
 }
 bool    Container::addPathShader(IShader* p)
@@ -518,6 +522,7 @@ bool    Container::addPathShader(IShader* p)
         ++i2;
     }
     m_shaders.push_back(p2);
+    p2->addUser(this);
     return true;
 }
 bool    Container::addHLSL10Shader(IShader* p)
@@ -531,6 +536,7 @@ bool    Container::addHLSL10Shader(IShader* p)
         ++i2;
     }
     m_shaders.push_back(p2);
+    p2->addUser(this);
     return true;
 }
 bool    Container::addHLSL11Shader(IShader* p)
@@ -544,6 +550,7 @@ bool    Container::addHLSL11Shader(IShader* p)
         ++i2;
     }
     m_shaders.push_back(p2);
+    p2->addUser(this);
     return true;
 }
 
@@ -1407,14 +1414,17 @@ bool            Container::destroy(ITechnique* p)
  **/ /*************************************************************************/ 
 bool            Container::destroy(IShader* p)
 {
+    // Note: the global repository gets updated when the container adds/removes a shader.
+    // and not when a program adds/removes a shader. Reason: a program always belongs to a container
     ShaderModuleRepository* pShdRep = 
         static_cast<ShaderModuleRepository*>(getShaderModuleRepositorySingleton());
+    int c = pShdRep->releaseShader(p);
     ShaderVec::iterator it = m_shaders.begin();
     while(it != m_shaders.end())
     {
         if(*it == p)
         {
-            pShdRep->releaseShader(*it);
+            (*it)->removeUser(this);
             m_shaders.erase(it);
             return true;
         }
@@ -1948,7 +1958,7 @@ void Container::moveGlobalUniformsToBuffer(CstBuffer* pBuff)
 /*************************************************************************/ /**
 **
 **/ /*************************************************************************/ 
-bool    Container::removeProgram(IProgram* p)
+bool    Container::destroy(IProgram* p)
 {
     ShaderModuleRepository* pShdRep = 
         static_cast<ShaderModuleRepository*>(getShaderModuleRepositorySingleton());
@@ -1957,36 +1967,35 @@ bool    Container::removeProgram(IProgram* p)
     {
         if(*ip && ((*ip) == p))
         {
+            int refcnt = pShdRep->releaseProgram(*ip); // remove it from the global pool if existed there
+            if(refcnt <= 0) // meaning: the program is not (or not anymore) in the global repository.
+            {
+#ifdef _DEBUG
+                LOGD("Program %d (", (*ip)->getProgram());
+                IShader* pshd;
+                for(int ii=0; pshd = (*ip)->getShader(ii); ii++)
+                    LOGD("%s ", pshd->getName());
+                LOGD(") no more used... deleting it\n");
+#endif
+                // good enough : query the first shader in the program
+                switch((*ip)->getShader(0)->getType())
+                {
+                case TGLSL:
+                case THLSL:
+                    delete_Program(*ip);
+                    break;
+                case TCUDA:
+                    delete_ProgramCUDA(*ip);
+                    break;
+                }
+            }
             m_shaderprograms.erase(ip);
-            pShdRep->releaseProgram(*ip); // remove it from the global pool if existed there
             return true;
         }
         ++ip;
     }
     return false;
 }
-
-/*************************************************************************/ /**
-**
-**/ /*************************************************************************/ 
-bool    Container::removeShader(IShader* p)
-{
-    ShaderModuleRepository* pShdRep = 
-        static_cast<ShaderModuleRepository*>(getShaderModuleRepositorySingleton());
-    ShaderVec::iterator ip = m_shaders.begin();
-    while(ip != m_shaders.end())
-    {
-        if(*ip && ((*ip) == p))
-        {
-            m_shaders.erase(ip);
-            pShdRep->releaseShader(*ip); // remove it from the global pool if existed there
-            return true;
-        }
-        ++ip;
-    }
-    return false;
-}
-
 
 /*************************************************************************/ /**
 **
