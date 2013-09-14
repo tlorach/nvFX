@@ -95,8 +95,7 @@ RasterizationState rasterState1
 //
 GLSLShader 
 {
-    #version 420 compatibility
-    #extension GL_ARB_tessellation_shader : enable
+    #version 400 compatibility
 
     struct TessControlStruct
     {
@@ -221,6 +220,7 @@ GLSLShader ObjectVS
 ////////////////////////////////////////////////////////////////////
 GLSLShader ObjectTCS
 {
+    #extension GL_ARB_tessellation_shader : enable
     layout(location=0) in vec4 cpPosition[];
     layout(location=1) in vec3 cpNormal[];
     layout(location=2) in vec3 cpTc[];
@@ -306,6 +306,7 @@ GLSLShader ObjectTCS
 ////////////////////////////////////////////////////////////////////
 GLSLShader ObjectTES
 {
+    #extension GL_ARB_tessellation_shader : enable
     layout(triangles, fractional_even_spacing, cw) in;
 
     in TessControlStruct PatchPN[3];

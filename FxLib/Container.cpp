@@ -43,7 +43,7 @@ using namespace nvFX;
 Container::Container()
 {
     // this flag has no impact out of GLSL
-    m_separateShaders = false; // by default, let's try to use it... modern way for OGL
+    m_separateShaders = false;
 }
 
 /*************************************************************************/ /**
@@ -63,7 +63,6 @@ void Container::separateShadersEnable(bool bYes)
     #else
     m_separateShaders = bYes;
     #endif
-    LOGI("Warning : separate shader mode changed to %d... More checking to be done on this\n", bYes);
 }
 
 /*************************************************************************/ /**
