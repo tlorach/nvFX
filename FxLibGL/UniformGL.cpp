@@ -218,7 +218,7 @@ void UniformGLSL::updateGLSL(ShadowedData *pData, STarget &t, bool bBindProgram)
                             if(pData->tex.textureUnit > 0)
                                 glActiveTexture(GL_TEXTURE0);
                         } else {
-                            nvFX::printf("Warning: %s references a texture (%s) that wasn't initialized properly\n", m_name.c_str(), pData->tex.pRes->getName());
+                            LOGD("Warning: %s references a texture resource (%s) with OpenGL texture Id to 0\n", m_name.c_str(), pData->tex.pRes->getName());
                         }
                     } else {
                         if(pData->tex.textureUnit >= 0)

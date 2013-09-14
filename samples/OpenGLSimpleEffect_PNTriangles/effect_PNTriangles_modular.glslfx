@@ -25,6 +25,7 @@
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
 */
+#extension GL_ARB_separate_shader_objects : enable
 //
 // reference : http://alex.vlachos.com/graphics/CurvedPNTriangles.pdf
 //
@@ -146,9 +147,7 @@ DepthStencilState dstStateFloor
 //
 GLSLShader 
 {
-    #version 400 compatibility
-    #extension GL_ARB_separate_shader_objects : enable
-    #extension GL_ARB_tessellation_shader : enable
+    #version 330 compatibility
 
     struct TessControlStruct
     {
@@ -297,6 +296,7 @@ namespace PNTriangles
   ///////////////////////////////////////////////////////////////////////////
   GLSLShader TCSMain
   {
+    #extension GL_ARB_tessellation_shader : enable
     layout(location=0) in vec4 cpPosition[];
     layout(location=1) in vec3 cpNormal[];
     layout(location=2) in vec3 cpTc[];
@@ -331,6 +331,8 @@ namespace PNTriangles
   ///////////////////////////////////////////////////////////////////////////
   GLSLShader TESMain
   {
+    #extension GL_ARB_tessellation_shader : enable
+
     in TessControlStruct PatchPN[NPATCHVERTICES];
 
     layout(location=0) out vec3 outNw;

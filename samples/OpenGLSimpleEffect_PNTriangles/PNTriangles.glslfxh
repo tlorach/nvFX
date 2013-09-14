@@ -20,6 +20,7 @@ GLSLShader
 ////////////////////////////////////////////////////////////////////
 GLSLShader PNtriTCS
 {
+    #extension GL_ARB_tessellation_shader : enable
     //
     // Control points computation
     //
@@ -96,6 +97,7 @@ GLSLShader PNtriTCS
 ////////////////////////////////////////////////////////////////////
 GLSLShader PNTriTES
 {
+    #extension GL_ARB_tessellation_shader : enable
     vec3 evaluatedNormal;
     vec4 evaluatedPosition;
     vec3 VS_getAttrNormal() { return evaluatedNormal; }

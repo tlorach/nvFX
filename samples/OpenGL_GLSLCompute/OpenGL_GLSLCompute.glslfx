@@ -25,6 +25,7 @@
 
     Please direct any questions to tlorach@nvidia.com (Tristan Lorach)
 */
+#extension GL_ARB_separate_shader_objects : enable
 //
 // Resources (Testing the scene-level effect part)
 //
@@ -81,7 +82,6 @@ FBO GLSLComputeResultFBO
 GLSLShader
 {
     #version 430 compatibility
-    #extension GL_ARB_separate_shader_objects : enable
 }
 #include "shared_globals.glslfxh"
 ///////////////////////////////////////////////////////////////////////////////////////////////////

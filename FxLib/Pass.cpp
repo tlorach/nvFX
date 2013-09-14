@@ -765,12 +765,14 @@ IProgram* Pass::createShaderProgram(std::map<std::string, PassState*> &passState
     std::map<std::string, PassState*>::iterator iMPS;
     int sz = 0;
     iMPS = passStateShader.begin();
+    // count the shader modules
     while(iMPS != passStateShader.end())
     {
         for(int i=0; (pShader = iMPS->second->getShader(i)); i++)
             sz++;
         ++iMPS;
     }
+    // put them in a temporary array
     IShader** pShaders = new IShader*[sz];
     iMPS = passStateShader.begin();
     sz = 0;
@@ -780,6 +782,7 @@ IProgram* Pass::createShaderProgram(std::map<std::string, PassState*> &passState
             pShaders[sz++] = pShader;
         ++iMPS;
     }
+    // create the shader program through the main effect container
     Program* pShdProg = static_cast<Program*>(m_container->createShaderProgram(type, sz, pShaders));
     // the idea: fill the pointer here only if no shader-pipeline used
     delete [] pShaders;
@@ -791,6 +794,7 @@ IProgram* Pass::createShaderProgram(std::map<std::string, PassState*> &passState
         programPipeline = NULL;
         return NULL;
     }
+    // add the shader program to the program-pipeline if exist
     if(programPipeline)
     {
         programPipeline->addProgramShader(pShdProg);
@@ -1034,11 +1038,12 @@ bool Pass::validate()
             }
 #endif
 //#ifdef USE_OLDPROGRAM
+            // CANCELED:
             // create a fake program just to see how the separate shader is working.
             // we cannot wait for real program to be created because we would already 
             // have taken the path of separate vs. non-separate
-            Program *p = new_Program(m_container);
-            delete_Program(p);
+            //Program *p = new_Program(m_container);
+            //delete_Program(p);
             //
             //
             // ====> Case where we don't support separate shaders
@@ -1066,7 +1071,12 @@ bool Pass::validate()
                 {
                     for(int i=0; (pShader = iMPS->second->getShader(i)); i++)
                         if(!m_pBaseStatesLayer->program->addVertexShader(pShader, m_container))
+                        {
+                            nvFX::eprintf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                            delete_Program(m_pBaseStatesLayer->program);
+                            m_pBaseStatesLayer->program = NULL;
                             return false;
+                        }
                     ++iMPS;
                 }
                 iMPS = passStatesBaseLayerPS.begin();
@@ -1075,7 +1085,9 @@ bool Pass::validate()
                     for(int i=0; (pShader = iMPS->second->getShader(i)); i++)
                         if(!m_pBaseStatesLayer->program->addFragmentShader(pShader, m_container))
                         {
-                            nvFX::printf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                            nvFX::eprintf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                            delete_Program(m_pBaseStatesLayer->program);
+                            m_pBaseStatesLayer->program = NULL;
                             return false;
                         }
                     ++iMPS;
@@ -1086,7 +1098,9 @@ bool Pass::validate()
                     for(int i=0; (pShader = iMPS->second->getShader(i)); i++)
                         if(!m_pBaseStatesLayer->program->addShader(nvFX::FX_GEOMPROG, pShader, m_container))
                         {
-                            nvFX::printf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                            nvFX::eprintf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                            delete_Program(m_pBaseStatesLayer->program);
+                            m_pBaseStatesLayer->program = NULL;
                             return false;
                         }
                     ++iMPS;
@@ -1098,6 +1112,8 @@ bool Pass::validate()
                         if(!m_pBaseStatesLayer->program->addShader(nvFX::FX_TCSPROG, pShader, m_container))
                         {
                             nvFX::printf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                            delete_Program(m_pBaseStatesLayer->program);
+                            m_pBaseStatesLayer->program = NULL;
                             return false;
                         }
                     ++iMPS;
@@ -1109,6 +1125,8 @@ bool Pass::validate()
                         if(!m_pBaseStatesLayer->program->addShader(nvFX::FX_TESPROG, pShader, m_container))
                         {
                             nvFX::printf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                            delete_Program(m_pBaseStatesLayer->program);
+                            m_pBaseStatesLayer->program = NULL;
                             return false;
                         }
                     ++iMPS;
@@ -1124,6 +1142,8 @@ bool Pass::validate()
                             if(!m_pBaseStatesLayer->program->addShader(nvFX::FX_COMPUTEPROG, pShader, m_container))
                             {
                                 nvFX::printf("Encountered errors during creation of program Pass %s\n", m_name.c_str());
+                                delete_Program(m_pBaseStatesLayer->program);
+                                m_pBaseStatesLayer->program = NULL;
                                 return false;
                             }
                         ++iMPS;
@@ -1166,13 +1186,13 @@ bool Pass::validate()
                 {
                     if(!m_pBaseStatesLayer->program->bind(m_container))
                     {
-                        delete m_pBaseStatesLayer->program;
-                        m_pBaseStatesLayer->program = NULL;
                         nvFX::printf("Encountered errors during validation of Pass (Shader Linkage) %s\n", m_name.c_str());
+                        delete_Program(m_pBaseStatesLayer->program);
+                        m_pBaseStatesLayer->program = NULL;
                         return false;
                     }
                 } else {
-                    delete m_pBaseStatesLayer->program;
+                    delete_Program(m_pBaseStatesLayer->program);
                     m_pBaseStatesLayer->program = NULL;
                 }
             } else
@@ -1684,13 +1704,13 @@ bool Pass::validateUniformTextureUnit(Uniform* pU, bool allowUnitAssignment, int
 				// an instance of a local uniform, used to assign things from the pass, as a pass-state
                 if(pUInUnit	&& !(pUInUnit->m_name == pU->m_name) )
                 {
-                    LOGI("WARNING from Pass %s: unit #%d already used by %s. Conflicting with %s...\n", m_name.c_str(), pU->m_data->tex.textureUnit, sl.textureUnits[pU->m_data->tex.textureUnit]->getName(),pU->getName());
+                    LOGD("WARNING from Pass %s: unit #%d already used by %s. Conflicting with %s...\n", m_name.c_str(), pU->m_data->tex.textureUnit, sl.textureUnits[pU->m_data->tex.textureUnit]->getName(),pU->getName());
                     // Let's push to another level the unit... other passes could fail but will push again
                     // setting it to -1 will force the rest of the functio to find it a new location
                     pU->setSamplerUnit(-1);
                     break;
                 } else if(pUInUnit == NULL) {
-					LOGI("NOTE from Pass %s: %s now in unit #%d\n", m_name.c_str(), pU->getName(),pU->m_data->tex.textureUnit);
+					LOGD("NOTE from Pass %s: %s now in unit #%d\n", m_name.c_str(), pU->getName(),pU->m_data->tex.textureUnit);
 					sl.textureUnits[pU->m_data->tex.textureUnit] = pU;
 				}
             }
@@ -1724,7 +1744,7 @@ bool Pass::validateUniformTextureUnit(Uniform* pU, bool allowUnitAssignment, int
             if((pU->m_data==NULL)||(pU->m_data->tex.textureUnit < 0))
             {
                 pU->setSamplerUnit(availableTexUnit);
-                LOGI("NOTE from Pass %s: %s now in unit #%d\n",m_name.c_str(), pU->getName(),availableTexUnit);
+                LOGD("NOTE from Pass %s: %s now in unit #%d\n",m_name.c_str(), pU->getName(),availableTexUnit);
                 sl.textureUnits[availableTexUnit] = pU;
             }
             break;
@@ -1799,12 +1819,12 @@ bool Pass::validateUniformTextureUnits(bool allowUnitAssignment)
 					// an instance of a local uniform, used to assign things from the pass, as a pass-state
                     if(pUInUnit	&& !(pUInUnit->m_name == itu->pU->m_name) )
                     {
-                        LOGI("WARNING from pass %s: unit #%d already used by %s. %s might need another unit...\n",m_name.c_str(),itu->pU->m_data->tex.textureUnit, sl.textureUnits[itu->pU->m_data->tex.textureUnit]->getName(),itu->pU->getName());
+                        LOGD("WARNING from pass %s: unit #%d already used by %s. %s might need another unit...\n",m_name.c_str(),itu->pU->m_data->tex.textureUnit, sl.textureUnits[itu->pU->m_data->tex.textureUnit]->getName(),itu->pU->getName());
                         // reset it so that later we'll assign another unit
                         itu->pU->setSamplerUnit(-1);
                         break;
                     } else if(pUInUnit == NULL) {
-						LOGI("NOTE from pass %s: %s in unit #%d\n",m_name.c_str(), itu->pU->getName(),itu->pU->m_data->tex.textureUnit);
+						LOGD("NOTE from pass %s: %s in unit #%d\n",m_name.c_str(), itu->pU->getName(),itu->pU->m_data->tex.textureUnit);
 						sl.textureUnits[itu->pU->m_data->tex.textureUnit] = itu->pU;
 					}
                 }
@@ -1844,7 +1864,7 @@ bool Pass::validateUniformTextureUnits(bool allowUnitAssignment)
             case IUniform::TTextureCube:
                 if((itu->pU->m_data==NULL)||(itu->pU->m_data->tex.textureUnit < 0))
                 {
-                    LOGI("NOTE from pass %s: %s now in unit #%d\n",m_name.c_str(), itu->pU->getName(),availableTexUnit);
+                    LOGD("NOTE from pass %s: %s now in unit #%d\n",m_name.c_str(), itu->pU->getName(),availableTexUnit);
                     itu->pU->setSamplerUnit(availableTexUnit);
                     // we need to update again the uniform since the unit changed
                     itu->pU->update(itu->pU->m_data, this, it->first, true, true);

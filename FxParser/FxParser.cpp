@@ -153,9 +153,9 @@
     #ifndef OGLES2
                 if(curContainer->separateShadersEnabled())
                 {
-                    LOGD("Using separable shaders. defining SEPARATE_SHADER_OBJECTS...\n");
-                    pShader->addHeaderCode(
-                    "#define SEPARATE_SHADER_OBJECTS\n"
+                    LOGD("Using separable shaders...\n");
+                    pShader->appendCode(
+                    "#extension GL_ARB_separate_shader_objects : enable\n"
                     "#define INFX\n"
                     );
                 } else
