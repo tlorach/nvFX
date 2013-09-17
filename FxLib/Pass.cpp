@@ -34,6 +34,32 @@ using namespace nvFX;
 /***************************************************************************/
 /* PassState PassState PassState PassState PassState PassState PassState   */
 /***************************************************************************/
+IStateGroupRaster*  PassState::getStateGroupRaster()
+{
+    return (m_type == TStateGroup_Raster) ? m_pSGR: NULL;
+};
+IStateGroupCS*      PassState::getStateGroupCS() 
+{
+    return (m_type == TStateGroup_CS) ? m_pSGCS: NULL;
+};
+IStateGroupDST*     PassState::getStateGroupDST() 
+{
+    return (m_type == TStateGroup_DST) ? m_pSGDST: NULL;
+};
+#ifndef OGLES2
+IStateGroupPath*    PassState::getStateGroupPathRendering() 
+{
+    return (m_type == TStateGroup_PR) ? m_pSGPR: NULL;
+};
+#endif
+IFrameBufferObject* PassState::getFBOTarget() 
+{
+    return (m_type == TFBOTarget) ? m_FBOTarget: NULL;
+};
+IFrameBufferObject* PassState::getBlitFBOToActiveTarget() 
+{
+    return (m_type == TBlitFBOSrc) ? m_BlitFBOSrc: NULL;
+};
 
 /*************************************************************************/ /**
  ** 
@@ -754,6 +780,57 @@ bool Pass::invalidate()
             //sl.programPipeline->
         }
 //#endif
+        //
+        // release the user counter of related resources
+        //
+        StateVec::iterator it = sl.statesForValidation.begin();
+        while(it != sl.statesForValidation.end())
+        {
+            PassState* pS = (*it);
+            PassState::Type t = pS->getType();
+            switch(t)
+            {
+            case PassState::TFBOTarget:
+                {
+                    IFrameBufferObject* pFBO = pS->getFBOTarget();
+                    Resource *pRes;
+                    for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                    {
+                        pRes->decUserCnt();
+                    }
+                    if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                        pRes->decUserCnt();
+                }
+                break;
+            case PassState::TBlitFBOSrc:
+                {
+                    IFrameBufferObject* pFBO = pS->getBlitFBOToActiveTarget();
+                    Resource *pRes;
+                    for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                    {
+                        pRes->decUserCnt();
+                    }
+                    if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                        pRes->decUserCnt();
+                }
+                break;
+            case PassState::TUniform:
+                {
+                    Uniform* pU = static_cast<Uniform*>(pS->getUniform());
+                    Uniform::ShadowedData* pData = pU->getShadowedData();
+                    if(pData->tex.pRes)
+                    {
+                        // at last: we can increase the counter of real users (users who need the resource to be allocated)
+                        pData->tex.pRes->incUserCnt();
+                    }
+                }
+                break;
+            case PassState::TSwapResource:
+                assert(!"TODO: PassState::TSwapResource");
+                break;
+            }
+            ++it;
+        }
         ++iPM;
     }
     return true;
@@ -1624,21 +1701,82 @@ bool Pass::validate()
         while(it != m_pBaseStatesLayer->statesForValidation.end())
         {
             PassState::Type t = (*it)->getType();
-            if( (t == PassState::TUniform)
-#ifndef OGLES2
-              ||(t == PassState::TSubRoutineUniform)
-#endif
-              )
+            switch(t)
             {
-                Uniform *uniform = static_cast<Uniform*>((*it)->getUniform());
-                // invalidate the targets : a new program was created so we need to make sure offset are re-computed
-                uniform->invalidateTarget(this, -1);
-                // this update will query targets to connect the uniform to targets ('true' flag)
-                // this method will setup the uniforms but more importantly will queue them to the usedUniforms table
-                // so that pass execution will update them when needed.
-                uniform->update(uniform->m_data, this, -1, true, true);
+            case PassState::TUniform:
+#ifndef OGLES2
+            case PassState::TSubRoutineUniform:
+#endif
+                {
+                    Uniform *uniform = static_cast<Uniform*>((*it)->getUniform());
+                    // invalidate the targets : a new program was created so we need to make sure offset are re-computed
+                    uniform->invalidateTarget(this, -1);
+                    // this update will query targets to connect the uniform to targets ('true' flag)
+                    // this method will setup the uniforms but more importantly will queue them to the usedUniforms table
+                    // so that pass execution will update them when needed.
+                    uniform->update(uniform->m_data, this, -1, true, true);
+                }
+                break;
             }
             ++it;
+        }
+        //
+        // maintain the reference-user-counter of the used resources
+        //
+        StatesLayerMap::iterator iSL = m_statesLayers.begin();
+        while(iSL != m_statesLayers.end())
+        {
+            int layerID = iSL->first;
+            StatesLayer &sl = iSL->second;
+            it = sl.statesForValidation.begin();
+            while(it != sl.statesForValidation.end())
+            {
+                PassState* pS = (*it);
+                PassState::Type t = pS->getType();
+                switch(t)
+                {
+                case PassState::TFBOTarget:
+                    {
+                        IFrameBufferObject* pFBO = pS->getFBOTarget();
+                        Resource *pRes;
+                        for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                        {
+                            pRes->incUserCnt();
+                        }
+                        if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                            pRes->incUserCnt();
+                    }
+                    break;
+                case PassState::TBlitFBOSrc:
+                    {
+                        IFrameBufferObject* pFBO = pS->getBlitFBOToActiveTarget();
+                        Resource *pRes;
+                        for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                        {
+                            pRes->incUserCnt();
+                        }
+                        if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                            pRes->incUserCnt();
+                    }
+                    break;
+                case PassState::TUniform:
+                    {
+                        Uniform* pU = static_cast<Uniform*>(pS->getUniform());
+                        Uniform::ShadowedData* pData = pU->getShadowedData();
+                        if(pData->tex.pRes)
+                        {
+                            // at last: we can increase the counter of real users (users who need the resource to be allocated)
+                            pData->tex.pRes->incUserCnt();
+                        }
+                    }
+                    break;
+                case PassState::TSwapResource:
+                    assert(!"TODO: PassState::TSwapResource");
+                    break;
+                }
+                ++it;
+            }
+            ++iSL;
         }
         //
         // Now let's update uniforms from the possible ones stored in the Container

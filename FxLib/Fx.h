@@ -608,7 +608,9 @@ public:
     IResource*  createResource(const char * name, ResourceType type);
     int         addResource(IResource* pRes);
     int         releaseResource(IResource* pRes);
+
     bool        validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev);
+    bool        invalidateUnusedResources();
     //IResource*  createTexture2DRandomRays(const char * name, int nbDirs); // for HBAO
 
     IResource*  loadTexture(const char * texName/*, CGtype samplerType*/);
@@ -1462,6 +1464,15 @@ public:
 #else
     IUniform*    getUniform() {return (m_type == TUniform) ? m_uniformSrc : NULL; };
 #endif
+    IStateGroupRaster*  getStateGroupRaster();
+    IStateGroupCS*      getStateGroupCS();
+    IStateGroupDST*     getStateGroupDST();
+#ifndef OGLES2
+    IStateGroupPath*    getStateGroupPathRendering();
+#endif
+    IFrameBufferObject* getFBOTarget();
+    IFrameBufferObject* getBlitFBOToActiveTarget();
+
     IShader*     getShader(int idx)     { if(idx<(int)m_shaders.size()) return static_cast<IShader*>(m_shaders[idx]); return NULL; };
     bool        clearShaders();
     bool        setShaders(Type type, IShader **progs, int numProgs);
@@ -1864,6 +1875,7 @@ protected:
     Annotation      m_annotations;
     ResourceRepository* m_pOwner;
     Container*      m_pContainer;
+    int             m_userCnt; ///< stores the amoung of users for this resource. \Remark users are the one really using as an active resource
 public:
     Resource(ResourceRepository* pCont, const char *name=NULL);
     virtual ~Resource();
@@ -1907,6 +1919,13 @@ public:
     virtual int         getHeight() {return (int)((float)m_creationData.sz[1] * m_creationData.szFact[1]);}
 
     virtual bool            unmapFromCUDA() { return false; } ///< for CUDA only
+
+    /// \name reference counter of users.
+    /// @{
+    virtual int         incUserCnt() { m_userCnt++; return m_userCnt; }
+    virtual int         decUserCnt() { if(m_userCnt > 0) m_userCnt--; return m_userCnt; }
+    virtual int         getUserCnt() { return m_userCnt; }
+    /// @}
 #if 0
     Resource(ResourceRepository *owner)
     {
@@ -1974,7 +1993,7 @@ public:
  **
  ** \todo use this extension whenever possible...
  **/ /*************************************************************************/ 
- class StateGroupRaster : public IStateGroupRasterEx
+class StateGroupRaster : public IStateGroupRasterEx
 {
 protected:
     StringName      m_name;
