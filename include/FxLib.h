@@ -1065,7 +1065,14 @@ public:
     virtual Type        getType() = 0;
     virtual IUniform*   getUniform() = 0;
     virtual IShader*    getShader(int idx) = 0;
-    // TODO: add some getXXX() for various types of pass-states
+    virtual IStateGroupRaster*  getStateGroupRaster() = 0;
+    virtual IStateGroupCS*      getStateGroupCS() = 0;
+    virtual IStateGroupDST*     getStateGroupDST() = 0;
+#ifndef OGLES2
+    virtual IStateGroupPath*    getStateGroupPathRendering() = 0;
+#endif
+    virtual IFrameBufferObject* getFBOTarget() = 0;
+    virtual IFrameBufferObject* getBlitFBOToActiveTarget() = 0;
 };
 
 /*************************************************************************/ /**
@@ -1376,6 +1383,8 @@ public:
     /// \arg depthSamples and coverageSamples are MSAA+CSAA
     /// \arg \e pDev is essentially used in the case of D3D : D3D device.
     virtual bool        validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
+    /// \brief invalidate (free memory) resources that aren't referenced by any active users. IResourceEx::getUserCnt() == 0
+    virtual bool        invalidateUnusedResources() = 0;
     virtual bool        finish() = 0;
 
     virtual IResource*  find(const char * texName) = 0;

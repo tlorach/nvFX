@@ -682,8 +682,31 @@ bool ResourceRepository::validate(int x, int y, int w, int h, int depthSamples, 
     ResourceMap::iterator iR = m_resources.begin();
     for(; iR != m_resources.end(); iR++)
     {
-        if(!iR->second.p->validate())
-            bRes = false;
+        if(iR->second.p->getUserCnt() > 0) // only validate those that are really used
+        {
+            if(!iR->second.p->validate())
+                bRes = false;
+        } else {
+            LOGD("Resource %s not referenced as active resource. Skipping it...\n", iR->second.p->getName());
+        }
+    }
+    return bRes;
+}
+
+bool ResourceRepository::invalidateUnusedResources()
+{
+    bool bRes = true;
+    ResourceMap::iterator iR = m_resources.begin();
+    for(; iR != m_resources.end(); iR++)
+    {
+        if(iR->second.p->getUserCnt() == 0)
+        {
+            LOGD("Resource %s NOT referenced as active resource. invalidating it...\n", iR->second.p->getName());
+            if(!iR->second.p->invalidate())
+                bRes = false;
+        } else {
+            LOGD("Resource %s still referenced as active resource. Skipping it...\n", iR->second.p->getName());
+        }
     }
     return bRes;
 }
@@ -703,6 +726,7 @@ Resource::Resource(ResourceRepository* pCont, const char *name)
     m_OGLId = 0;
     //m_d3dresource = NULL;
     m_pContainer = NULL;
+    m_userCnt = 0;
 }
 Resource::~Resource()
 {

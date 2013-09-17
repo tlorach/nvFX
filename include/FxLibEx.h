@@ -853,6 +853,14 @@ namespace nvFX
         virtual bool        validate() = 0;
         virtual bool        invalidate() = 0;
         //virtual bool        unmapFromCUDA() =0; ///< for CUDA only
+        /// \name reference counter of users.
+        /// Allows to figure-out if it is worth updating and allocating memory for the resource.
+        /// if the user count is 0, we could release (invalidate) the memory related to this resource
+        /// @{
+        virtual int         incUserCnt() = 0; ///< \brief incremement the reference counter of users
+        virtual int         decUserCnt() = 0; ///< \brief decremement the reference counter of users
+        virtual int         getUserCnt() = 0; ///< \brief decremement the reference counter of users
+        /// @}
     };
     /*************************************************************************/ /**
      ** \brief the extended interface 
