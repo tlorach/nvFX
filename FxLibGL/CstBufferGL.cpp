@@ -410,8 +410,15 @@ int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultipl
     unsigned int buf;
     glGenBuffers(1, &buf);
     glBindBuffer(GL_UNIFORM_BUFFER, buf);
+#if 0
+    glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBuffer * m_sizeMultiplier, NULL, usage);
+    void *pData = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+    memcpy(pData, pTemp, m_sizeOfCstBuffer * m_sizeMultiplier);
+    glUnmapBuffer(GL_UNIFORM_BUFFER);
+#else
 	// the size of the buffer can be more (m_sizeMultiplier>1) so we can later shift into it
     glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBuffer * m_sizeMultiplier, pTemp, usage);
+#endif
     free(pTemp);
     if(CHECKGLERRORS("CstBufferGL::buildGLBuffer"))
     {

@@ -755,6 +755,7 @@ namespace nvFX
         virtual bool        link(IContainer* pContainer) = 0; ///< \brief (\b Invokes \b GFX \b API) 
         virtual bool        linkNeeded(int bYes=-1) = 0;
         virtual int         getUniformLocation(const char* name) = 0;///< \brief (\b Invokes \b GFX \b API) 
+        virtual int         getASMCode(char* buffer, int bufLen) = 0;///< \brief gives the compiled GLSL code. returns the length of the ASM string code
         /// \name Input Attribute specific functions
         /// @{
         /// \brief returns attribute information

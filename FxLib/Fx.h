@@ -436,6 +436,7 @@ public:
     ~Program() {}
     virtual int         createKernelEntry(const char*kernelName, int *gridSz/*[3]*/, int *blockSz/*[3]*/, int ShMemSz,int numArgs, ArgVal *args) { return -1; }
     virtual bool        executeKernelEntry(int entryID) { return false; }
+    virtual int         getASMCode(char* buffer, int bufLen) { return 0; }
     virtual bool execute(int szx, int szy, int szz=1) { return false; }
     virtual bool execute(RenderingMode mode, const PassInfo::PathInfo *p) { return false; }
 
