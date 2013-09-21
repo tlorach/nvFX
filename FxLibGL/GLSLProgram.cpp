@@ -828,6 +828,37 @@ int GLSLProgram::getUniformLocation(const char* name)
 {
     return glGetUniformLocation(m_program, name);
 }
+
+/*************************************************************************/ /**
+ ** 
+ ** 
+ **/ /*************************************************************************/ 
+int GLSLProgram::getASMCode(char* buffer, int bufLen)
+{
+    if (strstr((const char*)glGetString(GL_VENDOR), "NVIDIA"))
+    {
+        GLsizei binaryLength = 0;
+        GLenum format = 0;
+        glGetProgramiv(m_program, GL_PROGRAM_BINARY_LENGTH,&binaryLength);
+        std::string binary(size_t(binaryLength+1),0);
+        glGetProgramBinary(m_program,binaryLength,NULL,&format,&binary[0]);
+        size_t pos = binary.rfind("!!NV");
+        const char* nvasm = pos != std::string::npos ? &binary[pos] : NULL;
+        if(nvasm)
+        {
+            int l = strlen(nvasm);
+            if(buffer)
+            {
+                int l2 = bufLen < l ? bufLen:l;
+                strncpy(buffer, nvasm, l2);
+                buffer[l2-1] = '\0';
+            }
+            return l+1;
+        }
+    }
+    return 0;
+}
+
 /*************************************************************************/ /**
  ** 
  ** 

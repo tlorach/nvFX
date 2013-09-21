@@ -32,7 +32,7 @@
 #include <string>
 
 //#define USEMAPRANGE
-#define USEBUFFERSUBDATA
+//#define USEBUFFERSUBDATA
 
 //#undef NVFXCHECKGLERRORS
 #ifdef NVFXCHECKGLERRORS
@@ -254,6 +254,8 @@ namespace nvFX
         virtual int         getProgram() {return m_program;}
         virtual int         getProgramShaderFlags() { return m_shaderFlags; }
         virtual int         getUniformLocation(const char* name);
+
+        virtual int         getASMCode(char* buffer, int bufLen);
 
         virtual int         getAttribLocation(const char* attrName);
         virtual void        bindAttribLocation(int i, const char* attrName);

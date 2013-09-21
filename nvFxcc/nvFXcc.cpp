@@ -87,6 +87,12 @@ void myErrorCb(const char *errMsg)
     if(fileOut)
         fprintf(fileOut, errMsg);
 }
+void myMsgCb(const char *msg)
+{
+    printf(msg);
+    if(fileOut)
+        fprintf(fileOut, msg);
+}
 void myIncludeCb(const char *incName, FILE *&fp, const char *&buf)
 {
     nvFX::printf("(Including file %s...)\n", incName);
@@ -388,7 +394,7 @@ void initGL()
 #endif
 }
 
-nvFX::IContainer* parseEffect(const char * pathName)
+nvFX::IContainer* parseEffect(const char * pathName, bool dumpASM)
 {
     nvFX::IContainer*    pGLSLFx;
     nvFX::ITechnique*    fxTech;
@@ -437,6 +443,49 @@ nvFX::IContainer* parseEffect(const char * pathName)
                     //nvFX::printf("\nErrors with Pass %s\n", fxPass->getName());
                     //return 1;
                     failed  = true;
+                }
+                if(dumpASM)
+                {
+                    nvFX::IProgram* pProg = fxPass->getExInterface()->getProgram(0);
+                    nvFX::IProgramEx* pProgEx = NULL;
+                    if(pProg) {
+                        pProgEx = pProg->getExInterface();
+                        if(pProgEx)
+                        {
+                            int l = pProgEx->getASMCode(NULL, 0);
+                            char *buf = (char *)malloc(l);
+                            pProgEx->getASMCode(buf, l);
+                            nvFX::printf("----------------------------------------------\n");
+                            nvFX::printf("%s\n", buf);
+                            nvFX::printf("----------------------------------------------\n");
+                        }
+                    } else {
+                        nvFX::IProgramPipeline *pPP = fxPass->getExInterface()->getProgramPipeline(0);
+                        if(pPP)
+                            for(int j=0; pProg = pPP->getShaderProgram(j); j++)
+                            {
+                                nvFX::printf("-------------------- %d ----------------------\n", j);
+                                int sf = pProg->getProgramShaderFlags();
+                                if(sf & FX_VERTEX_SHADER_BIT)
+                                    nvFX::printf("FX_VERTEX_SHADER\n");
+                                if(sf & FX_FRAGMENT_SHADER_BIT)
+                                    nvFX::printf("FX_FRAGMENT_SHADER\n");
+                                if(sf & FX_GEOMETRY_SHADER_BIT)
+                                    nvFX::printf("FX_GEOMETRY_SHADER\n");
+                                if(sf & FX_TESS_CONTROL_SHADER_BIT)
+                                    nvFX::printf("FX_TESS_CONTROL_SHADER\n");
+                                if(sf & FX_TESS_EVALUATION_SHADER_BIT)
+                                    nvFX::printf("FX_TESS_EVALUATION_SHADER\n");
+                                if(sf & FX_COMPUTE_SHADER_BIT)
+                                    nvFX::printf("FX_COMPUTE_SHADER\n");
+                                pProgEx = pProg->getExInterface();
+                                int l = pProgEx->getASMCode(NULL, 0);
+                                char *buf = (char *)malloc(l);
+                                pProgEx->getASMCode(buf, l);
+                                nvFX::printf("%s\n", buf);
+                                nvFX::printf("----------------------------------------------\n");
+                            }
+                    }
                 }
             }
         }
@@ -511,8 +560,10 @@ int _tmain(int argc, _TCHAR* argv[])
     // take care of an effect
     //
     nvFX::setErrorCallback(myErrorCb);
+    nvFX::setMessageCallback(myMsgCb);
     nvFX::setIncludeCallback(myIncludeCb);
     int failed = 0;
+    bool dumpASM = false;
     for(int c=1; c<argc; c++)
     {
         if(*argv[c] == '-') switch(argv[c][1])
@@ -522,11 +573,18 @@ int _tmain(int argc, _TCHAR* argv[])
                 if(!fileOut)
                     fprintf(stderr, "couldn't open for writing '%s'\n", argv[c][2]);
                 break;
+            case 'a':
+                dumpASM = true;
+                break;
+            case 'h':
+            case '?':
+                fprintf(stdout, "%s [-a] -oOutFile <effect [effect2 [...]]>\n", argv[0]);
+                break;
             default:
                 fprintf(stderr, "Unknown option %c\n", argv[c][1]);
                 break;
         }
-        else if(parseEffect(argv[c]) == NULL)
+        else if(parseEffect(argv[c], dumpASM) == NULL)
         {
             failed = 1;
         }
