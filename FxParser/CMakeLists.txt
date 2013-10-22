@@ -54,8 +54,8 @@ if(USE_DLLSO)
     # for now, Optix makes sense only for OpenGL, too
     if(USE_OPTIX AND OPTIX_FOUND)
       message(STATUS "Parser .dll or .so prepared for OptiX")
-      add_subdirectory( FxLibOPTIX )
-      list(APPEND NVFX_LIBS_PARSER FxLibOPTIX)
+      add_subdirectory( FxParser )
+      list(APPEND NVFX_LIBS_PARSER FxParser)
     endif()
   #endif()
   elseif(USE_D3D AND WIN32)
@@ -105,6 +105,10 @@ endif()
 
 add_definitions(-DYY_NEVER_INTERACTIVE)
 set_target_properties( FxParser PROPERTIES FOLDER "FxParser" )
+set_target_properties( FxParser PROPERTIES DEBUG_OUTPUT_NAME "FxParser${ARCHSUFFIX}D" )
+set_target_properties( FxParser PROPERTIES RELEASE_OUTPUT_NAME "FxParser${ARCHSUFFIX}" )
+set_target_properties( FxParser PROPERTIES MINSIZEREL_OUTPUT_NAME "FxParser${ARCHSUFFIX}" )
+set_target_properties( FxParser PROPERTIES RELWITHDEBINFO_OUTPUT_NAME "FxParser${ARCHSUFFIX}" )
 
 ##################################################################
 # INSTALL

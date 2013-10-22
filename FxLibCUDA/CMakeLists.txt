@@ -59,6 +59,10 @@ add_library(FxLibCUDA STATIC
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#command:set_target_properties
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#prop_tgt:FOLDER
 set_target_properties( FxLibCUDA PROPERTIES FOLDER "FxLibCUDA" )
+set_target_properties( FxLibCUDA PROPERTIES DEBUG_OUTPUT_NAME "FxLibCUDA${ARCHSUFFIX}D" )
+set_target_properties( FxLibCUDA PROPERTIES RELEASE_OUTPUT_NAME "FxLibCUDA${ARCHSUFFIX}" )
+set_target_properties( FxLibCUDA PROPERTIES MINSIZEREL_OUTPUT_NAME "FxLibCUDA${ARCHSUFFIX}" )
+set_target_properties( FxLibCUDA PROPERTIES RELWITHDEBINFO_OUTPUT_NAME "FxLibCUDA${ARCHSUFFIX}" )
 
 ##################################################################
 # INSTALL
