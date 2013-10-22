@@ -118,6 +118,10 @@ endif()
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#command:set_target_properties
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#prop_tgt:FOLDER
 set_target_properties( FxLibGL PROPERTIES FOLDER "FxLibGL" )
+set_target_properties( FxLibGL PROPERTIES DEBUG_OUTPUT_NAME "FxLibGL${ARCHSUFFIX}D" )
+set_target_properties( FxLibGL PROPERTIES RELEASE_OUTPUT_NAME "FxLibGL${ARCHSUFFIX}" )
+set_target_properties( FxLibGL PROPERTIES MINSIZEREL_OUTPUT_NAME "FxLibGL${ARCHSUFFIX}" )
+set_target_properties( FxLibGL PROPERTIES RELWITHDEBINFO_OUTPUT_NAME "FxLibGL${ARCHSUFFIX}" )
 
 ##################################################################
 # INSTALL

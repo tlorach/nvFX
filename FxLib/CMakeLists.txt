@@ -47,6 +47,10 @@ add_library(FxLib STATIC
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#command:set_target_properties
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#prop_tgt:FOLDER
 set_target_properties( FxLib PROPERTIES FOLDER "FxLib" )
+set_target_properties( FxLib PROPERTIES DEBUG_OUTPUT_NAME "FxLib${ARCHSUFFIX}D" )
+set_target_properties( FxLib PROPERTIES RELEASE_OUTPUT_NAME "FxLib${ARCHSUFFIX}" )
+set_target_properties( FxLib PROPERTIES MINSIZEREL_OUTPUT_NAME "FxLib${ARCHSUFFIX}" )
+set_target_properties( FxLib PROPERTIES RELWITHDEBINFO_OUTPUT_NAME "FxLib${ARCHSUFFIX}" )
 
 ##################################################################
 # INSTALL
