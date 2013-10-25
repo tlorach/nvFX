@@ -279,7 +279,7 @@ bool        FrameBufferObjectsRepository::setParams(int x, int y, int w, int h, 
     return true;
 }
 
-bool        FrameBufferObjectsRepository::validate()
+bool        FrameBufferObjectsRepository::validateAll()
 {
     bool bRes = true;
     FboMap::iterator iR = m_FBOs.begin();
@@ -290,7 +290,7 @@ bool        FrameBufferObjectsRepository::validate()
     }
     return bRes;
 }
-bool        FrameBufferObjectsRepository::update()
+bool        FrameBufferObjectsRepository::updateValidated()
 {
     bool bRes = true;
     FboMap::iterator iR = m_FBOs.begin();
@@ -696,36 +696,39 @@ bool ResourceRepository::setParams(int x, int y, int w, int h, int depthSamples,
     m_backbufferDST = backbufferDST;
     m_msaa[0] = depthSamples;
     m_msaa[1] = coverageSamples;
+    //
+    // FBOs repository must be in-sync with the resource. So let's do it here
+    //
+    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(x,y,w,h,depthSamples,coverageSamples, backbuffer, backbufferDST, pDev );
     return true;
 }
 
-bool ResourceRepository::validate()
+bool ResourceRepository::validateAll()
 {
     bool bRes = true;
     ResourceMap::iterator iR = m_resources.begin();
     for(; iR != m_resources.end(); iR++)
     {
-        if(iR->second.p->getUserCnt() > 0) // only validate those that are really used
-        {
-            LOGD("Validating Resource %s\n", iR->second.p->getName());
-            if(!iR->second.p->validate())
-                bRes = false;
-        } else {
-            LOGD("Resource %s not referenced as active resource. Skipping it...\n", iR->second.p->getName());
-        }
+        LOGD("Validating Resource %s (userCnt=%d)\n", iR->second.p->getName(), iR->second.p->getUserCnt());
+        if(!iR->second.p->validate())
+            bRes = false;
     }
+    //
+    // The validation of FBOs is mandatory anyways to be consistent. So let's do it here
+    //
+    if(!nvFX::getFrameBufferObjectsRepositorySingleton()->validateAll() )
+        bRes = false;
     return bRes;
 }
 
-bool ResourceRepository::update()
+bool ResourceRepository::updateValidated()
 {
     bool bRes = true;
     ResourceMap::iterator iR = m_resources.begin();
     for(; iR != m_resources.end(); iR++)
     {
         // re-validate only those that got previously explicitly validated
-        if((iR->second.p->getUserCnt() > 0)
-            &&((iR->second.p->m_OGLId)/*||(iR->second.p->m_d3dresource)*/))
+        if(iR->second.p->isValidated() )
         {
             LOGD("Updating Resource %s\n", iR->second.p->getName());
             if(!iR->second.p->validate())
@@ -734,6 +737,11 @@ bool ResourceRepository::update()
             LOGD("Resource %s not referenced as active resource. Skipping it...\n", iR->second.p->getName());
         }
     }
+    //
+    // The validation of FBOs is mandatory anyways to be consistent. So let's do it here
+    //
+    if(!nvFX::getFrameBufferObjectsRepositorySingleton()->updateValidated() )
+        bRes = false;
     return bRes;
 }
 

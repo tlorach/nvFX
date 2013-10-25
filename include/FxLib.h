@@ -1377,9 +1377,9 @@ public:
     /// \arg depthSamples and coverageSamples are MSAA+CSAA
     virtual bool    setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
     /// \brief (\b Invokes \b GFX \b API) creates the FBOs
-    virtual bool    validate() = 0;
+    virtual bool    validateAll() = 0;
     /// \brief (\b Invokes \b GFX \b API) updates previously validated FBOs (if size changed etc)
-    virtual bool    update() = 0;
+    virtual bool    updateValidated() = 0;
     virtual bool    finish() = 0;
 };
 /*************************************************************************/ /**
@@ -1396,11 +1396,11 @@ public:
     /// \arg depthSamples and coverageSamples are MSAA+CSAA
     /// \arg \e pDev is essentially used in the case of D3D : D3D device.
     virtual bool        setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
-    /// \brief (\b Invokes \b GFX \b API) validates resources referenced by the effect(s)
-    virtual bool        validate() = 0;
+    /// \brief (\b Invokes \b GFX \b API) validates all resources referenced by the effect(s), even those which are not used anywhere
+    virtual bool        validateAll() = 0;
     /// \brief (\b Invokes \b GFX \b API) re-validates already validated resources: good if setParams changed anything
-    /// This won't create resources that didn't get previously validated (even if their refcnt >0)
-    virtual bool        update() = 0;
+    /// This won't create resources that didn't get previously validated
+    virtual bool        updateValidated() = 0;
     /// \brief invalidate (free memory) resources that aren't referenced by any active users. IResourceEx::getUserCnt() == 0
     virtual bool        invalidateUnusedResources() = 0;
     virtual bool        finish() = 0;

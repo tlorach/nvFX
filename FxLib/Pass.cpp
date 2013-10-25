@@ -764,6 +764,7 @@ Pass::Pass(Container *pCont, Technique *pParent, const char *name)
  **/ /*************************************************************************/ 
 bool Pass::invalidate()
 {
+    LOGD("Invalidating Pass %s\n", m_name.c_str());
     invalidateResources();
     m_validated &= ~VALIDATED_PASS;
     StatesLayerMap::iterator iPM = m_statesLayers.begin();
@@ -1971,7 +1972,7 @@ bool Pass::invalidateResources()
     // one might call this method directly rather than using the Technique::invalidateResources()
     //
     FrameBufferObjectsRepository *pFBORep = static_cast<FrameBufferObjectsRepository *>(nvFX::getFrameBufferObjectsRepositorySingleton());
-    pFBORep->update();
+    pFBORep->updateValidated();
 
     m_validated &= ~VALIDATED_RESOURCES;
     return bRes;

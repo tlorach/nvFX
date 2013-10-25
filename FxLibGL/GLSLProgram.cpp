@@ -65,6 +65,7 @@ GLSLProgram::~GLSLProgram()
  **/ /*************************************************************************/ 
 GLSLProgram::GLSLProgram(Container *pCont) : Program(pCont)
 {
+    GLenum err = glGetError(); // we don't want to have errors from outside interfere with this method
     m_program = glCreateProgram();
 	m_linkNeeded = true;
     m_usable = false;

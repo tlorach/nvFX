@@ -571,6 +571,7 @@ bool GLSLProgramPipeline::validate()
 bool GLSLProgramPipeline::invalidate(int stages)
 {
 #ifndef OGLES2
+    LOGD("Invalidating Program pipeline %d\n", m_pipelineID);
     NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_BLUE, 13);
     if(m_pipelineID == 0)
         return false;
