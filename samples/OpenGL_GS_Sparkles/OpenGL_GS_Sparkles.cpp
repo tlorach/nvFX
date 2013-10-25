@@ -581,7 +581,7 @@ void messageCallbackFunc(const char *msg)
 void includeCallbackFunc(const char *incName, FILE *&fp, const char *&buf)
 {
     char fullpath[200];
-    fp = fopen("incName", "r");
+    fp = fopen(incName, "r");
     if(fp) return;
 
     sprintf(fullpath, SOURCE_DIR "/%s", incName);
@@ -939,7 +939,7 @@ void setup_common_uniforms(nvFX::IContainer* pEffect)
     if(!fx_almostNeverChange)
     {
         fx_almostNeverChange = pEffect->findCstBuffer("almostNeverChange");
-        fx_almostNeverChange->buildGLBuffer();
+        fx_almostNeverChange->buildGLBuffer(nvFX::ICstBuffer::STREAM_DRAW);
         nvFX::IUniform* pU = fx_almostNeverChange->findUniform("near_far_scrratio");
         if(pU) pU->setValue4f(PROJ_NEAR, PROJ_FAR, (float)g_winSz[0]/(float)g_winSz[1], 0.0);
         pU = fx_almostNeverChange->findUniform("DepthRTSz");
