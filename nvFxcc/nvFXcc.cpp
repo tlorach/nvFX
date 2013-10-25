@@ -426,11 +426,7 @@ nvFX::IContainer* parseEffect(const char * pathName, bool dumpASM)
     if(nvFX::loadEffectFromFile(pGLSLFx, pathName))
     {
         nvFX::getResourceRepositorySingleton()->setParams(0,0,100,100,1,0,(void*)NULL);
-        if(!nvFX::getResourceRepositorySingleton()->validate() )
-            failed = true;
-        nvFX::printf("Resource validation Ok\n");
-        nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,100,100,1,0,(void*)NULL);
-        if(!nvFX::getFrameBufferObjectsRepositorySingleton()->validate() )
+        if(!nvFX::getResourceRepositorySingleton()->validateAll() )
             failed = true;
         nvFX::printf("Frame buffer objects validation Done\n");
         for(int i=0; fxTech = pGLSLFx->findTechnique(i); i++)

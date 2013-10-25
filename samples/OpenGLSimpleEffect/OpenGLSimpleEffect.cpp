@@ -223,11 +223,7 @@ void reshape(int w, int h)
     perspective(g_transfBlock1.m4_Proj, 45.0f, (float)g_winSz[0] / (float)g_winSz[1], 0.01f, 10.0f);
 
     nvFX::getResourceRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
-    bool failed = nvFX::getResourceRepositorySingleton()->validate() ? false : true;
-    if(failed)
-        assert(!"Oops");
-    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
-    failed = nvFX::getFrameBufferObjectsRepositorySingleton()->validate() ? false : true;
+    bool failed = nvFX::getResourceRepositorySingleton()->validateAll() ? false : true;
     if(failed)
         assert(!"Oops");
 }

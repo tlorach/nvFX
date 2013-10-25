@@ -255,14 +255,6 @@ void reshape(int w, int h)
     //
     // Let's validate again the base of resource management to make sure things keep consistent
     //
-    //if(fboBox)
-    //    fboBox->Initialize(g_winSz[0], g_winSz[1],2,4,0);
-    //
-    // Let's validate again the base of resource management to make sure things keep consistent
-    //
-    //int fboId = fboBox?fboBox->getFBO():0;
-    //int W = fboBox?fboBox->getBufferWidth():g_winSz[0];
-    //int H = fboBox?fboBox->getBufferHeight():g_winSz[1];
     int W = g_winSz[0];
     int H = g_winSz[1];
 
@@ -271,11 +263,7 @@ void reshape(int w, int h)
     perspective(g_transfBlock1.m4_Proj, 45.0f, (float)g_winSz[0] / (float)g_winSz[1], PROJ_NEAR, PROJ_FAR);
 
     nvFX::getResourceRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
-    bool failed = nvFX::getResourceRepositorySingleton()->validate() ? false : true;
-    if(failed)
-        assert(!"Oops");
-    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
-    failed = nvFX::getFrameBufferObjectsRepositorySingleton()->validate() ? false : true;
+    bool failed = nvFX::getResourceRepositorySingleton()->validateAll() ? false : true;
     if(failed)
         assert(!"Oops");
     if(fx_gViewportSizeI)
@@ -1033,16 +1021,11 @@ bool loadSceneEffect()
     //
     // Some resources could have been created from the effect and added to the resource repository
     //
-    int fboId = 0;//fboBox?fboBox->getFBO():0;
-    //int W = fboBox?fboBox->getBufferWidth():g_winSz[0];
-    //int H = fboBox?fboBox->getBufferHeight():g_winSz[1];
+    int fboId = 0;
     int W = g_winSz[0];
     int H = g_winSz[1];
     nvFX::getResourceRepositorySingleton()->setParams(0,0,W,H,1,0,(void*)(fboId) );
-    if(!nvFX::getResourceRepositorySingleton()->validate())
-        return false;
-    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,W,H,1,0,(void*)(fboId) );
-    if(!nvFX::getFrameBufferObjectsRepositorySingleton()->validate())
+    if(!nvFX::getResourceRepositorySingleton()->validateAll())
         return false;
     //
     // Load possible textures
@@ -1853,11 +1836,6 @@ void display()
     }
 
     //
-    // Offscreen rendering
-    //
-    //if(fboBox)
-    //    fboBox->Activate();
-    //
     // SCENE-LEVEL TEST
     //
     nvFX::PassInfo pr;
@@ -1878,14 +1856,6 @@ void display()
             break;
         }
     }
-    //
-    // Done with offscreen rendering
-    //
-    //if(fboBox)
-    //{
-    //    fboBox->Deactivate();
-    //    fboBox->Draw(InvFBOBox::DS2,0,0,g_winSz[0],g_winSz[1],NULL);
-    //}
 #ifdef NOGLUT
     SwapBuffers( g_hDC );
 #else

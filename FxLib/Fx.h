@@ -479,8 +479,8 @@ public:
     int         addFBO(IFrameBufferObject* p);
     int         releaseFbo(IFrameBufferObject* p);
     bool        setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev);
-    bool        validate();
-    bool        update();
+    bool        validateAll();
+    bool        updateValidated();
     bool        finish();
 
     IFrameBufferObject*      find(const char * fboName);
@@ -613,8 +613,8 @@ public:
     int         releaseResource(IResource* pRes);
 
     bool        setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev);
-    bool        validate();
-    bool        update();
+    bool        validateAll();
+    bool        updateValidated();
     bool        invalidateUnusedResources();
     //IResource*  createTexture2DRandomRays(const char * name, int nbDirs); // for HBAO
 

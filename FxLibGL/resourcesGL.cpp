@@ -497,6 +497,7 @@ bool ResourceGL::invalidate()
 {
     if(m_OGLId > 0)
     {
+        LOGD("Invalidating Resource %s (ID=%d)\n", m_name.c_str(), m_OGLId);
         switch(m_type)
         {
         case RESRBUF_2D:
@@ -1008,7 +1009,7 @@ bool      FrameBufferObjectsRepository::blit(IFrameBufferObject* pIDst, IFrameBu
  **/ /*************************************************************************/ 
 bool FrameBufferObject::invalidate()
 {
-    LOGD("invalidating FBO %s (ID=%d)\n", m_name.c_str(), m_fboID);
+    LOGD("Invalidating FBO %s (ID=%d)\n", m_name.c_str(), m_fboID);
     glDeleteFramebuffers(1, &(m_fboID));
     m_fboID = 0;
     return true;

@@ -102,6 +102,7 @@ bool    Technique::destroy(IPass *p)
  **/ /*************************************************************************/ 
 bool    Technique::invalidate()
 {
+    LOGD("Invalidating Technique %s\n", m_name.c_str());
     bool bRes = true;
     for(int i=0; i<(int)m_passes.size(); i++)
     {
