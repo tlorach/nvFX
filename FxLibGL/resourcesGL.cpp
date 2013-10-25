@@ -655,8 +655,9 @@ bool FrameBufferObject::validate()
     {
         if(m_colors[i] <= 0)
             break;
-        if((m_colors[i]->getWidth() != m_w)
-         ||(m_colors[i]->getHeight() != m_h))
+        if((!m_colors[i]->isValidated())
+         ||(m_colors[i]->getWidth() != m_w)
+         ||(m_colors[i]->getHeight() != m_h) )
         {
             validated = false;
             break;
@@ -668,17 +669,35 @@ bool FrameBufferObject::validate()
         //    break;
         //}
     }
-    // No need : color buffers are enough
-    //if(m_dst &&((m_colors[i]->getWidth() != m_w)
-    // ||(m_colors[i]->getHeight() != m_h)))
-    //{
-    //    validated = false;
-    //    break;
-    //}
+    if(validated && m_dst &&((!m_dst->isValidated())
+     ||(m_dst->getWidth() != m_w)
+     ||(m_dst->getHeight() != m_h)))
+    {
+        validated = false;
+    }
     if(validated)
         return true;
     bool fbo_failed = false;
     IResourceRepository* pRep = nvFX::getResourceRepositorySingleton();
+
+    //
+    // check validity of resources: the FBO can't take the liberty to create them
+    // so we can save memory when not needed
+    //
+    for(int i=0; i<(int)m_colors.size(); i++)
+        if(!m_colors[i]->isValidated() )
+            fbo_failed = true;
+    if(m_dst && (!m_dst->isValidated()) )
+            fbo_failed = true;
+    if(fbo_failed)
+    {
+        if(m_fboID) {
+            LOGD("Invalidating FBO %s (ID=%d)\n", m_name.c_str(), m_fboID);
+            glDeleteFramebuffers(1, &(m_fboID));
+        }
+        m_fboID = 0;
+        return false;
+    }
 
     if(!m_fboID)
         glGenFramebuffers(1, &m_fboID);
@@ -697,6 +716,7 @@ bool FrameBufferObject::validate()
         }
         if(m_colors[i])
         {
+            // only work with already validated resources
             m_colors[i]->validate();
             switch(m_colors[i]->m_type)
             {
@@ -710,7 +730,7 @@ bool FrameBufferObject::validate()
                 if(m_colors[i]->m_creationData.resolveTarget) // case where we shortcut the rb to the texutre directly
                 {
                     pResource = m_colors[i]->m_creationData.resolveTarget;
-                    LOGI("RE-Attaching %s to FBO %s at Color %d (via %s)\n", m_colors[i]->m_creationData.resolveTarget->getName(), m_name.c_str(), i, m_colors[i]->getName());
+                    LOGD("RE-Attaching %s to FBO %s at Color %d (via %s)\n", m_colors[i]->m_creationData.resolveTarget->getName(), m_name.c_str(), i, m_colors[i]->getName());
                 } else {
                     pResource = m_colors[i];
                 }
@@ -725,7 +745,7 @@ bool FrameBufferObject::validate()
             break;
             case RESRBUF_2D:
             {
-                LOGI("RE-Attaching %s to FBO %s at Color %d\n", m_colors[i]->getName(), m_name.c_str(), i);
+                LOGD("RE-Attaching %s to FBO %s at Color %d\n", m_colors[i]->getName(), m_name.c_str(), i);
                 glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_RENDERBUFFER, m_colors[i]->m_OGLId);
             }
             break;
@@ -753,7 +773,7 @@ bool FrameBufferObject::validate()
     {
 #ifndef OGLES2
         m_dst->validate();
-        LOGI(" Attaching %s to FBO DST %s\n", m_dst->m_name.c_str(), m_name.c_str());
+        LOGD(" Attaching %s to FBO DST %s\n", m_dst->m_name.c_str(), m_name.c_str());
         //to remove... m_dst->addRef();
         switch(m_dst->m_type) // we are dealing with a texture
         {
@@ -767,7 +787,7 @@ bool FrameBufferObject::validate()
             if(m_dst->m_creationData.resolveTarget)
             {
                 pResource = m_dst->m_creationData.resolveTarget;
-                LOGI("RE-Attaching %s to FBO %s at dst (via %s)\n", pResource->getName(), m_name.c_str(), m_dst->getName());
+                LOGD("RE-Attaching %s to FBO %s at dst (via %s)\n", pResource->getName(), m_name.c_str(), m_dst->getName());
             } else {
                 pResource = m_dst;
             }
@@ -988,7 +1008,7 @@ bool      FrameBufferObjectsRepository::blit(IFrameBufferObject* pIDst, IFrameBu
  **/ /*************************************************************************/ 
 bool FrameBufferObject::invalidate()
 {
-    LOGD("invalidating FBO %s\n", m_name.c_str());
+    LOGD("invalidating FBO %s (ID=%d)\n", m_name.c_str(), m_fboID);
     glDeleteFramebuffers(1, &(m_fboID));
     m_fboID = 0;
     return true;

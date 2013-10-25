@@ -137,6 +137,36 @@ bool    Technique::validate()
         bindAttributes();
     return bRes;
 }
+bool    Technique::validateResources()
+{
+    NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_BLUE, 1);
+    bool bRes = true;
+    for(int i=0; i<(int)m_passes.size(); i++)
+    {
+        PassTable &pt = m_passes[i];
+        if(pt.pass->isValidated())
+        {
+            if(!pt.pass->validateResources())
+                bRes = false;
+        }
+    }
+    return bRes;
+}
+bool    Technique::invalidateResources()
+{
+    NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_BLUE, 1);
+    bool bRes = true;
+    for(int i=0; i<(int)m_passes.size(); i++)
+    {
+        PassTable &pt = m_passes[i];
+        if(pt.pass->isValidated())
+        {
+            if(!pt.pass->invalidateResources())
+                bRes = false;
+        }
+    }
+    return bRes;
+}
 
 bool            Technique::isPassActive(IPass* p)
 { 

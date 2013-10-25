@@ -3,7 +3,7 @@ project(FxLibOPTIX)
 include_directories( 
 "../include"
 "../FxLib"
-"../FxLibGL"
+"../FxLibOPTIX"
 "${GLEW_INCLUDE_DIR}")
 
 if(OPTIX_INCLUDE_DIRS)
@@ -60,6 +60,10 @@ add_library(FxLibOPTIX STATIC
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#command:set_target_properties
 # http://cmake.org/cmake/help/v2.8.8/cmake.html#prop_tgt:FOLDER
 set_target_properties( FxLibOPTIX PROPERTIES FOLDER "FxLibOPTIX" )
+set_target_properties( FxLibOPTIX PROPERTIES DEBUG_OUTPUT_NAME "FxLibOPTIX${ARCHSUFFIX}D" )
+set_target_properties( FxLibOPTIX PROPERTIES RELEASE_OUTPUT_NAME "FxLibOPTIX${ARCHSUFFIX}" )
+set_target_properties( FxLibOPTIX PROPERTIES MINSIZEREL_OUTPUT_NAME "FxLibOPTIX${ARCHSUFFIX}" )
+set_target_properties( FxLibOPTIX PROPERTIES RELWITHDEBINFO_OUTPUT_NAME "FxLibOPTIX${ARCHSUFFIX}" )
 
 ##################################################################
 # INSTALL
