@@ -478,7 +478,9 @@ public:
     IFrameBufferObject* createFBO(const char * name);
     int         addFBO(IFrameBufferObject* p);
     int         releaseFbo(IFrameBufferObject* p);
-    bool        validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev);
+    bool        setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev);
+    bool        validate();
+    bool        update();
     bool        finish();
 
     IFrameBufferObject*      find(const char * fboName);
@@ -610,7 +612,9 @@ public:
     int         addResource(IResource* pRes);
     int         releaseResource(IResource* pRes);
 
-    bool        validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev);
+    bool        setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev);
+    bool        validate();
+    bool        update();
     bool        invalidateUnusedResources();
     //IResource*  createTexture2DRandomRays(const char * name, int nbDirs); // for HBAO
 
@@ -1388,6 +1392,8 @@ public:
 
     bool            validate();
     bool            invalidate();
+    bool            validateResources();
+    bool            invalidateResources();
 
     /// \brief allows to map the attributes of a vertex shader to *all* the sub-sequence passes
     bool            bindAttribute(const char * name, int unit);
@@ -1589,7 +1595,9 @@ protected:
 // TODO...
     AttribMap               m_attributes; // map where we store the attributes for possible vertex shader in this pass
     std::string             m_name;
-    bool                    m_validated;
+    #define VALIDATED_PASS      1
+    #define VALIDATED_RESOURCES 2
+    unsigned int            m_validated;
     int                     m_loopCnt;
     Container*              m_container; ///< just referenced here to be able to access to nvFX::Uniform
     Technique*              m_parent; ///<parent owner
@@ -1717,6 +1725,8 @@ public:
     /// @}
     /// \brief validates the pass. It will create the GLSL/Cg (and others) programs if needed
     bool            validate(); ///< called by Technique::validate()
+    /// \brief validates the related resources needed by this pass.
+    bool            validateResources();
     /// \brief creates in \e dest techniques passes additional pass states from \e override states
     bool            setupOverrides(ITechnique **dest, int numPasses);
     /// \brief creates in \e dest passes additional pass states from \e override states
@@ -1725,7 +1735,10 @@ public:
     bool            releaseOverrides(ITechnique **dest, int numTechs);
     /// \brief removes a specific override
     bool            releaseOverrides(IPass **dest, int numPasses);
+    /// \brief validates the pass. It will create the GLSL/Cg (and others) programs if needed
     bool            invalidate();
+    /// \brief invalidates the related resources needed by this pass.
+    bool            invalidateResources();
     /// \brief executes the states of this pass : [GLSL] program and other states (render states)...
     /// \arg \e cancelInternalAction allows you to cancel some implicit actions that execute() would perform. See nvFX::PassInfo  ::flags
     bool            execute(PassInfo   * pr=NULL, unsigned int cancelInternalAction=0);
@@ -1743,7 +1756,7 @@ public:
     /// \brief erase all mapped attributes
     void            clearAttributeBinding();
     /// \brief tells if the pass got validated or not
-    bool            isValidated() { return m_validated; };
+    bool            isValidated() { return m_validated&VALIDATED_PASS; };
     /// \brief returns the string name of a specific attribute #. NULL if nothing assigned
     const char *    getAttributeNameForLocation(int loc);
     /// \brief returns # of associated attributes
@@ -1880,6 +1893,7 @@ protected:
 public:
     Resource(ResourceRepository* pCont, const char *name=NULL);
     virtual ~Resource();
+    virtual bool        isValidated() { return m_OGLId/*||m_d3dresource*/ ? true:false; }
     /// \brief returns the interface for annotations
     virtual IAnnotation *annotations() { return &m_annotations; }
     virtual const char* getName() { return m_name.c_str(); }
@@ -1923,8 +1937,15 @@ public:
 
     /// \name reference counter of users.
     /// @{
-    virtual int         incUserCnt() { m_userCnt++; return m_userCnt; }
-    virtual int         decUserCnt() { if(m_userCnt > 0) m_userCnt--; return m_userCnt; }
+    virtual int         incUserCnt() { 
+        m_userCnt++;
+        LOGD("Incremented Resource %s use-count to %d\n", m_name.c_str(), m_userCnt);
+        return m_userCnt;
+    }
+    virtual int         decUserCnt() { 
+        if(m_userCnt > 0) m_userCnt--; 
+        LOGD("Deccremented Resource %s use-count to %d\n", m_name.c_str(), m_userCnt);
+        return m_userCnt; }
     virtual int         getUserCnt() { return m_userCnt; }
     /// @}
 #if 0
@@ -2274,6 +2295,7 @@ public:
     /// \brief returns the interface for annotations
     IAnnotation*    annotations() { return &m_annotations; }
     const char*     getName() { return m_name.c_str(); }
+    GLuint          getID() { return m_fboID; }
     /// \brief sets the pass name
     void            setName(const char *name) { m_name = name; }
     /// \name resource assignment

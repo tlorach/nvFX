@@ -744,7 +744,7 @@ Pass::Pass(Container *pCont, Technique *pParent, const char *name)
     m_loopCnt = 1;
     m_overrideID = 0;
     m_parent = pParent;
-    m_validated = false;
+    m_validated = 0;
     if(name)
         m_name = std::string(name);
     m_container = pCont;
@@ -764,7 +764,8 @@ Pass::Pass(Container *pCont, Technique *pParent, const char *name)
  **/ /*************************************************************************/ 
 bool Pass::invalidate()
 {
-    m_validated = false;
+    invalidateResources();
+    m_validated &= ~VALIDATED_PASS;
     StatesLayerMap::iterator iPM = m_statesLayers.begin();
     m_container->invalidateTargets(this, -1);
     while(iPM != m_statesLayers.end())
@@ -780,57 +781,6 @@ bool Pass::invalidate()
             //sl.programPipeline->
         }
 //#endif
-        //
-        // release the user counter of related resources
-        //
-        StateVec::iterator it = sl.statesForValidation.begin();
-        while(it != sl.statesForValidation.end())
-        {
-            PassState* pS = (*it);
-            PassState::Type t = pS->getType();
-            switch(t)
-            {
-            case PassState::TFBOTarget:
-                {
-                    IFrameBufferObject* pFBO = pS->getFBOTarget();
-                    Resource *pRes;
-                    for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
-                    {
-                        pRes->decUserCnt();
-                    }
-                    if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
-                        pRes->decUserCnt();
-                }
-                break;
-            case PassState::TBlitFBOSrc:
-                {
-                    IFrameBufferObject* pFBO = pS->getBlitFBOToActiveTarget();
-                    Resource *pRes;
-                    for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
-                    {
-                        pRes->decUserCnt();
-                    }
-                    if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
-                        pRes->decUserCnt();
-                }
-                break;
-            case PassState::TUniform:
-                {
-                    Uniform* pU = static_cast<Uniform*>(pS->getUniform());
-                    Uniform::ShadowedData* pData = pU->getShadowedData();
-                    if(pData->tex.pRes)
-                    {
-                        // at last: we can increase the counter of real users (users who need the resource to be allocated)
-                        pData->tex.pRes->incUserCnt();
-                    }
-                }
-                break;
-            case PassState::TSwapResource:
-                assert(!"TODO: PassState::TSwapResource");
-                break;
-            }
-            ++it;
-        }
         ++iPM;
     }
     return true;
@@ -887,7 +837,7 @@ bool Pass::validate()
 {
     NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_BLUE2, 2);
     bool bErr = false;
-    if(m_validated)
+    if((m_validated&VALIDATED_PASS))
     {
         //
         // Already validated : let's just update active uniforms, if needed
@@ -1721,64 +1671,6 @@ bool Pass::validate()
             ++it;
         }
         //
-        // maintain the reference-user-counter of the used resources
-        //
-        StatesLayerMap::iterator iSL = m_statesLayers.begin();
-        while(iSL != m_statesLayers.end())
-        {
-            int layerID = iSL->first;
-            StatesLayer &sl = iSL->second;
-            it = sl.statesForValidation.begin();
-            while(it != sl.statesForValidation.end())
-            {
-                PassState* pS = (*it);
-                PassState::Type t = pS->getType();
-                switch(t)
-                {
-                case PassState::TFBOTarget:
-                    {
-                        IFrameBufferObject* pFBO = pS->getFBOTarget();
-                        Resource *pRes;
-                        for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
-                        {
-                            pRes->incUserCnt();
-                        }
-                        if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
-                            pRes->incUserCnt();
-                    }
-                    break;
-                case PassState::TBlitFBOSrc:
-                    {
-                        IFrameBufferObject* pFBO = pS->getBlitFBOToActiveTarget();
-                        Resource *pRes;
-                        for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
-                        {
-                            pRes->incUserCnt();
-                        }
-                        if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
-                            pRes->incUserCnt();
-                    }
-                    break;
-                case PassState::TUniform:
-                    {
-                        Uniform* pU = static_cast<Uniform*>(pS->getUniform());
-                        Uniform::ShadowedData* pData = pU->getShadowedData();
-                        if(pData->tex.pRes)
-                        {
-                            // at last: we can increase the counter of real users (users who need the resource to be allocated)
-                            pData->tex.pRes->incUserCnt();
-                        }
-                    }
-                    break;
-                case PassState::TSwapResource:
-                    assert(!"TODO: PassState::TSwapResource");
-                    break;
-                }
-                ++it;
-            }
-            ++iSL;
-        }
-        //
         // Now let's update uniforms from the possible ones stored in the Container
         //
         m_container->updateCstBuffers(this, -1, true, true, false);
@@ -1801,8 +1693,288 @@ bool Pass::validate()
         // TODO : manage the sub-routines in the pass-states
         //
     } //bHasProgram
-    m_validated = bErr ? false : true;
+    //
+    // maintain the reference-user-counter of the used resources
+    //
+    //StatesLayerMap::iterator iSL = m_statesLayers.begin();
+    //while(iSL != m_statesLayers.end())
+    //{
+    //    int layerID = iSL->first;
+    //    StatesLayer &sl = iSL->second;
+    //    it = sl.statesForExecution.begin();
+    //    while(it != sl.statesForExecution.end())
+    //    {
+    //        PassState* pS = (*it);
+    //        PassState::Type t = pS->getType();
+    //        switch(t)
+    //        {
+    //        case PassState::TFBOTarget:
+    //            {
+    //                IFrameBufferObject* pFBO = pS->getFBOTarget();
+    //                if(pFBO)
+    //                {
+    //                    LOGD("Pass %s needs resources from FBO %s for target\n", m_name.c_str(), pFBO->getName() );
+    //                    Resource *pRes;
+    //                    for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+    //                    {
+    //                        pRes->incUserCnt();
+    //                    }
+    //                    if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+    //                    {
+    //                        pRes->incUserCnt();
+    //                    }
+    //                }
+    //            }
+    //            break;
+    //        case PassState::TBlitFBOSrc:
+    //            {
+    //                IFrameBufferObject* pFBO = pS->getBlitFBOToActiveTarget();
+    //                LOGD("Pass %s needs resources from FBO %s for blitting\n", m_name.c_str(), pFBO->getName() );
+    //                Resource *pRes;
+    //                for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+    //                {
+    //                    pRes->incUserCnt();
+    //                }
+    //                if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+    //                    pRes->incUserCnt();
+    //            }
+    //            break;
+    //        case PassState::TUniform:
+    //            {
+    //                Uniform* pU = static_cast<Uniform*>(pS->getUniform());
+    //                Uniform::ShadowedData* pData = pU->getShadowedData();
+    //                if(pData->tex.pRes)
+    //                {
+    //                    LOGD("Pass %s needs resource %s as a texture\n", m_name.c_str(), pData->tex.pRes->getName() );
+    //                    // at last: we can increase the counter of real users (users who need the resource to be allocated)
+    //                    pData->tex.pRes->incUserCnt();
+    //                }
+    //            }
+    //            break;
+    //        case PassState::TSwapResource:
+    //            assert(!"TODO: PassState::TSwapResource");
+    //            break;
+    //        }
+    //        ++it;
+    //    }
+    //    ++iSL;
+    //}
+    if(bErr)
+        m_validated &= ~VALIDATED_PASS;
+    else
+        m_validated |= VALIDATED_PASS;
     return m_validated;
+}
+/*************************************************************************/ /**
+ **
+ ** 
+ **/ /*************************************************************************/ 
+bool Pass::validateResources()
+{
+    bool bRes = true;
+    if(m_validated != VALIDATED_PASS)
+        return false;
+    StateVec::iterator it;
+    // Note: currently we will validate resources for *all the layers*
+    // so if a Pass has many instances with different resources for each,
+    // all might be validated.
+    // QUESTION: do we really want to care so much about each layer ?
+    StatesLayerMap::iterator iSL = m_statesLayers.begin();
+    while(iSL != m_statesLayers.end())
+    {
+        int layerID = iSL->first;
+        StatesLayer &sl = iSL->second;
+        it = sl.statesForExecution.begin();
+        while(it != sl.statesForExecution.end())
+        {
+            PassState* pS = (*it);
+            PassState::Type t = pS->getType();
+            switch(t)
+            {
+            case PassState::TFBOTarget:
+                {
+                    IFrameBufferObject* pFBO = pS->getFBOTarget();
+                    if(pFBO)
+                    {
+                        LOGD("Pass %s (layerID %d) validating resources from FBO %s for target\n", m_name.c_str(), layerID, pFBO->getName() );
+                        Resource *pRes;
+                        for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                        {
+                            if(pRes->incUserCnt() == 1)
+                                if(!pRes->validate())
+                                    bRes = false;
+                        }
+                        if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                        {
+                            if(pRes->incUserCnt() == 1)
+                                if(!pRes->validate())
+                                    bRes = false;
+                        }
+                        // maybe we need to re-validate the FBO
+                        pFBO->getExInterface()->validate();
+                    }
+                }
+                break;
+            case PassState::TBlitFBOSrc:
+                {
+                    IFrameBufferObject* pFBO = pS->getBlitFBOToActiveTarget();
+                    LOGD("Pass %s (layerID %d) validating resources from FBO %s for blitting\n", m_name.c_str(), layerID, pFBO->getName() );
+                    Resource *pRes;
+                    for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                    {
+                        if(pRes->incUserCnt() == 1)
+                            if(!pRes->validate())
+                                bRes = false;
+                    }
+                    if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                    {
+                        if(pRes->incUserCnt() == 1)
+                            if(!pRes->validate())
+                                bRes = false;
+                    }
+                    // maybe we need to re-validate the FBO
+                    pFBO->getExInterface()->validate();
+                }
+                break;
+            case PassState::TUniform:
+                {
+                    Uniform* pU = static_cast<Uniform*>(pS->getUniform());
+                    Uniform::ShadowedData* pData = pU->getShadowedData();
+                    if(pData->tex.pRes)
+                    {
+                        LOGD("Pass %s (layerID %d) validating resource %s as a texture\n", m_name.c_str(), layerID, pData->tex.pRes->getName() );
+                        // at last: we can increase the counter of real users (users who need the resource to be allocated)
+                        if(pData->tex.pRes->incUserCnt() == 1)
+                            if(!pData->tex.pRes->validate())
+                                bRes = false;
+                    }
+                }
+                break;
+            case PassState::TSwapResource:
+                assert(!"TODO: PassState::TSwapResource");
+                break;
+            }
+            ++it;
+        }
+        ++iSL;
+    }
+    m_validated |= VALIDATED_RESOURCES;
+    return bRes;
+}
+/*************************************************************************/ /**
+ ** 
+ ** 
+ **/ /*************************************************************************/ 
+bool Pass::invalidateResources()
+{
+    bool bRes = true;
+    if(m_validated != (VALIDATED_PASS|VALIDATED_RESOURCES))
+        return false;
+    StateVec::iterator it;
+    // Note: currently we will invalidate resources for *all the layers*
+    // so if a Pass has many instances with different resources for each,
+    // all might be validated.
+    // QUESTION: do we really want to care so much about each layer ?
+    StatesLayerMap::iterator iSL = m_statesLayers.begin();
+    while(iSL != m_statesLayers.end())
+    {
+        int layerID = iSL->first;
+        StatesLayer &sl = iSL->second;
+        it = sl.statesForExecution.begin();
+        while(it != sl.statesForExecution.end())
+        {
+            PassState* pS = (*it);
+            PassState::Type t = pS->getType();
+            switch(t)
+            {
+            case PassState::TFBOTarget:
+                {
+                    IFrameBufferObject* pFBO = pS->getFBOTarget();
+                    if(pFBO)
+                    {
+                        bool bLostResource = false;
+                        Resource *pRes;
+                        LOGD("Pass %s (layerID %d) INvalidating resource from FBO %s (ID=%d) for target\n", m_name.c_str(), layerID, pFBO->getName(), pFBO->getID() );
+                        for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                        {
+                            if(pRes->decUserCnt() == 0)
+                                if(pRes->invalidate())
+                                    bLostResource = true;
+                                else bRes = false;
+                        }
+                        if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                        {
+                            if(pRes->decUserCnt() == 0)
+                                if(pRes->invalidate())
+                                    bLostResource = true;
+                                else bRes = false;
+                        }
+                        // if any of the related resource got discarded, invalidate the FBO
+                        // reason: we did not add FBOs some userCnt mechanism. So we must bypass it
+                        if(bLostResource)
+                            pFBO->getExInterface()->invalidate();
+                    }
+                }
+                break;
+            case PassState::TBlitFBOSrc:
+                {
+                    IFrameBufferObject* pFBO = pS->getBlitFBOToActiveTarget();
+                    LOGD("Pass %s (layerID %d) INvalidating resources from FBO %s (ID=%d)for blitting\n", m_name.c_str(), layerID, pFBO->getName(), pFBO->getID() );
+                    bool bLostResource = false;
+                    Resource *pRes;
+                    for(int i=0; pRes = static_cast<Resource*>(pFBO->getColorResource(i)); i++)
+                    {
+                        if(pRes->decUserCnt() == 0)
+                            if(pRes->invalidate())
+                                bLostResource = true;
+                            else bRes = false;
+                    }
+                    if(pRes = static_cast<Resource*>(pFBO->getDSTResource()))
+                        if(pRes->decUserCnt() == 0)
+                            if(pRes->invalidate())
+                                bLostResource = true;
+                            else bRes = false;
+                    // if any of the related resource got discarded, invalidate the FBO
+                    if(bLostResource)
+                        pFBO->getExInterface()->invalidate();
+                }
+                break;
+            case PassState::TUniform:
+                {
+                    Uniform* pU = static_cast<Uniform*>(pS->getUniform());
+                    Uniform::ShadowedData* pData = pU->getShadowedData();
+                    if(pData->tex.pRes)
+                    {
+                        LOGD("Pass %s (layerID %d) validating resource %s as a texture\n", m_name.c_str(), layerID, pData->tex.pRes->getName() );
+                        // at last: we can increase the counter of real users (users who need the resource to be allocated)
+                        if(pData->tex.pRes->decUserCnt() == 0 )
+                            if(!pData->tex.pRes->invalidate())
+                                bRes = false;
+                    }
+                }
+                break;
+            case PassState::TSwapResource:
+                assert(!"TODO: PassState::TSwapResource");
+                break;
+            }
+            ++it;
+        }
+        ++iSL;
+    }
+    //
+    // We need to walk through the FBO repository to check if some must be invalidated
+    // this is not so cool but the problem is that some resource might have been released
+    // from a pass and now would make the FBO inconsistent if ever this same texture
+    // was used for it. This FBO didn't get previously deleted certainly because none of its
+    // resources user counter did reach 0...
+    // Note that we have to put this call in the Pass::invalidateResources() because
+    // one might call this method directly rather than using the Technique::invalidateResources()
+    //
+    FrameBufferObjectsRepository *pFBORep = static_cast<FrameBufferObjectsRepository *>(nvFX::getFrameBufferObjectsRepositorySingleton());
+    pFBORep->update();
+
+    m_validated &= ~VALIDATED_RESOURCES;
+    return bRes;
 }
 
 /*************************************************************************/ /**
@@ -2048,7 +2220,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
 #pragma MESSAGE("TODO : define MAX_RENDERTARGETS and replace 4 by MAX_RENDERTARGETS in the code...")
     memset(pr->clearColorValid, 0, sizeof(bool)*4/*MAX_RENDERTARGETS*/);
 
-    if(!m_validated)
+    if(!(m_validated&VALIDATED_PASS))
     {
         nvFX::printf("Warning : Pass %s must be validated before executing it\n", m_name.c_str());
         if(!validate()) // commented : we should just fail... up to the app to validate() if needed
@@ -2435,7 +2607,6 @@ IPassState* Pass::createStateOverride(IPassState::Type type, IShader **shd, int 
  **/ /*************************************************************************/ 
 IPassState*      Pass::createStateSamplerResourceOverride(const char *varName, IResource *pRes, int texUnit)
 {
-    //m_validated = false;
     PassState *p = new PassState(m_container, this, varName); // name it the same as the uniform it relates to
     p->setSamplerResource(varName, pRes, texUnit);
     m_statesOverride.push_back(p);
@@ -2446,7 +2617,6 @@ IPassState*      Pass::createStateSamplerResourceOverride(const char *varName, I
  **/ /*************************************************************************/ 
 IPassState*      Pass::createStateTextureResourceOverride(const char *varName, IResource *pRes)
 {
-    //m_validated = false;
     PassState *p = new PassState(m_container, this, varName); // name it the same as the uniform it relates to
     p->setTextureResource(varName, pRes);
     m_statesOverride.push_back(p);
@@ -2457,7 +2627,6 @@ IPassState*      Pass::createStateTextureResourceOverride(const char *varName, I
  **/ /*************************************************************************/ 
 IPassState*      Pass::createStateImageResourceOverride(const char *varName, IResource *pRes, int unit)
 {
-    //m_validated = false;
     PassState *p = new PassState(m_container, this, varName); // name it the same as the uniform it relates to
     p->setImageResource(varName, pRes, unit);
     m_statesOverride.push_back(p);
@@ -2468,7 +2637,6 @@ IPassState*      Pass::createStateImageResourceOverride(const char *varName, IRe
  **/ /*************************************************************************/ 
 IPassState*      Pass::createStateSamplerStateOverride(const char *varName, ISamplerState * pSState)
 {
-    //m_validated = false;
     PassState *p = new PassState(m_container, this, varName);
     p->setSamplerState(varName, pSState);
     m_statesOverride.push_back(p);
@@ -2491,7 +2659,7 @@ IPassState* Pass::createState(IPassState::Type type, IShader *shd, const char *g
         pLayer->program = NULL;
     }
 //#endif
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = NULL;
     // NOTE: I know this is not clean : the group name here suddently becomes the state name
     // I should have a special field for this. For now this is good enough but not really
@@ -2528,7 +2696,7 @@ IPassState* Pass::createState(IPassState::Type type, IShader *shd, const char *g
 IPassState* Pass::createState(IPassState::Type type, IShader **shd, int numShaders, const char *groupName, bool bUseActiveLayer)
 {
     StatesLayer* pLayer = bUseActiveLayer ? m_pActiveStatesLayer : m_pBaseStatesLayer;
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
 //#ifdef USE_OLDPROGRAM
     if(pLayer->program  && !pLayer->programPipeline)
     {
@@ -2573,7 +2741,7 @@ IPassState* Pass::createState(IPassState::Type type, IShader **shd, int numShade
 IPassState* Pass::createState(const char *srcVarName, int idx, const char *dstVarName)
 {
     // creates a state layer 0 if doesn't exist
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = NULL;
     // first, look for an existing state that would already assign data to this variable
     StateVec::iterator it = m_pBaseStatesLayer->statesForExecution.begin();
@@ -2610,7 +2778,7 @@ IPassState* Pass::createState(const char *srcVarName, int idx, const char *dstVa
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(const char *srcVarName, const char **dstVarNames, int numNames)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = NULL;
     // first, look for an existing state that would already assign data to this variable
     StateVec::iterator it = m_pBaseStatesLayer->statesForExecution.begin();
@@ -2647,7 +2815,7 @@ IPassState* Pass::createState(const char *srcVarName, const char **dstVarNames, 
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(const char *varName, int idx, float *pF, int nComps)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     // first, look for an existing state that would already assign data to this variable
     StateVec::iterator it = m_pBaseStatesLayer->statesForExecution.begin();
     PassState* p = new PassState(m_container, this);
@@ -2662,7 +2830,7 @@ IPassState* Pass::createState(const char *varName, int idx, float *pF, int nComp
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(const char *varName, int idx, int *pI, int nComps)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setUniform(varName, idx, pI, nComps);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2675,7 +2843,7 @@ IPassState* Pass::createState(const char *varName, int idx, int *pI, int nComps)
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(const char *varName, int idx, float *pF, int nComps, int nVecs)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setUniform(varName, idx, pF, nComps, nVecs);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2687,7 +2855,7 @@ IPassState* Pass::createState(const char *varName, int idx, float *pF, int nComp
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(const char *varName, int idx, int *pI, int nComps, int nVecs)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setUniform(varName, idx, pI, nComps, nVecs);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2699,7 +2867,7 @@ IPassState* Pass::createState(const char *varName, int idx, int *pI, int nComps,
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(IStateGroupRaster *pSGRaster)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateGroup(pSGRaster);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2711,7 +2879,7 @@ IPassState* Pass::createState(IStateGroupRaster *pSGRaster)
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(IStateGroupCS *pSGCS)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateGroup(pSGCS);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2723,7 +2891,7 @@ IPassState* Pass::createState(IStateGroupCS *pSGCS)
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(IStateGroupDST *pSGDST)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateGroup(pSGDST);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2736,7 +2904,7 @@ IPassState* Pass::createState(IStateGroupDST *pSGDST)
  **/ /*************************************************************************/ 
 IPassState* Pass::createState(IStateGroupPath *pSGPR)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     if (NULL!=p)
     {
@@ -2753,7 +2921,7 @@ IPassState*      Pass::createStateFromState(IPassState* pState)
 {
     if (NULL == pState)
       return NULL;
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     switch(pState->getType())
     {
     case IPassState::TUniform:
@@ -2776,7 +2944,7 @@ IPassState*      Pass::createStateFromState(IPassState* pState)
  **/ /*************************************************************************/ 
 bool Pass::destroy(IPassState* p)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     if (NULL == p)
       return false;
     StatesLayerMap::iterator iSL = m_statesLayers.begin();
@@ -2838,7 +3006,7 @@ bool Pass::destroy(IPassState* p)
  **/ /*************************************************************************/ 
 IPassState* Pass::createStateSamplerResource(const char *varName, IResource *pRes, int texUnit)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this, varName); // name it the same as the uniform it relates to
     p->setSamplerResource(varName, pRes, texUnit);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2851,7 +3019,7 @@ IPassState* Pass::createStateSamplerResource(const char *varName, IResource *pRe
  **/ /*************************************************************************/ 
 IPassState* Pass::createStateTextureResource(const char *varName, IResource *pRes)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this, varName); // name it the same as the uniform it relates to
     p->setTextureResource(varName, pRes);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2864,7 +3032,7 @@ IPassState* Pass::createStateTextureResource(const char *varName, IResource *pRe
  **/ /*************************************************************************/ 
 IPassState* Pass::createStateImageResource(const char *varName, IResource *pRes, int unit)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this, varName); // name it the same as the uniform it relates to
     p->setImageResource(varName, pRes, unit);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2877,7 +3045,7 @@ IPassState* Pass::createStateImageResource(const char *varName, IResource *pRes,
  **/ /*************************************************************************/ 
 IPassState* Pass::createStateSamplerState(const char *varName, ISamplerState * pSState)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this, varName);
     p->setSamplerState(varName, pSState);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2890,7 +3058,7 @@ IPassState* Pass::createStateSamplerState(const char *varName, ISamplerState * p
  **/ /*************************************************************************/ 
 IPassState*            Pass::createStateRenderMode(RenderingMode rmode)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setRenderingMode(rmode);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2898,7 +3066,7 @@ IPassState*            Pass::createStateRenderMode(RenderingMode rmode)
 }
 IPassState*            Pass::createStateRenderGroup(int renderGroup)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setRenderGroup(renderGroup);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2906,7 +3074,7 @@ IPassState*            Pass::createStateRenderGroup(int renderGroup)
 }
 IPassState*            Pass::createStateClearMode(ClearMode cmode)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setClearMode(cmode);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2914,7 +3082,7 @@ IPassState*            Pass::createStateClearMode(ClearMode cmode)
 }
 IPassState*      Pass::createStateClearColor(int i, float r, float g, float b, float a)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setClearColor(i,r,g,b,a);
     m_pBaseStatesLayer->statesForExecution.push_back(p);
@@ -2923,7 +3091,7 @@ IPassState*      Pass::createStateClearColor(int i, float r, float g, float b, f
 
 IPassState*            Pass::createStateRenderTarget(IFrameBufferObject *p)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *pPS = new PassState(m_container, this);
     pPS->setRenderTarget(p);
     m_pBaseStatesLayer->statesForExecution.push_back(pPS);
@@ -2931,7 +3099,7 @@ IPassState*            Pass::createStateRenderTarget(IFrameBufferObject *p)
 }
 IPassState*            Pass::createStateBlitFBOToActiveTarget(IFrameBufferObject *p)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *pPS = new PassState(m_container, this);
     pPS->setBlitFBOToActiveTarget(p);
     m_pBaseStatesLayer->statesForExecution.push_back(pPS);
@@ -2940,7 +3108,7 @@ IPassState*            Pass::createStateBlitFBOToActiveTarget(IFrameBufferObject
 
 IPassState*            Pass::createStateViewport(int x, int y, int w, int h, float minZ, float maxZ)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *pPS = new PassState(m_container, this);
     pPS->setViewport(x,y,w,h, minZ, maxZ);
     m_pBaseStatesLayer->statesForExecution.push_back(pPS);
@@ -2948,7 +3116,7 @@ IPassState*            Pass::createStateViewport(int x, int y, int w, int h, flo
 }
 IPassState*      Pass::createStateSwapResources(IFrameBufferObject *p1, IFrameBufferObject *p2)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *pPS = new PassState(m_container, this);
     pPS->setSwapResources(p1, p2);
     m_pBaseStatesLayer->statesForExecution.push_back(pPS);
@@ -3467,7 +3635,7 @@ bool            Pass::getActive()
  **/ /*************************************************************************/ 
 IPassState* Pass::createStateKernelEntry(const char * kernelName, int numArgs, ArgVal *argvalues)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateKernelEntry(kernelName, numArgs, argvalues);
     m_pBaseStatesLayer->statesForValidation.push_back(p);
@@ -3475,7 +3643,7 @@ IPassState* Pass::createStateKernelEntry(const char * kernelName, int numArgs, A
 }
 IPassState* Pass::createStateBlockSz(int x, int y, int z)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateBlockSz(x, y, z);
     m_pBaseStatesLayer->statesForValidation.push_back(p);
@@ -3483,7 +3651,7 @@ IPassState* Pass::createStateBlockSz(int x, int y, int z)
 }
 IPassState* Pass::createStateGridSz(int x, int y, int z)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateGridSz(x, y, z);
     m_pBaseStatesLayer->statesForValidation.push_back(p);
@@ -3491,7 +3659,7 @@ IPassState* Pass::createStateGridSz(int x, int y, int z)
 }
 IPassState* Pass::createStateSharedMemory(int Sz)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateSharedMemory(Sz);
     m_pBaseStatesLayer->statesForValidation.push_back(p);
@@ -3517,7 +3685,7 @@ IPassState* Pass::createStateSharedMemory(int Sz)
 #endif
 IPassState* Pass::createStateComputeGroup(int x, int y, int z)
 {
-    m_validated = false;
+    m_validated &= ~VALIDATED_PASS;
     PassState *p = new PassState(m_container, this);
     p->setStateComputeGroup(x, y, z);
     m_pBaseStatesLayer->statesForValidation.push_back(p);

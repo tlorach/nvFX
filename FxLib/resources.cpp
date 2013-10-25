@@ -263,7 +263,7 @@ int         FrameBufferObjectsRepository::releaseFbo(IFrameBufferObject* p)
     return -1;
 }
 
-bool        FrameBufferObjectsRepository::validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev)
+bool        FrameBufferObjectsRepository::setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev)
 {
 #ifdef WIN32
     m_pDevice = pDev; // Note: in D3D, we may want to 'AddRef' the device... should be done in a FrameBufferObjectsRepositoryD3D...
@@ -276,12 +276,30 @@ bool        FrameBufferObjectsRepository::validate(int x, int y, int w, int h, i
     m_backbufferDST = backbufferDST;
     m_msaa[0] = depthSamples;
     m_msaa[1] = coverageSamples;
+    return true;
+}
+
+bool        FrameBufferObjectsRepository::validate()
+{
     bool bRes = true;
     FboMap::iterator iR = m_FBOs.begin();
     for(; iR != m_FBOs.end(); iR++)
     {
         if(!iR->second.p->validate())
             bRes = false;
+    }
+    return bRes;
+}
+bool        FrameBufferObjectsRepository::update()
+{
+    bool bRes = true;
+    FboMap::iterator iR = m_FBOs.begin();
+    for(; iR != m_FBOs.end(); iR++)
+    {
+        // only update the ones already valid
+        if((iR->second.refCnt > 0)&&(iR->second.p->m_fboID))
+            if(!iR->second.p->validate())
+                bRes = false;
     }
     return bRes;
 }
@@ -665,7 +683,7 @@ bool ResourceRepository::removeResource(Resource *p)
     return false;
 }
 
-bool ResourceRepository::validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev)
+bool ResourceRepository::setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev)
 {
 #ifdef WIN32
     m_pDevice = pDev; // AddRef ?
@@ -678,12 +696,38 @@ bool ResourceRepository::validate(int x, int y, int w, int h, int depthSamples, 
     m_backbufferDST = backbufferDST;
     m_msaa[0] = depthSamples;
     m_msaa[1] = coverageSamples;
+    return true;
+}
+
+bool ResourceRepository::validate()
+{
     bool bRes = true;
     ResourceMap::iterator iR = m_resources.begin();
     for(; iR != m_resources.end(); iR++)
     {
         if(iR->second.p->getUserCnt() > 0) // only validate those that are really used
         {
+            LOGD("Validating Resource %s\n", iR->second.p->getName());
+            if(!iR->second.p->validate())
+                bRes = false;
+        } else {
+            LOGD("Resource %s not referenced as active resource. Skipping it...\n", iR->second.p->getName());
+        }
+    }
+    return bRes;
+}
+
+bool ResourceRepository::update()
+{
+    bool bRes = true;
+    ResourceMap::iterator iR = m_resources.begin();
+    for(; iR != m_resources.end(); iR++)
+    {
+        // re-validate only those that got previously explicitly validated
+        if((iR->second.p->getUserCnt() > 0)
+            &&((iR->second.p->m_OGLId)/*||(iR->second.p->m_d3dresource)*/))
+        {
+            LOGD("Updating Resource %s\n", iR->second.p->getName());
             if(!iR->second.p->validate())
                 bRes = false;
         } else {

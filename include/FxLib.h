@@ -981,8 +981,12 @@ public:
     /// @}
     /// \brief (\b Invokes \b GFX \b API) validates the technique and sub-sequent passes
     virtual bool            validate() = 0;
+    /// \brief (\b Invokes \b GFX \b API) validates the related resources needed by this pass.
+    virtual bool            validateResources() = 0;
     /// \brief invalidates the technique and sub-sequent passes. Can be needed if we messed-up with a program or anything shared with this
     virtual bool            invalidate() = 0;
+    /// \brief (\b Invokes \b GFX \b API) invalidates the related resources used by this pass.
+    virtual bool            invalidateResources() = 0;
     /// \brief (\b Invokes \b GFX \b API) allows to map the attributes of a vertex shader to *all* the sub-sequence passes
     virtual bool            bindAttribute(const char * name, int unit) = 0;
     /// \brief (\b Invokes \b GFX \b API) binds mapped attributes to the program (triggers a linkage) to *all* the sub-sequence passes
@@ -1090,6 +1094,8 @@ public:
     /// @{
     /// \brief (\b Invokes \b GFX \b API) validates the pass. It will create the GLSL/Cg (and others) programs if needed
     virtual bool            validate() = 0;
+    /// \brief validates the related resources needed by this pass.
+    virtual bool            validateResources() = 0;
     /// \brief creates in \e dest techniques passes additional pass states from \e override states
     virtual bool            setupOverrides(ITechnique **dest, int numPasses) = 0;
     /// \brief creates in \e dest passes additional pass states from \e override states
@@ -1100,6 +1106,8 @@ public:
     virtual bool            releaseOverrides(IPass **dest, int numPasses) = 0;
     /// \brief validates the pass. It will create the GLSL/Cg (and others) programs if needed
     virtual bool            invalidate() = 0;
+    /// \brief invalidates the related resources needed by this pass.
+    virtual bool            invalidateResources() = 0;
     /// \brief (\b Invokes \b GFX \b API) executes the states of this pass : [GLSL] program and other states (render states)...
     /// \todo \e PassInfo would be a ptr to a struct in which the requests from the pass would be put (scene-level effect)
     /// \arg \e cancelInternalAction allows you to cancel some implicit actions that execute() would perform. See nvFX::PassInfo::flags
@@ -1343,6 +1351,7 @@ public:
     virtual int             getWidth() = 0;
     virtual int             getHeight() = 0;
     virtual int             getNumRenderTargets() = 0;
+    virtual GLuint          getID() = 0;
 };
 /*************************************************************************/ /**
  ** \brief Frame buffer Object binding point (FBO in OpenGL), gathering many render targets : textures or buffers
@@ -1362,11 +1371,15 @@ public:
 
     virtual BufferHandle getBackBuffer() = 0;///< D3D interface for color buffer \e OR OpenGL FBO Id (0 for backbuffer)
     virtual BufferHandle getBackBufferDST() = 0;///< D3D interface for DST buffer
-    /// \brief (\b Invokes \b GFX \b API)
+    /// \brief assign those default values, needed for some creation of FBOs
     /// \arg \e backbuffer is either a FBO Id; 0 for the backbuffer; or a D3D render target
     /// \arg \e x,y,w,h is the viewport of this backbuffer. It will allow some resources to be allocated accordingly to this
     /// \arg depthSamples and coverageSamples are MSAA+CSAA
-    virtual bool    validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
+    virtual bool    setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
+    /// \brief (\b Invokes \b GFX \b API) creates the FBOs
+    virtual bool    validate() = 0;
+    /// \brief (\b Invokes \b GFX \b API) updates previously validated FBOs (if size changed etc)
+    virtual bool    update() = 0;
     virtual bool    finish() = 0;
 };
 /*************************************************************************/ /**
@@ -1377,12 +1390,17 @@ class IResourceRepository : public IBaseInterface<IResourceRepositoryEx>
 {
 public:
 	virtual ~IResourceRepository() {}
-    /// \brief (\b Invokes \b GFX \b API)
+    /// \brief setup basic general parameters for possible need from resources
     /// \arg \e backbuffer is either a FBO Id; 0 for the backbuffer; or a D3D render target
     /// \arg \e x,y,w,h is the viewport of this backbuffer. It will allow some resources to be allocated accordingly to this
     /// \arg depthSamples and coverageSamples are MSAA+CSAA
     /// \arg \e pDev is essentially used in the case of D3D : D3D device.
-    virtual bool        validate(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
+    virtual bool        setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
+    /// \brief (\b Invokes \b GFX \b API) validates resources referenced by the effect(s)
+    virtual bool        validate() = 0;
+    /// \brief (\b Invokes \b GFX \b API) re-validates already validated resources: good if setParams changed anything
+    /// This won't create resources that didn't get previously validated (even if their refcnt >0)
+    virtual bool        update() = 0;
     /// \brief invalidate (free memory) resources that aren't referenced by any active users. IResourceEx::getUserCnt() == 0
     virtual bool        invalidateUnusedResources() = 0;
     virtual bool        finish() = 0;

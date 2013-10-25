@@ -304,6 +304,55 @@ GLSLShader toneMappingPS2 {
 //****
 //**************************************************************************************
 //**************************************************************************************
+Technique Simple
+{
+    Pass skybox
+    {
+        DEPTH_TEST = FALSE;
+        ClearMode = all;
+
+        // assign to a custom state the handle of a state object ready to be used
+        //rasterizationState = myStateRast;
+        //colorSampleState = myStateColorSample
+
+        RenderMode = fullscreen_quad;
+        VertexProgram = SkyboxVS;
+        SamplerResource(hdrEnvSampler) = hdEnvTexture;
+        FragmentProgram = { SkyboxPS, DefaultFragOutput};
+
+        currentTarget = FBOrenderBufferRGBA32F;
+    }
+    Pass scene
+    {
+        DEPTH_TEST = TRUE;
+
+        CULL_FACE_MODE = Back;
+        CULL_FACE = TRUE;
+
+        RenderMode = SceneShading;
+
+        currentTarget = FBOrenderBufferRGBA32F;
+        //FragmentProgramOverride<"globlighting"> = SIBLLighting; // defined in common.fxh
+    }
+    Pass resolve_to_texture
+    {
+        currentTarget = FBOtextureRGBA32F;
+        blitFBOToActiveTarget = FBOrenderBufferRGBA32F;
+    }
+    Pass resolve_to_backbuffer
+    {
+        ClearColor = {1.0f, 1.0f, 1.f, 1.f};
+        DEPTH_TEST = FALSE;
+        ClearMode = color;
+        currentTarget = backbuffer;
+
+        renderMode = fullscreen_quad;
+        VertexProgram = fullscreenquadVS;
+        SamplerResource(ScnSampler) = textureRGBA32F;
+        FragmentProgram = toneMappingPS2;
+    }
+}
+
 Technique HDR_IBL
 {
     Pass skybox
@@ -394,51 +443,3 @@ Technique HDR_IBL
     }*/
 }
 
-Technique Simple
-{
-    Pass skybox
-    {
-        DEPTH_TEST = FALSE;
-        ClearMode = all;
-
-        // assign to a custom state the handle of a state object ready to be used
-        //rasterizationState = myStateRast;
-        //colorSampleState = myStateColorSample
-
-        RenderMode = fullscreen_quad;
-        VertexProgram = SkyboxVS;
-        SamplerResource(hdrEnvSampler) = hdEnvTexture;
-        FragmentProgram = { SkyboxPS, DefaultFragOutput};
-
-        currentTarget = FBOrenderBufferRGBA32F;
-    }
-    Pass scene
-    {
-        DEPTH_TEST = TRUE;
-
-        CULL_FACE_MODE = Back;
-        CULL_FACE = TRUE;
-
-        RenderMode = SceneShading;
-
-        currentTarget = FBOrenderBufferRGBA32F;
-        //FragmentProgramOverride<"globlighting"> = SIBLLighting; // defined in common.fxh
-    }
-    Pass resolve_to_texture
-    {
-        currentTarget = FBOtextureRGBA32F;
-        blitFBOToActiveTarget = FBOrenderBufferRGBA32F;
-    }
-    Pass resolve_to_backbuffer
-    {
-        ClearColor = {1.0f, 1.0f, 1.f, 1.f};
-        DEPTH_TEST = FALSE;
-        ClearMode = color;
-        currentTarget = backbuffer;
-
-        renderMode = fullscreen_quad;
-        VertexProgram = fullscreenquadVS;
-        SamplerResource(ScnSampler) = textureRGBA32F;
-        FragmentProgram = toneMappingPS2;
-    }
-}
