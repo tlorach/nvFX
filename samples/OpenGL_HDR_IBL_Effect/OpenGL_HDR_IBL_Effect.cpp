@@ -268,10 +268,12 @@ void reshape(int w, int h)
 
     perspective(g_transfBlock1.m4_Proj, 45.0f, (float)g_winSz[0] / (float)g_winSz[1], 0.01f, 10.0f);
 
-    bool failed = nvFX::getResourceRepositorySingleton()->validate(0,0,W,H,1,0,NULL ) ? false : true;
+    nvFX::getResourceRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
+    bool failed = nvFX::getResourceRepositorySingleton()->update() ? false : true;
     if(failed)
         assert(!"Oops");
-    failed = nvFX::getFrameBufferObjectsRepositorySingleton()->validate(0,0,W,H,1,0,NULL ) ? false : true;
+    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
+    failed = nvFX::getFrameBufferObjectsRepositorySingleton()->validate() ? false : true;
     if(failed)
         assert(!"Oops");
     if(fx_gViewportSizeI)
@@ -556,6 +558,13 @@ void idle()
 
 //------------------------------------------------------------------------------
 void errorCallbackFunc(const char *errMsg)
+{
+#ifdef WIN32
+    OutputDebugString(errMsg);
+#endif
+    printf(errMsg);
+}
+void messageCallbackFunc(const char *errMsg)
 {
 #ifdef WIN32
     OutputDebugString(errMsg);
@@ -1001,6 +1010,42 @@ bool loadSceneEffect()
 
     LOGI("=========> Resource setup\n");
     //
+    // Now we need to re-build the instances of materials for the scenes
+    //
+    LOGI("=========> Effect instance override setup\n");
+    if(fx_EffectMaterial)
+        if(validateAndCreateSceneInstances())
+            failed = true;
+    // validate again the related resources of the current material: more instances could have been added
+    if(fx_TechMaterial)
+        fx_TechMaterial->validateResources();
+    // Validates the resources of the current selected scene technique
+    fx_TechScene->validateResources();
+    //
+    // Load possible textures
+    //
+    nvFX::IResource* pRes = NULL;
+    for(int i=0; pRes=fx_EffectScene->findResource(i); i++)
+    {
+        if(pRes->getExInterface()->getUserCnt() > 0)
+        {
+            const char* name = pRes->annotations()->getAnnotationString("defaultFile");
+            if(!name)
+                continue;
+            loadTexture(name, pRes->getExInterface());
+        } else {
+            LOGI("Skipped %s : not used anywhere, yet\n", pRes->getName() );
+        }
+    }
+    return failed ? false : true;
+}
+//-----------------------------------------------------------------------------
+// Update the resources
+//-----------------------------------------------------------------------------
+bool validateResources()
+{
+    bool failed = false;
+    //
     // Some resources could have been created from the effect and added to the resource repository
     //
     int fboId = 0;//fboBox?fboBox->getFBO():0;
@@ -1008,32 +1053,16 @@ bool loadSceneEffect()
     //int H = fboBox?fboBox->getBufferHeight():g_winSz[1];
     int W = g_winSz[0];
     int H = g_winSz[1];
-    if(!nvFX::getResourceRepositorySingleton()->validate(0,0,W,H,1,0,(void*)(fboId) ))
-        return false;
-    if(!nvFX::getFrameBufferObjectsRepositorySingleton()->validate(0,0,W,H,1,0,(void*)(fboId) ))
-        return false;
-    //
-    // Load possible textures
-    //
-    nvFX::IResource* pRes = NULL;
-    for(int i=0; pRes=fx_EffectScene->findResource(i); i++)
-    {
-        const char* name = pRes->annotations()->getAnnotationString("defaultFile");
-        if(!name)
-            continue;
-        loadTexture(name, pRes->getExInterface());
-    }
-    //
-    // Now we need to re-build the instances of materials for the scenes
-    //
-    LOGI("=========> Effect instance override setup\n");
-    if(fx_EffectMaterial)
-        if(validateAndCreateSceneInstances())
-            failed = true;
-    return failed ? false : true;
+    nvFX::getResourceRepositorySingleton()->setParams(0,0,W,H,1,0,(void*)(fboId));
+    if(!nvFX::getResourceRepositorySingleton()->update() )
+        failed = true;
+    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,W,H,1,0,(void*)(fboId) );
+    if(!nvFX::getFrameBufferObjectsRepositorySingleton()->validate() )
+        failed = true;
+    return failed;
 }
 //-----------------------------------------------------------------------------
-// Load scene effect
+// Load material effect
 //-----------------------------------------------------------------------------
 bool loadMaterialEffect()
 {
@@ -1112,6 +1141,8 @@ bool loadMaterialEffect()
     //
     if(validateAndCreateSceneInstances())
         return false;
+    // validate related resources of the current material: more instances could have been added
+    fx_TechMaterial->validateResources();
     return true;
 }
 
@@ -1403,11 +1434,17 @@ void initGL()
         {
             if(!strcmp(pWin->GetID(), "SCTECH"))
             {
+                nvFX::ITechnique* p = fx_TechScene;
                 fx_TechScene    = fx_EffectScene->findTechnique(selectedidx);
+                fx_TechScene->validateResources();
+                p->invalidateResources();
             }
             else if(!strcmp(pWin->GetID(), "MTECH"))
             {
+                nvFX::ITechnique* p = fx_TechMaterial;
                 fx_TechMaterial = fx_EffectMaterial->findTechnique(TECH_DEFAULT+selectedidx);
+                fx_TechMaterial->validateResources();
+                p->invalidateResources();
             }
             else if(!strcmp(pWin->GetID(), "MESH"))
             {
@@ -1467,9 +1504,11 @@ void initGL()
     // Effects
     //
     nvFX::setErrorCallback(errorCallbackFunc);
+    nvFX::setMessageCallback(messageCallbackFunc);
     nvFX::setIncludeCallback(includeCallbackFunc);
     loadSceneEffect();
     loadMaterialEffect();
+    validateResources();
     loadModel();
 #ifdef USESVCUI
     gatherEffectParamsUI();
