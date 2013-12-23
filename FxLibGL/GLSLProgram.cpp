@@ -78,7 +78,9 @@ GLSLProgram::GLSLProgram(Container *pCont) : Program(pCont)
     m_separable    = pCont->separateShadersEnabled();
     if(m_separable)
     {
-        glProgramParameteri(m_program, GL_PROGRAM_SEPARABLE, m_separable);
+		// glProgramParameteri is part of GL_ARB_get_program_binary 
+		// so it could be NULL for < 4.1 !
+        glProgramParameteriARB(m_program, GL_PROGRAM_SEPARABLE, m_separable);
         if((glGetError()==GL_INVALID_ENUM)||(glGenProgramPipelines == NULL))
         {
             LOGI("Warning : ARB_separate_shader_objects not available\n");
