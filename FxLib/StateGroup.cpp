@@ -102,6 +102,7 @@ StateGroupRaster::State* StateGroupRaster::createState(GLenum state, GLenum valu
 #ifndef OGLES2
     case GL_POINT_SMOOTH:
     case GL_POINT_SPRITE:
+    case GL_PROGRAM_POINT_SIZE:
     case GL_POINT_SPRITE_COORD_ORIGIN:
     case GL_LINE_SMOOTH:
     case GL_LINE_STIPPLE:

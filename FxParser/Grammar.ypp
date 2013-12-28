@@ -697,6 +697,7 @@ TODO: New resource types (from D3D)
 %token <glenum>     GLPOINTSIZE
 %token <glenum>     GLPOINTSMOOTH
 %token <glenum>     GLPOINTSPRITE
+%token <glenum>     GLPROGRAMPOINTSIZE
 %token <glenum>     GLPOINTSPRITECOORDORIGIN
 %token <glenum>     GLLINEWIDTH
 %token <glenum>     GLLINESMOOTH
@@ -3177,6 +3178,7 @@ sstate: SAMPLER_STATE nsvarname {
 passglsstates: GLPOINTSIZE '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), ($3))) yyerror("Failed to create state!\n"); }
 | GLPOINTSMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)(($3 )? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
 | GLPOINTSPRITE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)(($3 )? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| GLPROGRAMPOINTSIZE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)(($3 )? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
 | GLPOINTSPRITECOORDORIGIN '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), getGLEnumValue($3))) yyerror("Failed to create state!\n"); }
 | GLLINEWIDTH '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), ($3))) yyerror("Failed to create state!\n"); }
 | GLLINESMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($1), (GLenum)(($3 )? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
@@ -3333,6 +3335,7 @@ rstates: /* empty */
 | rstates GLPOINTSIZE '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n"); }
 | rstates GLPOINTSMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
 | rstates GLPOINTSPRITE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
+| rstates GLPROGRAMPOINTSIZE '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
 | rstates GLPOINTSPRITECOORDORIGIN '=' glenum ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), getGLEnumValue($4))) yyerror("Failed to create state!\n"); }
 | rstates GLLINEWIDTH '=' asfexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), $4)) yyerror("Failed to create state!\n"); }
 | rstates GLLINESMOOTH '=' asbexp ';' { check_curRState(); if(!curRState->createState(getGLEnumValue($2), (GLenum)($4 ? GL_TRUE: GL_FALSE))) yyerror("Failed to create state!\n"); }
