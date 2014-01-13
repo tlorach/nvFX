@@ -764,6 +764,8 @@ Pass::Pass(Container *pCont, Technique *pParent, const char *name)
  **/ /*************************************************************************/ 
 bool Pass::invalidate()
 {
+    if(!(m_validated & VALIDATED_PASS))
+        return true;
     LOGD("Invalidating Pass %s\n", m_name.c_str());
     invalidateResources();
     m_validated &= ~VALIDATED_PASS;
@@ -3405,7 +3407,6 @@ bool Pass::setupOverrides(IPass **dest, int numPasses)
     for(int i=0; i<numPasses; i++)
     {
         Pass *pDestPass = static_cast<Pass*>(dest[i]);
-        pDestPass->invalidate(); // invalidate the whole pass since some stuff will change
         int layer = pDestPass->getActiveProgramLayer();
         StateVec::iterator iSO = m_statesOverride.begin();
         for(; iSO != m_statesOverride.end(); iSO++)
@@ -3429,6 +3430,7 @@ bool Pass::setupOverrides(IPass **dest, int numPasses)
                     // Create only if we found the same group name in the base layer
                     if(pDstPassState)
                     {
+                        pDestPass->invalidate(); // invalidate the whole pass since some stuff will change
 						IShader** shaders =  new IShader*[pSrcPassState->m_shaders.size()];
 						for(int s=0; s<(int)pSrcPassState->m_shaders.size(); s++)
 							shaders[s] = pSrcPassState->m_shaders[s];
@@ -3458,6 +3460,7 @@ bool Pass::setupOverrides(IPass **dest, int numPasses)
                         LOGI("Warning: pass-state Uniform Override skipped for %s\n", m_name.c_str() );
                         break;
                     }
+                    pDestPass->invalidate(); // invalidate the whole pass since some stuff will change
                     // creates ON THE ACTIVE STATE LAYER a copy of the original state
                     PassState* pPS = static_cast<PassState*>(pDestPass->createStateFromState(pSrcPassState));
                     // let's validate here the texture unit #... to prevent conflicts
