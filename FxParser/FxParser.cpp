@@ -291,6 +291,7 @@
         case GLPOINTSIZE: return 0x0B11;
         case GLPOINTSMOOTH: return 0x0B10;
         case GLPOINTSPRITE: return 0x8861;
+        case GLPROGRAMPOINTSIZE: return 0x8642;
         case GLPOINTSPRITECOORDORIGIN: return 0x8CA0;
         case GLLINEWIDTH: return 0x0B21;
         case GLLINESMOOTH: return 0x0B20;

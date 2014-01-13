@@ -56,6 +56,7 @@ void StateGroupRasterGL::apply()
         #ifndef OGLES2
             case GL_POINT_SMOOTH:
             case GL_POINT_SPRITE:
+            case GL_PROGRAM_POINT_SIZE:
             case GL_LINE_SMOOTH:
             case GL_LINE_STIPPLE:
             case GL_POLYGON_SMOOTH:
