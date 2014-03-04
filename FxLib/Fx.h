@@ -704,6 +704,7 @@ protected:
     unsigned int            m_bufferId; ///< typically GLSL buffer Id
 	int						m_sizeMultiplier; ///< a multiplier, to allocate a bigger buffer for many occurences
 	int						m_sizeOfCstBuffer; ///< a multiplier, to allocate a bigger buffer for many occurences
+    void *                  m_stagingBuffer; ///< temporary storage were data are put together before being sent to the driver (especially for OpenGL)
 	int						m_bufferOffset; ///< offset within the constant buffer attached here
     void *                  m_pBufferInterface; ///< any pointer (for example : D3D buffer interface)
     UniformVec              m_uniforms;

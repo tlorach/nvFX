@@ -401,8 +401,10 @@ int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultipl
     //
     // setup the default values
     //
-    void * pTemp = malloc(m_sizeOfCstBuffer);
-    bufferSizeAndData((char*)pTemp);
+    if(m_stagingBuffer)
+        free(m_stagingBuffer);
+    m_stagingBuffer = malloc(m_sizeOfCstBuffer);
+    bufferSizeAndData((char*)m_stagingBuffer);
 
     //
     // Create the buffer
@@ -417,9 +419,8 @@ int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultipl
     glUnmapBuffer(GL_UNIFORM_BUFFER);
 #else
 	// the size of the buffer can be more (m_sizeMultiplier>1) so we can later shift into it
-    glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBuffer * m_sizeMultiplier, pTemp, usage);
+    glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBuffer * m_sizeMultiplier, m_stagingBuffer, usage);
 #endif
-    free(pTemp);
     if(CHECKGLERRORS("CstBufferGL::buildGLBuffer"))
     {
         //DebugBreak();
@@ -565,7 +566,8 @@ bool CstBufferGL::updateFromUniforms(bool bForceUpdating)
     if(bDidBind)
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
 #else
-    NXPROFILEFUNCCOL2("upd.MapBuffer", COLOR_RED2, 11);
+    //NXPROFILEFUNCCOL2("upd.MapBuffer", COLOR_RED2, 11);
+    NXPROFILEFUNCCOL2("upd.BufferSubData", COLOR_RED2, 11);
     //
     // gather the dirty flags of uniforms and reset them
     //
@@ -584,11 +586,17 @@ bool CstBufferGL::updateFromUniforms(bool bForceUpdating)
     //
     char *cb;
     glBindBuffer(GL_UNIFORM_BUFFER, m_bufferId);
+#if 0
     cb = (char*)glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
     if(!cb)
         return false;
     int sz = bufferSizeAndData(cb);
     glUnmapBuffer(GL_UNIFORM_BUFFER);
+#else
+    assert(m_stagingBuffer);
+    int sz = bufferSizeAndData((char*)m_stagingBuffer);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, m_sizeOfCstBuffer * m_sizeMultiplier, m_stagingBuffer);
+#endif
     //
     // The buffer is clean
     //

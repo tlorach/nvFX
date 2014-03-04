@@ -41,6 +41,8 @@ using namespace nvFX;
  **/ /*************************************************************************/ 
 CstBuffer::~CstBuffer()
 {
+    if(m_stagingBuffer)
+        free(m_stagingBuffer);
     for(int i=0; i<(int)m_uniforms.size(); i++)
     {
         if(m_uniforms[i])
@@ -57,6 +59,7 @@ ICstBufferEx()
 	m_bufferOffset = 0;
     m_bufferId = 0;
     m_pBufferInterface = NULL;
+    m_stagingBuffer = NULL;
     if(name)
         m_name = name;
 }
