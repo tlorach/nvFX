@@ -4,6 +4,7 @@ set(PLATFORM_LIBRARIES
     ${NVFX_LIBS}
     ${OPENGL_LIBRARY}
     ${CUDA_LIBRARIES}
+    ${NSIGHT_LIB}
 )
 
 

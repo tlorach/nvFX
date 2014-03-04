@@ -175,9 +175,22 @@ endif()
 
 set(NVFX_BINARY_PATH "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NVFX_CONFIG}" CACHE STRING "Devtech Platform binary path")
 
+#####################################################################################
+# NSIGHT
+#
 if(USE_NSIGHT)
   add_definitions(-DUSE_NSIGHT)
   include_directories(NSight)
+  if( ARCH STREQUAL "x64" )
+    set(NSIGHT_LIB "${PROJECT_SOURCE_DIR}/NSight/nvToolsExt64_1.lib")
+    set(NSIGHT_DLL "${PROJECT_SOURCE_DIR}/NSight/nvToolsExt64_1.dll")
+  else()
+    set(NSIGHT_LIB "${PROJECT_SOURCE_DIR}/NSight/nvToolsExt32_1.lib")
+    set(NSIGHT_DLL "${PROJECT_SOURCE_DIR}/NSight/nvToolsExt32_1.dll")
+  endif()
+  #MARK_AS_ADVANCED(NSIGHT_LIB)
+else()
+  set(NSIGHT_LIB, "")
 endif()
 
 #include_directories(${NVFX_HOME})
