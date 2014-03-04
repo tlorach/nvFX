@@ -5,6 +5,7 @@ set(PLATFORM_LIBRARIES
     ${OPENGL_LIBRARY}
     ${GLEW_LIBRARY}
     ${CUDA_LIBRARIES}
+    ${NSIGHT_LIB}
 )
 include_directories(
     ${nvFx_SOURCE_DIR}/include
@@ -129,5 +130,8 @@ target_link_libraries(OpenGLUniformUpdateExample
 if(USE_SVCUI AND SVCMFCUI_FOUND)
   # Copy the resources where the executable file will be created
   _copy_files_to_target( OpenGLUniformUpdateExample "${SVCMFCUI_DLL}")
+endif()
+if(NSIGHT_DLL)
+  _copy_files_to_target( bk3dViewer "${NSIGHT_DLL}")
 endif()
 add_definitions(-DSOURCE_DIR="${OpenGLUniformUpdateExample_SOURCE_DIR}")

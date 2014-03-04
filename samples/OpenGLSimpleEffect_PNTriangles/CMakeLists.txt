@@ -6,6 +6,7 @@ set(PLATFORM_LIBRARIES
     ${GLEW_LIBRARY}
     ${ZLIB_LIBRARIES}
     ${CUDA_LIBRARIES}
+    ${NSIGHT_LIB}
 )
 include_directories(
     ${nvFx_SOURCE_DIR}/include
@@ -143,6 +144,9 @@ if(USE_SVCUI AND SVCMFCUI_FOUND)
 endif()
 if(ZLIB_FOUND)
   _copy_files_to_target( OpenGLSimpleEffect_PNTriangles "${ZLIB_BIN}")
+endif()
+if(NSIGHT_DLL)
+  _copy_files_to_target( bk3dViewer "${NSIGHT_DLL}")
 endif()
 #_copy_files_to_target( simpleOpenGL "${RESOURCE_DIR}/NV_Shaderball_v133.bk3d.gz")
 add_definitions(-DRESOURCE_DIR="${RESOURCE_DIR}" -DSOURCE_DIR="${OpenGLSimpleEffect_PNTriangles_SOURCE_DIR}")
