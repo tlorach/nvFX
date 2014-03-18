@@ -7,6 +7,9 @@ doxygen/perlmod
 doxygen/nvFX.chm
 doxygen/log.txt
 samples/OpenGLSimpleMDLEffect
+samples/firedemo*
+samples/Samples_ES2*
+samples/es2emu
 ISF
 *.pptx
 *.ppt
