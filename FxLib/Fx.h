@@ -675,6 +675,8 @@ public:
     virtual int addProgram(IProgram* p);
     virtual int releaseShader(IShader *p);
     virtual int releaseProgram(IProgram* p);
+    virtual IShader*    getShader(int i);
+    virtual IProgram*   getProgram(int i);
 };
 /*************************************************************************/ /**
  ** 
@@ -1133,6 +1135,7 @@ private:
     typedef std::vector<Resource*>         ResourceVec;
     typedef std::vector<FrameBufferObject*> FboVec;
     //----------------------- DATA ----------------
+    // TODO: resources names should contain name-space when sorted/stored or checked!!
     TechVec             m_techniques;
     ShaderVec           m_shaders;
     ShaderProgramVec    m_shaderprograms;
