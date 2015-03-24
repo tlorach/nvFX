@@ -1475,6 +1475,8 @@ public:
     /// could be global, if all the nvFX::IShader sources are global, too. So it is good to have a
     /// way to find them back
     virtual IProgram*   findProgram(ShaderType type, int numShaders, IShader ** pShaders) = 0;
+    virtual IShader*    getShader(int i) = 0;
+    virtual IProgram*   getProgram(int i) = 0;
     /// @}
 };
 
