@@ -2113,12 +2113,12 @@ int         UniformRepository::releaseUniform(IUniform* p)
             iR->second.refCnt--;
             if(iR->second.refCnt == 0)
             {
-                LOGI("Delete Uniform %s and remove it from repository\n", pp->getName());
+                LOGD("Delete Uniform %s and remove it from repository\n", pp->getName());
                 delete_Uniform(pp);
                 m_Items.erase(iR);
                 return 0;
             } else {
-                LOGI("Released Uniform %s to refCnt=%d\n", pp->getName(), iR->second.refCnt);
+                LOGD("Released Uniform %s to refCnt=%d\n", pp->getName(), iR->second.refCnt);
                 return iR->second.refCnt;
             }
         }
