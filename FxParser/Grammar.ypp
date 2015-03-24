@@ -173,20 +173,14 @@
                 p->getExInterface()->setType(T);
             }
         } else { // otherwise just make a regular uniform creation at the root of the effect
-            p = curContainer->createUniform(name, namespaceName.c_str(), sem, global);
-            if(p) {
-                p->getExInterface()->setType(T);
-                p->getExInterface()->setPrecision(precision);
-            } else { // failed. Try to find it in the global repository
-                if(global)
-                    p = pURep->find(name);
-                if(p==NULL)
-                    yyerror("failed to create global uniform\n");
-                else if(p->getType() != T)
-                    yyerror("uniform differs in its type the the global instance of the same name. Make it local ?\n");
-                else {
-                    curContainer->addUniform(p);
-                    pURep->addUniform(p);
+            // TODO: we should take into account the name-space !!
+            p = curContainer->findUniform(name);
+            if(!p)
+            {
+                p = curContainer->createUniform(name, namespaceName.c_str(), sem, global);
+                if(p) {
+                    p->getExInterface()->setType(T);
+                    p->getExInterface()->setPrecision(precision);
                 }
             }
         }
