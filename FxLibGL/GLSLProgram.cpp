@@ -80,7 +80,8 @@ GLSLProgram::GLSLProgram(Container *pCont) : Program(pCont)
     {
 		// glProgramParameteri is part of GL_ARB_get_program_binary 
 		// so it could be NULL for < 4.1 !
-        glProgramParameteriARB(m_program, GL_PROGRAM_SEPARABLE, m_separable);
+        // if you want to avoid this issue, use glProgramParameteriARB instead
+        glProgramParameteri/*ARB*/(m_program, GL_PROGRAM_SEPARABLE, m_separable);
         if((glGetError()==GL_INVALID_ENUM)||(glGenProgramPipelines == NULL))
         {
             LOGI("Warning : ARB_separate_shader_objects not available\n");
