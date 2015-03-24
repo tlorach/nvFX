@@ -183,7 +183,7 @@ Container::~Container()
                 IShader* pshd;
                 for(int ii=0; pshd = (*i10)->getShader(ii); ii++)
                     LOGD("%s ", pshd->getName());
-                LOGD(") no more used... deleting it\n");
+                LOGD(") no more used... DELETING it\n");
 #endif
                 // good enough : query the first shader in the program
                 switch((*i10)->getShader(0)->getType())
@@ -1127,8 +1127,10 @@ IStateGroupPath*      Container::findStateGroupPR(int i)
 }
 #endif
 /*************************************************************************/ /**
- ** 
- ** 
+ ** TODO: we should take into account the name-space when searching!!
+ ** true everywhere we search/find a uniform from m_uniforms
+ ** for now, there will be a bug if a same uniform name is used 2 times, once
+ ** in a namespace, and another time outside...
  **/ /*************************************************************************/ 
 IUniform*            Container::findUniform(const char * name)
 {
@@ -1327,12 +1329,17 @@ IUniform*      Container::createUniform(const char *name, const char *groupname,
     return p;
 }
 /*************************************************************************/ /**
- ** 
- ** 
+ ** Add a uniform to the container
+ ** - return false if already here
+ ** - return true otherwise
  **/ /*************************************************************************/ 
 bool Container::addUniform(IUniform *p)
 {
     Uniform* pp = static_cast<Uniform*>(p);
+    UniformMap::iterator iU = m_uniforms.find(pp->getName());
+    // check if this uniform name is already there
+    if(iU != m_uniforms.end())
+        return false;
     m_uniforms[pp->m_name] = pp;
     // Let's walk through the techniques and passes to make sure the existing ones
     // know about this new guy
@@ -1974,7 +1981,7 @@ bool    Container::destroy(IProgram* p)
                 IShader* pshd;
                 for(int ii=0; pshd = (*ip)->getShader(ii); ii++)
                     LOGD("%s ", pshd->getName());
-                LOGD(") no more used... deleting it\n");
+                LOGD(") no more used... DELETING it\n");
 #endif
                 // good enough : query the first shader in the program
                 switch((*ip)->getShader(0)->getType())
@@ -2035,6 +2042,7 @@ IResource*          Container::createResource(const char * name, ResourceType ty
 {
     IResource* pRes;
     //if(bGlobal)
+    if(!(pRes = findResource(name)))
     {
         IResourceRepositoryEx* pRep = getResourceRepositorySingleton()->getExInterface();
         pRes = pRep->createResource(name, type);
