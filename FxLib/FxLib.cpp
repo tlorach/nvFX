@@ -440,6 +440,21 @@ IShader* ShaderModuleRepository::findShader(const char * name, TargetType t)
     return NULL;
 }
 
+IShader*    ShaderModuleRepository::getShader(int i)
+{
+    ShdMap::iterator it = m_shaders.begin();
+    for(;(i>0) && (it!=m_shaders.end());i--)
+        ++it;
+    return (it == m_shaders.end()) ? NULL:it->second.p;
+}
+IProgram*   ShaderModuleRepository::getProgram(int i)
+{
+    if(i >= m_programs.size())
+        return NULL;
+    return m_programs[i].p;
+}
+
+
 static IShader* shdArray[100];
 extern bool findMatchingAnnotation(IAnnotation* pAnnot, const char *annotationName, const char* value);
 
@@ -587,18 +602,18 @@ int ShaderModuleRepository::releaseProgram(IProgram *p)
                 IShader* pshd;
                 for(int ii=0; pshd = (*it).p->getShader(ii); ii++)
                     LOGD("%s ", pshd->getName());
-                LOGD(")\n");
+                LOGD(") ");
 #endif
             if(c <= 0)
             {
 #ifdef _DEBUG
-                LOGD("no more used. Removing it from repository\n", a);
+                LOGD("no more used. REMOVING it from ShaderModuleRepository\n", a);
 #endif
                 m_programs.erase(it);
                 return 0;
             } else
 #ifdef _DEBUG
-                LOGD("still used (%d). Keeping it in repository\n", a, c);
+                LOGD("still used (%d). KEEPING it in ShaderModuleRepository\n", a, c);
 #endif
                 return c;
         }
@@ -616,11 +631,11 @@ int ShaderModuleRepository::releaseShader(IShader* p)
             int c = --it->second.refCnt;
             if(c <= 0)
             {
-                LOGD("Shader %s no more used. Removing it from repository\n", it->first.c_str());
+                LOGD("Shader %s no more used. Removing it from ShaderModuleRepository\n", it->first.c_str());
                 m_shaders.erase(it);
                 return 0;
             }
-            LOGD("Shader %s still used (%d). Keeping it in repository\n", it->first.c_str(), c);
+            LOGD("Shader %s still used (%d). Keeping it in ShaderModuleRepository\n", it->first.c_str(), c);
             return c;
         }
         ++it;
@@ -665,21 +680,25 @@ void Container::consolidateShaders()
                     // at last we have a program
                     iip = usedPrograms.find(p);
 #ifdef _DEBUG
-                        LOGD("Program %d (", p->getProgram() );
-                        IShader* pshd;
-                        for(int ii=0; pshd = p->getShader(ii); ii++)
-                            LOGD("%s ", pshd->getName());
+                        //LOGD("Program %d (", p->getProgram() );
+                        //IShader* pshd;
+                        //for(int ii=0; pshd = p->getShader(ii); ii++)
+                        //    LOGD("%s ", pshd->getName());
 #endif
                     if(iip != usedPrograms.end())
                     {
 #ifdef _DEBUG
+                        LOGD("Program %d (", p->getProgram() );
+                        IShader* pshd;
+                        for(int ii=0; pshd = p->getShader(ii); ii++)
+                            LOGD("%s ", pshd->getName());
                         LOGD(") Found as used by some pass (%s)\n", ip->pass->getName());
 #endif
                         usedPrograms.erase(iip);
                         m_shaderprograms.push_back(p); // add it back, because used here
                     } else {
 #ifdef _DEBUG
-                        LOGD(") used in pass %s BUT not found\n", ip->pass->getName());
+                        //LOGD(") used in pass %s BUT not found\n", ip->pass->getName());
 #endif
                     }
                   } // for()
@@ -957,7 +976,7 @@ void Shader::releaseMe()
 {
     if(m_users.empty())
     {
-        LOGD("Shader %s no more used... deleting it\n", getName());
+        LOGD("Shader %s no more used... DELETING it\n", getName());
         switch(m_targetType)
         {
         case TGLSL:
