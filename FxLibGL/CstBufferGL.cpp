@@ -56,6 +56,7 @@ CstBufferGL::~CstBufferGL()
 /*************************************************************************
  **
  **  method invoked by update()
+ ** TODO: remove bBindProgram
  **
  *************************************************************************/ 
 void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
@@ -63,24 +64,24 @@ void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
     NXPROFILEFUNCCOL2(m_name.c_str(), COLOR_ORANGE, 11);
     if(t.pass)
     {
-        // Here we take into account either the single-program case, or the separable shader case
-        GLSLProgram *glslProgram = static_cast<GLSLProgram*>(t.pass->getProgram(t.passLayerId));
-        GLSLProgramPipeline* glslProgramPipeline = static_cast<GLSLProgramPipeline*>(t.pass->getProgramPipeline(t.passLayerId));
-        if(glslProgramPipeline)
-            glslProgram = static_cast<GLSLProgram*>(glslProgramPipeline->getShaderProgram(t.shaderProgramNumber));
-        int prog = glslProgram->getProgram();
-//#ifdef USE_OLDPROGRAM
-        if(bBindProgram && !glslProgramPipeline)
-            glslProgram->bind(t.pass->m_container);
-        GLint dbgProg = 0;
-        //glGetIntegerv(GL_CURRENT_PROGRAM, &dbgProg);
-        //assert(prog == dbgProg);
-//#endif
         if(!t.valid)
         {
+			// Here we take into account either the single-program case, or the separable shader case
+			GLSLProgram *glslProgram = static_cast<GLSLProgram*>(t.pass->getProgram(t.passLayerId));
+			GLSLProgramPipeline* glslProgramPipeline = static_cast<GLSLProgramPipeline*>(t.pass->getProgramPipeline(t.passLayerId));
+			if(glslProgramPipeline)
+				glslProgram = static_cast<GLSLProgram*>(glslProgramPipeline->getShaderProgram(t.shaderProgramNumber));
+			int prog = glslProgram->getProgram();
+	//#ifdef USE_OLDPROGRAM
+			//if(bBindProgram && !glslProgramPipeline)
+			//	glslProgram->bind(t.pass->m_container);
+			//GLint dbgProg = 0;
+			//glGetIntegerv(GL_CURRENT_PROGRAM, &dbgProg);
+			//assert(prog == dbgProg);
+	//#endif
 #ifndef OGLES2
             if(glGetUniformBlockIndex)
-                t.uniformLocation = glGetUniformBlockIndex(glslProgram->getProgram(), m_name.c_str());
+                t.uniformLocation = glGetUniformBlockIndex(prog, m_name.c_str());
 #endif
             t.valid = t.uniformLocation < 0 ? false : true;
         }
@@ -106,7 +107,7 @@ void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
                 //glGetActiveUniformBlockiv(prog,t.uniformLocation, GL_UNIFORM_BLOCK_BINDING, &res);
                 //glUniformBlockBinding(prog, t.uniformLocation, t.uniformLocation);
                 if(m_bufferOffset > 0)
-                    glBindBufferRange(GL_UNIFORM_BUFFER, t.uniformLocation, m_bufferId, m_bufferOffset*m_sizeOfCstBuffer, m_sizeOfCstBuffer);
+                    glBindBufferRange(GL_UNIFORM_BUFFER, t.uniformLocation, m_bufferId, m_bufferOffset*m_sizeOfCstBufferAligned, m_sizeOfCstBuffer);
                 else
                     glBindBufferBase(GL_UNIFORM_BUFFER, t.uniformLocation, m_bufferId);
                 CHECKGLERRORS("Uniform::TUBO");
@@ -114,7 +115,8 @@ void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
 #endif
         }
 //#ifdef USE_OLDPROGRAM
-        if(bBindProgram && !glslProgramPipeline) glslProgram->unbind(t.pass->m_container);
+		// TODO: remove definitely because we don't want bBindProgram anymore
+        //if(bBindProgram && !glslProgramPipeline) glslProgram->unbind(t.pass->m_container);
 //#endif
         t.dirty = false;
     }
@@ -285,8 +287,10 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
  **  
  **
  *************************************************************************/ 
-CstBuffer*    CstBufferGL::updateForTarget(CstBuffer::STarget &t, bool bBindProgram)
+CstBuffer*    CstBufferGL::updateForTarget(int target, bool bBindProgram)
 {
+	CstBuffer::STarget &t = m_targets[target];
+	m_activeTarget = target;
     //assert(t.valid);
     CHECK_TRUE(t.valid);
     //if(!t.valid)
@@ -389,15 +393,37 @@ int CstBufferGL::bufferSizeAndData(char *pData, int *sz)
 int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultiplier)
 {
     NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_RED, 11);
+#ifndef OGLES2
+    //
+    // Create the buffer
+    //
+    unsigned int buf;
+    glGenBuffers(1, &buf);
+    glBindBuffer(GL_UNIFORM_BUFFER, buf);
+    setGLBuffer(buf);
+    m_ownBufferId = true;
+
 	if(sizeMultiplier > 1)
 		m_sizeMultiplier = sizeMultiplier;
 	else
 		m_sizeMultiplier = 1;
-#ifndef OGLES2
     //
     // Calculate the totaly size of the buffer to allocate
     //
     m_sizeOfCstBuffer = bufferSizeAndData(NULL);
+	//
+	// take into account the alignment
+	//
+    static int offsetAlignment = 0;
+	static int bitshift = 0;
+	if(offsetAlignment == 0)
+	{
+		glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &offsetAlignment);
+		bitshift = (int)(log((float)offsetAlignment)/log(2.0));
+	}
+    m_sizeOfCstBufferAligned = (m_sizeOfCstBuffer >> bitshift);
+    m_sizeOfCstBufferAligned <<= bitshift;
+    if(m_sizeOfCstBuffer & 0xFF) m_sizeOfCstBufferAligned += offsetAlignment;
     //
     // setup the default values
     //
@@ -406,20 +432,15 @@ int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultipl
     m_stagingBuffer = malloc(m_sizeOfCstBuffer);
     bufferSizeAndData((char*)m_stagingBuffer);
 
-    //
-    // Create the buffer
-    //
-    unsigned int buf;
-    glGenBuffers(1, &buf);
-    glBindBuffer(GL_UNIFORM_BUFFER, buf);
 #if 0
-    glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBuffer * m_sizeMultiplier, NULL, usage);
+    glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBufferAligned * m_sizeMultiplier, NULL, usage);
     void *pData = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
     memcpy(pData, pTemp, m_sizeOfCstBuffer * m_sizeMultiplier);
     glUnmapBuffer(GL_UNIFORM_BUFFER);
 #else
 	// the size of the buffer can be more (m_sizeMultiplier>1) so we can later shift into it
-    glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBuffer * m_sizeMultiplier, m_stagingBuffer, usage);
+	// WARNING: m_stagingBuffer is not big enough, here... will read beyong the allocated area... TODO
+    glBufferData(GL_UNIFORM_BUFFER, m_sizeOfCstBufferAligned * m_sizeMultiplier, m_stagingBuffer, usage);
 #endif
     if(CHECKGLERRORS("CstBufferGL::buildGLBuffer"))
     {
@@ -427,8 +448,6 @@ int CstBufferGL::buildGLBuffer(CstBufferGL::BufferUsageGL usage, int sizeMultipl
         assert(0);
         return NULL;
     }
-    setGLBuffer(buf);
-    m_ownBufferId = true;
     //
     // The creation did write existing values from the sub-uniforms
     // we need to set dirty flag to false
@@ -458,6 +477,7 @@ bool CstBufferGL::removeGLBuffer()
 	m_sizeMultiplier = 1;
 #ifndef OGLES2
     m_sizeOfCstBuffer = 0;
+	m_sizeOfCstBufferAligned = 0;
     if(m_bufferId && m_ownBufferId)
         glDeleteBuffers(1, &m_bufferId);
     m_bufferId = 0;
@@ -595,7 +615,7 @@ bool CstBufferGL::updateFromUniforms(bool bForceUpdating)
 #else
     assert(m_stagingBuffer);
     int sz = bufferSizeAndData((char*)m_stagingBuffer);
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, m_sizeOfCstBuffer * m_sizeMultiplier, m_stagingBuffer);
+    glBufferSubData(GL_UNIFORM_BUFFER, m_bufferOffset*m_sizeOfCstBufferAligned, m_sizeOfCstBuffer, m_stagingBuffer);
 #endif
     //
     // The buffer is clean

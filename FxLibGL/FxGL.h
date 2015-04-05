@@ -93,7 +93,7 @@ namespace nvFX
         // target creation should be done outside of update
         virtual CstBuffer*  update(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
         virtual CstBuffer*  update2(Pass *pass, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
-        virtual CstBuffer*  updateForTarget(STarget &t, bool bBindProgram);
+        virtual CstBuffer*  updateForTarget(int target, bool bBindProgram);
         virtual int         buildGLBuffer(BufferUsageGL usage, int sizeMultiplier);
         virtual bool        removeGLBuffer();
 

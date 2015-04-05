@@ -2319,15 +2319,19 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
         }
         ++itu;
     }
-    // Used uniforms (and that are not in pass-state list)
+    // -----------------------------------------------------------------------
+    // Used Constant Buffers
+	//
     CstBufferVec::iterator itc = m_pActiveStatesLayer->usedCstBuffers.begin();
     while(itc != m_pActiveStatesLayer->usedCstBuffers.end())
     {
         CstBufferAndTarget &ut = *itc;
-        ut.pC->updateForTarget(ut.pC->m_targets[ut.target], false);
+        ut.pC->updateForTarget(ut.target, false);
         ++itc;
     }
+    // -----------------------------------------------------------------------
     // Used samplerstates
+	//
     SamplerStateVec::iterator its = m_pActiveStatesLayer->usedSamplerStates.begin();
     while(its != m_pActiveStatesLayer->usedSamplerStates.end())
     {
