@@ -256,7 +256,7 @@
 
 
 /* Line 189 of yacc.c  */
-#line 260 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 260 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 
 /* Enabling traces.  */
 #ifndef YYDEBUG
@@ -454,7 +454,7 @@
 
 
 /* Line 209 of yacc.c  */
-#line 458 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 458 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 
 /* Tokens.  */
 #ifndef YYTOKENTYPE
@@ -885,7 +885,7 @@ typedef union YYSTYPE
 
 
 /* Line 214 of yacc.c  */
-#line 889 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 889 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
@@ -897,7 +897,7 @@ typedef union YYSTYPE
 
 
 /* Line 264 of yacc.c  */
-#line 901 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 901 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 
 #ifdef short
 # undef short
@@ -4266,7 +4266,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->shaderList)) delete (yyvaluep->shaderList); };
 
 /* Line 1000 of yacc.c  */
-#line 4270 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4270 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 408: /* "one_or_more_shaders" */
 
@@ -4275,7 +4275,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->shaderList)) delete (yyvaluep->shaderList); };
 
 /* Line 1000 of yacc.c  */
-#line 4279 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4279 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 409: /* "varnamelist" */
 
@@ -4284,7 +4284,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->varNameList)) delete (yyvaluep->varNameList); };
 
 /* Line 1000 of yacc.c  */
-#line 4288 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4288 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 412: /* "fexplist" */
 
@@ -4293,7 +4293,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->floatList)) delete (yyvaluep->floatList); };
 
 /* Line 1000 of yacc.c  */
-#line 4297 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4297 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 413: /* "fexpveclist" */
 
@@ -4302,7 +4302,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->floatVecList)) delete (yyvaluep->floatVecList); };
 
 /* Line 1000 of yacc.c  */
-#line 4306 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4306 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 414: /* "iexplist" */
 
@@ -4311,7 +4311,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->intList)) delete (yyvaluep->intList); };
 
 /* Line 1000 of yacc.c  */
-#line 4315 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4315 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 416: /* "bexplist" */
 
@@ -4320,7 +4320,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->boolList)) delete (yyvaluep->boolList); };
 
 /* Line 1000 of yacc.c  */
-#line 4324 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4324 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 441: /* "arglist" */
 
@@ -4329,7 +4329,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->argList)) delete (yyvaluep->argList); };
 
 /* Line 1000 of yacc.c  */
-#line 4333 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4333 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 482: /* "valueassignment_f" */
 
@@ -4338,7 +4338,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->floatVecList)) delete (yyvaluep->floatVecList); };
 
 /* Line 1000 of yacc.c  */
-#line 4342 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4342 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 483: /* "valueassignment_fv" */
 
@@ -4347,7 +4347,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->floatVecList)) delete (yyvaluep->floatVecList); };
 
 /* Line 1000 of yacc.c  */
-#line 4351 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4351 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
       case 484: /* "valueassignment_fvl" */
 
@@ -4356,7 +4356,7 @@ yydestruct (yymsg, yytype, yyvaluep)
 	{ if((yyvaluep->floatVecList)) delete (yyvaluep->floatVecList); };
 
 /* Line 1000 of yacc.c  */
-#line 4360 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4360 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 	break;
 
       default:
@@ -4514,7 +4514,7 @@ yyparse ()
 }
 
 /* Line 1242 of yacc.c  */
-#line 4518 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 4518 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
 
   goto yysetstate;
 
@@ -10612,7 +10612,7 @@ yyreduce:
 
 
 /* Line 1455 of yacc.c  */
-#line 10616 "C:/p4/GitHub/nvFX/FxParser/Grammar.cpp"
+#line 10616 "C:/github/tristan/nvFX/FxParser/Grammar.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);

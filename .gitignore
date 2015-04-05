@@ -1,6 +1,7 @@
 #################
 ## nvFX
 #################
+cmake_build
 build*
 doxygen/html
 doxygen/perlmod

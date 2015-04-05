@@ -54,6 +54,7 @@ CstBuffer::~CstBuffer()
 CstBuffer::CstBuffer(const char* name) : 
 ICstBufferEx()
 {
+	m_activeTarget = -1;
 	m_sizeMultiplier = 1;
 	m_sizeOfCstBuffer = 0;
 	m_bufferOffset = 0;
@@ -68,7 +69,7 @@ ICstBufferEx()
 ** \brief sets the offset where to use the data for the uniform block
 **
 **/ /*************************************************************************/
-bool		CstBuffer::offsetBufferBlock(int n)
+bool		CstBuffer::bindBufferRange(int n, IPass* pPass)
 {
 	if(n >= m_sizeMultiplier)
 		return false;
@@ -76,6 +77,22 @@ bool		CstBuffer::offsetBufferBlock(int n)
 	{
 		m_bufferOffset = n;
 		//setDirty(true);
+	}
+	if(pPass)
+	{
+		if((m_activeTarget >= 0) && (m_targets[m_activeTarget].pass == pPass))
+		{
+			updateForTarget(m_activeTarget);
+		} else {
+			Pass* pP = static_cast<Pass*>(pPass);
+			for(int i=0; i<m_targets.size(); i++)
+			{
+				if((m_targets[i].pass == pPass)&&(m_targets[i].passLayerId == pP->getActiveProgramLayer()))
+				{
+					updateForTarget(i);
+				}
+			}
+		}
 	}
 	return true;
 }
@@ -195,6 +212,8 @@ IUniform*            CstBuffer::findUniform(int i)
 bool CstBuffer::getDirty(Pass *pass)
 {
     bool bDirty = false;
+	if((m_activeTarget >=0 ) && (m_targets[m_activeTarget].pass == pass))
+		return m_targets[m_activeTarget].dirty;
     int tsz = (int)m_targets.size();
     for(int i=0; i<tsz; i++)
     {
@@ -218,7 +237,9 @@ bool CstBuffer::getDirty(Pass *pass)
 void CstBuffer::setDirty(bool bYes, Pass *pass)
 {
     int tsz = (int)m_targets.size();
-    for(int i=0; i<tsz; i++)
+	if((m_activeTarget >=0 ) && (m_targets[m_activeTarget].pass == pass))
+		m_targets[m_activeTarget].dirty = bYes;
+	else for(int i=0; i<tsz; i++)
     {
         STarget &t = m_targets[i];
         if((pass && (t.pass == pass)) || (pass == NULL))
@@ -233,11 +254,16 @@ void CstBuffer::setDirty(bool bYes, Pass *pass)
 CstBuffer*    CstBuffer::invalidateTarget(IPass *pass, int layerID)
 {
     std::vector<STarget>::iterator it = m_targets.begin();
+	int i=0;
     while(it != m_targets.end())
     {
         if((it->pass == pass)&&(it->passLayerId == layerID))
+		{
+			if(m_activeTarget == i)
+				m_activeTarget = -1;
             it->valid = false;
-        ++it;
+		}
+        ++it; ++i;
     }
     return this;
 }

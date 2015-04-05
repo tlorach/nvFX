@@ -504,8 +504,8 @@ public:
 	virtual void*       buildD3DBuffer(BufferUsageD3D usage = D3D_USAGE_IMMUTABLE, int sizeMultiplier=1) { return NULL; }
 	/// \brief way to change the offset of the attached buffer to the cbuffer/uniform block. Allows fast change (materials...)
 	/// This feature is only valid if the buffer creation (buildGLBuffer/buildD3DBuffer) has sizeMultiplier > 1
-	virtual bool		offsetBufferBlock(int n) = 0;
-	virtual int			getOffsetBufferBlock() = 0;
+	virtual bool		bindBufferRange(int n, IPass* pPass=NULL) = 0;
+	virtual int			getBufferRange() = 0;
     /// @}
     /// \brief (\b Invokes \b GFX \b API) returns a temporary pointer of the mapped aread of the buffer \b and \first : it updates the areas from uniforms if needed
     virtual bool        mapBuffer(void** ppData, bool bForceUpdating=false) = 0;

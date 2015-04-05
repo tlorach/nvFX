@@ -702,10 +702,13 @@ protected:
     StringName              m_name;
     // TODO: write the code when some targets need to be removed
     std::vector<STarget>    m_targets;
+	int						m_activeTarget; // keep track of the last target used (inside a Pass::execute)
+
     bool                    m_ownBufferId;
     unsigned int            m_bufferId; ///< typically GLSL buffer Id
 	int						m_sizeMultiplier; ///< a multiplier, to allocate a bigger buffer for many occurences
-	int						m_sizeOfCstBuffer; ///< a multiplier, to allocate a bigger buffer for many occurences
+	int						m_sizeOfCstBufferAligned; ///< size of the constant buffer with alignment taken into account
+	int						m_sizeOfCstBuffer; ///< Size of the constant buffer
     void *                  m_stagingBuffer; ///< temporary storage were data are put together before being sent to the driver (especially for OpenGL)
 	int						m_bufferOffset; ///< offset within the constant buffer attached here
     void *                  m_pBufferInterface; ///< any pointer (for example : D3D buffer interface)
@@ -715,7 +718,7 @@ protected:
     CstBuffer(const char* name);
     virtual ~CstBuffer();
     /// \brief update for a specific target only
-    virtual CstBuffer*    updateForTarget(STarget &t, bool bBindProgram = false) = 0;
+    virtual CstBuffer*    updateForTarget(int target, bool bBindProgram = false) = 0;
     virtual int           bufferSizeAndData(char *pData, int *sz=NULL) = 0;
 public:
     bool        getDirty(Pass *pass=NULL); ///< get Dirty status for either all targets or one specific, using pass ptr
@@ -734,14 +737,14 @@ public:
     virtual IUniform*   createUniform(const char *name, const char *semantic=NULL);
     virtual int         buildGLBuffer(BufferUsageGL usage, int sizeMultiplier) { return 0; }
     virtual void*       buildD3DBuffer(BufferUsageD3D usage, int sizeMultiplier) { return NULL; }
-	virtual bool		offsetBufferBlock(int n);
-	virtual int			getOffsetBufferBlock() { return m_bufferOffset; }
     virtual IUniform*   findUniform(const char * name);
     virtual IUniform*   findUniform(int i);
     virtual bool        updateFromUniforms(bool bForceUpdating) { return false; }
     virtual bool        mapBuffer(void** pBuf, bool bForceUpdating=false) {return false; }
     virtual void        unmapBuffer() { }
     virtual bool        update() { return false; }
+	virtual bool		bindBufferRange(int n, IPass* pPass);
+	virtual int			getBufferRange() { return m_bufferOffset; }
 
     friend class Container;
     friend class Pass;

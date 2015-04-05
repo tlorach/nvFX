@@ -210,7 +210,7 @@
 
 
 /* Line 1676 of yacc.c  */
-#line 214 "C:/p4/GitHub/nvFX/FxParser/Grammar.hpp"
+#line 214 "C:/github/tristan/nvFX/FxParser/Grammar.hpp"
 
 /* Tokens.  */
 #ifndef YYTOKENTYPE
@@ -641,7 +641,7 @@ typedef union YYSTYPE
 
 
 /* Line 1676 of yacc.c  */
-#line 645 "C:/p4/GitHub/nvFX/FxParser/Grammar.hpp"
+#line 645 "C:/github/tristan/nvFX/FxParser/Grammar.hpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
