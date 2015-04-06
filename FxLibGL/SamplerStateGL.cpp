@@ -139,7 +139,7 @@ SamplerState*  SamplerStateGL::update(void *data, Pass *pass, int layerID, bool 
     return this;
 }
 
-SamplerState*  SamplerStateGL::updateForTarget(void *data, STarget &t, bool bBindProgram)
+SamplerState*  SamplerStateGL::updateForTarget(void *data, int target, bool bBindProgram)
 {
     return this;
 }

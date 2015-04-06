@@ -2286,6 +2286,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
     //
     // Used uniforms (and that are not in pass-state list)
     UniformVec::iterator itu = m_pActiveStatesLayer->usedUniforms.begin();
+	int i=0;
     while(itu != m_pActiveStatesLayer->usedUniforms.end())
     {
         UniformAndTarget &ut = *itu;
@@ -2313,31 +2314,36 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
                 default:
                     break;
                 }
-                ut.pU->updateForTarget(ut.pU->m_data, t, false);
+                ut.pU->updateForTarget(ut.pU->m_data, i, false);
             } else // Same as when dirty... because this doesn't make it for now
-                ut.pU->updateForTarget(ut.pU->m_data, t, false);
+                ut.pU->updateForTarget(ut.pU->m_data, i, false);
         }
         ++itu;
+		++i;
     }
     // -----------------------------------------------------------------------
     // Used Constant Buffers
 	//
     CstBufferVec::iterator itc = m_pActiveStatesLayer->usedCstBuffers.begin();
+	i=0;
     while(itc != m_pActiveStatesLayer->usedCstBuffers.end())
     {
         CstBufferAndTarget &ut = *itc;
-        ut.pC->updateForTarget(ut.target, false);
+        ut.pC->updateForTarget(i, false);
+		++i;
         ++itc;
     }
     // -----------------------------------------------------------------------
     // Used samplerstates
 	//
     SamplerStateVec::iterator its = m_pActiveStatesLayer->usedSamplerStates.begin();
+	i=0;
     while(its != m_pActiveStatesLayer->usedSamplerStates.end())
     {
         SamplerStateAndTarget &ut = *its;
-        ut.pS->updateForTarget(ut.pS->m_data, ut.pS->m_targets[ut.target], false);
+        ut.pS->updateForTarget(ut.pS->m_data, i, false);
         ++its;
+		++i;
     }
     // ================================================================
     // Now let's take few actions especially for the scene-level effect

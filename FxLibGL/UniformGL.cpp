@@ -300,40 +300,67 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
     UniformCUDA::update(pData, pass, layerID, bBindProgram, bCreateIfNeeded);
 #endif
     bool bCreate = pass ? bCreateIfNeeded : false;
-    int tsz = (int)m_targets.size();
-    for(int i=0; i<tsz; i++)
-    {
-        STarget &t = m_targets[i];
-        if(!t.valid)
-            continue;
-        // Force the target to be updated if the update data came from something else than m_data
-        if(m_data != pData)
-            t.dirty = true;
-        switch(t.ttype)
-        {
-        case TGLSL:
-            if(pass)
-            { // In this case we only update matching pass and return
-                if((t.pass == pass)&&(t.passLayerId == layerID))
-                {
-                    updateGLSL(pData, t, bBindProgram);
-                    bCreate = false;
-                    break;
-                }
-            } else {
-                updateGLSL(pData, t, true/*bBindProgram*/); // if updating all, we need to bind programs in any case
-                LOGI(">Warning : uniform update for many targets at the same time... normal ?\n");
-            }
-            break;
-        case TCSTBUFFER:
-            LOGI(">Warning : uniform update for Constan buffer target should not be done. use setXXX() instead and then call ICstBuffer::update()\n");
-            break;
-        }
-        // Force AGAIN the target to be updated if the update data came from something else than m_data
-        // this allows the original m_data to be updated later if needed
-        if(m_data && (m_data != pData))
-            t.dirty = true;
-    }
+	if((m_activeTarget >= 0) 
+		&& (m_targets[m_activeTarget].pass == pass)
+		&& (m_targets[m_activeTarget].passLayerId == layerID))
+	{
+        STarget &t = m_targets[m_activeTarget];
+        if(t.valid)
+		{
+			// Force the target to be updated if the update data came from something else than m_data
+			if(m_data != pData)
+				t.dirty = true;
+			switch(t.ttype)
+			{
+			case TGLSL:
+				updateGLSL(pData, t, bBindProgram);
+				break;
+			case TCSTBUFFER:
+				LOGI(">Warning : uniform update for Constan buffert target should not be done. use setXXX() instead and then call ICstBuffer::update()\n");
+				break;
+			}
+			// Force AGAIN the target to be updated if the update data came from something else than m_data
+			// this allows the original m_data to be updated later if needed
+			if(m_data && (m_data != pData))
+				t.dirty = true;
+		}
+		return this;
+	}
+	int tsz = (int)m_targets.size();
+	for(int i=0; i<tsz; i++)
+	{
+		STarget &t = m_targets[i];
+		if(!t.valid)
+			continue;
+		// Force the target to be updated if the update data came from something else than m_data
+		if(m_data != pData)
+			t.dirty = true;
+		switch(t.ttype)
+		{
+		case TGLSL:
+			if(pass)
+			{ // In this case we only update matching pass and return
+				if((t.pass == pass)&&(t.passLayerId == layerID))
+				{
+					updateGLSL(pData, t, bBindProgram);
+					m_activeTarget = i;
+					bCreate = false;
+					break;
+				}
+			} else {
+				updateGLSL(pData, t, true/*bBindProgram*/); // if updating all, we need to bind programs in any case
+				LOGI(">Warning : uniform update for many targets at the same time... normal ?\n");
+			}
+			break;
+		case TCSTBUFFER:
+			LOGI(">Warning : uniform update for Constan buffer target should not be done. use setXXX() instead and then call ICstBuffer::update()\n");
+			break;
+		}
+		// Force AGAIN the target to be updated if the update data came from something else than m_data
+		// this allows the original m_data to be updated later if needed
+		if(m_data && (m_data != pData))
+			t.dirty = true;
+	}
     //
     // a pass ptr was specified and nothing found, we shall try to find the uniform in the pass program
     //
@@ -401,6 +428,7 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
                             pass->addUniform(this, i);
                         }
                         updateGLSL(pData, t, false);
+						m_activeTarget = i;
 //#ifdef USE_OLDPROGRAM
                         if(bBindProgram && (!bSp))
                             glUseProgram(prevProg);//glslProgram->unbind();
@@ -505,13 +533,15 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
  **  
  **
  *************************************************************************/ 
-Uniform*    UniformGLSL::updateForTarget(ShadowedData* pData, STarget &t, bool bBindProgram)
+Uniform*    UniformGLSL::updateForTarget(ShadowedData* pData, int target, bool bBindProgram)
 {
+	STarget& t = m_targets[target];
+	m_activeTarget = target;
     switch(t.ttype)
     {
 #ifdef USECUDA
     case TCUDA:
-        UniformCUDA::updateForTarget(pData, t, bBindProgram);
+        UniformCUDA::updateForTarget(pData, target, bBindProgram);
         break;
 #endif
     case TGLSL:
