@@ -64,6 +64,7 @@ SamplerState::SamplerState(Container *pCont, const char *name)
     m_container = pCont;
     if(name)
         m_name = name;
+	m_activeTarget = -1;
     //glGenSamplers(...)
 }
 
@@ -107,6 +108,14 @@ ISamplerState*    SamplerState::deleteTarget(IPass *pass, int layerID)
 }
 ISamplerState*    SamplerState::invalidateTarget(IPass *pass, int layerID)
 {
+	if((m_activeTarget >= 0)&&(m_targets[m_activeTarget].pass == pass)&&(m_targets[m_activeTarget].passLayerId == layerID))
+	{
+		STarget &t = m_targets[m_activeTarget];
+        t.valid = false;
+        t.dirty = true;
+        t.index = -1;
+		return this;
+	}
     int tsz = (int)m_targets.size();
     for(int i=0; i<tsz; i++)
     {

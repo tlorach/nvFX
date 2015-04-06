@@ -132,7 +132,7 @@ namespace nvFX
         virtual Uniform*    update2(ShadowedData* pData, Pass *pass, bool bBindProgram, bool bCreateIfNeeded);
         void                updateGLSL(ShadowedData* pData, STarget &t, bool bBindProgram);
         /// \brief update for a specific target only
-        virtual Uniform*    updateForTarget(ShadowedData* pData, STarget &t, bool bBindProgram);
+        virtual Uniform*    updateForTarget(ShadowedData* pData, int target, bool bBindProgram);
     };
 
     /*************************************************************************/ /**
@@ -314,7 +314,7 @@ namespace nvFX
         SamplerStateGL(Container *pCont, const char* name = NULL);
         void            updateGLTexture(GLenum target, GLint tex, bool bindTexture);
         SamplerState*   update(void *data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded);
-        SamplerState*   updateForTarget(void *data, STarget &t, bool bBindProgram = false);
+        SamplerState*   updateForTarget(void *data, int target, bool bBindProgram = false);
     };
 
     /*************************************************************************/ /**

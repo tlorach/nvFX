@@ -784,6 +784,8 @@ protected:
     std::string             m_semantic; // essentially used when created from "Introspec"
     // TODO: write the code when some targets need to be removed
     std::vector<STarget>    m_targets;
+	int						m_activeTarget; // keep track of the last target used (inside a Pass::execute)
+
     Type                    m_type;
     PrecisionType           m_precision;
     int                     m_idx;
@@ -931,7 +933,7 @@ public:
     /// \brief update targets with the shadowed values
     IUniform*    update(IPass *pass = NULL, bool bBindProgram=false);
     /// \brief update for a specific target only
-    virtual Uniform*    updateForTarget(ShadowedData* pData, STarget &t, bool bBindProgram = false) = 0;
+    virtual Uniform*    updateForTarget(ShadowedData* pData, int target, bool bBindProgram = false) = 0;
     /// \name methods to directly assign values to targets without the use of shadowed area
     /// When using these methods, you must be aware that the values won't be persistent
     /// in the unfiform class, as it would when using setXXX().
@@ -1815,6 +1817,8 @@ protected:
     };
     // TODO: write the code when some targets need to be removed
     std::vector<STarget>    m_targets;
+	int						m_activeTarget; // keep track of the last target used (inside a Pass::execute)
+
     void*   m_data; ///< data that will be passed to the target. It could be a ID3D1XSamplerState ptr...
     Container*      m_container; ///< we might need the container : to get back device interface...
 
@@ -1827,7 +1831,7 @@ protected:
 
     /// \brief update targets with the shadowed values
     virtual SamplerState*  update(void *data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded) = 0;
-    virtual SamplerState*  updateForTarget(void *data, STarget &t, bool bBindProgram = false) = 0;
+    virtual SamplerState*  updateForTarget(void *data, int target, bool bBindProgram = false) = 0;
 public:
     virtual ~SamplerState();
     SamplerState(Container* pCont, const char* name = NULL);

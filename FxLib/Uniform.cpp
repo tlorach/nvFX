@@ -187,6 +187,7 @@ Uniform::~Uniform()
 Uniform::Uniform(const char* name, const char *groupname, const char *semantic) : 
     IUniformEx()
 {
+	m_activeTarget = -1;
     m_precision = PHighP;
     m_idx = 0;
     m_arraySz = 1;
