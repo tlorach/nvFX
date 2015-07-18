@@ -1280,7 +1280,7 @@ bool Container::addCstBuffer(ICstBuffer* p)
         Technique::PassVec::iterator itPass = (*itTech)->m_passes.begin();
         while(itPass != (*itTech)->m_passes.end())
         {
-            pp->update(itPass->pass, -1, true, true, false); // targeted update of the uniform: will setup its target list
+            pp->update(itPass->pass, -1, true, true); // targeted update of the uniform: will setup its target list
             ++itPass;
         }
         ++itTech;
@@ -1351,7 +1351,7 @@ bool Container::addUniform(IUniform *p)
         {
             int layerID;
             for(int i=0; (layerID=itPass->pass->getLayerId(i)) >= 0; i++)
-                pp->update(pp->m_data, itPass->pass, layerID, true, true); // targeted update of the uniform: will setup its target list
+                pp->update(pp->m_data, itPass->pass, layerID, true); // targeted update of the uniform: will setup its target list
             ++itPass;
         }
         ++itTech;
@@ -1565,7 +1565,7 @@ bool Container::destroy(IUniform *p)
  **
  ** Therefore we also validate things at the same time here
  **/ /*************************************************************************/ 
-bool Container::updateUniforms(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bOnlyShadowed)
+bool Container::updateUniforms(Pass *pass, int layerID, bool bCreateIfNeeded, bool bOnlyShadowed)
 {
     NXPROFILEFUNCCOL2("update Unifs", COLOR_BLUE2, 2);
     bool bRes = true;
@@ -1575,7 +1575,7 @@ bool Container::updateUniforms(Pass *pass, int layerID, bool bBindProgram, bool 
     {
         if((!bOnlyShadowed) || it->second->m_data)
         {
-            if(it->second->update(it->second->m_data, pass, layerID, bBindProgram, bCreateIfNeeded)) // use the return value to see if we did something
+            if(it->second->update(it->second->m_data, pass, layerID, bCreateIfNeeded)) // use the return value to see if we did something
                 ++n;
         }
         ++it;
@@ -1637,7 +1637,7 @@ void Container::invalidateUniformsTarget(Pass *pass, int layerID)
  **
  ** Therefore we also validate things at the same time here
  **/ /*************************************************************************/ 
-bool Container::updateCstBuffers(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
+bool Container::updateCstBuffers(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
 {
     NXPROFILEFUNCCOL2("update CBuffs", COLOR_BLUE3, 2);
     bool bRes = true;
@@ -1646,7 +1646,7 @@ bool Container::updateCstBuffers(Pass *pass, int layerID, bool bBindProgram, boo
     while(it != m_cstBuffers.end())
     {
         CstBuffer* pCBuff = *it;
-        if(pCBuff->update(pass, layerID, bBindProgram, bCreateIfNeeded, bCreateBufferIfNeeded)) // use the return value to see if we did something
+        if(pCBuff->update(pass, layerID, bCreateIfNeeded, bCreateBufferIfNeeded)) // use the return value to see if we did something
             ++n;
         ++it;
     }
@@ -1689,7 +1689,7 @@ void Container::invalidateCstBuffersTarget(Pass *pass, int layerID)
  **
  ** Therefore we also validate things at the same time here
  **/ /*************************************************************************/ 
-bool Container::updateSamplerStates(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bOnlyShadowed)
+bool Container::updateSamplerStates(Pass *pass, int layerID, bool bCreateIfNeeded, bool bOnlyShadowed)
 {
     NXPROFILEFUNCCOL2("update SSs", COLOR_BLUE, 2);
     bool bRes = true;
@@ -1699,7 +1699,7 @@ bool Container::updateSamplerStates(Pass *pass, int layerID, bool bBindProgram, 
     {
         if((!bOnlyShadowed) || (*it)->m_data)
         {
-            if((*it)->update((*it)->m_data, pass, layerID, bBindProgram, bCreateIfNeeded)) // use the return value to see if we did something
+            if((*it)->update((*it)->m_data, pass, layerID, bCreateIfNeeded)) // use the return value to see if we did something
                 ++n;
         }
         ++it;

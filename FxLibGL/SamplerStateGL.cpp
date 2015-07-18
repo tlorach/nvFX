@@ -134,12 +134,12 @@ void SamplerStateGL::updateGLTexture(GLenum target, GLint tex, bool bindTexture)
     // glBindSampler(unit, sampler);
 }
 
-SamplerState*  SamplerStateGL::update(void *data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded)
+SamplerState*  SamplerStateGL::update(void *data, Pass *pass, int layerID, bool bCreateIfNeeded)
 {
     return this;
 }
 
-SamplerState*  SamplerStateGL::updateForTarget(void *data, int target, bool bBindProgram)
+SamplerState*  SamplerStateGL::updateForTarget(void *data, int target)
 {
     return this;
 }

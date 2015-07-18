@@ -85,22 +85,25 @@ namespace nvFX
         public CstBuffer
 #endif
     {
+    private:
+        static unsigned int availableBlockBindingID;
+        unsigned int m_blockBinding;
     public:
         CstBufferGL(const char* name);
         ~CstBufferGL();
 
         // TODO: change this approach : update() should be done in CstBuffer
         // target creation should be done outside of update
-        virtual CstBuffer*  update(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
-        virtual CstBuffer*  update2(Pass *pass, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
-        virtual CstBuffer*  updateForTarget(int target, bool bBindProgram);
+        virtual CstBuffer*  update(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
+        virtual CstBuffer*  update2(Pass *pass, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
+        virtual CstBuffer*  updateForTarget(int target);
         virtual int         buildGLBuffer(BufferUsageGL usage, int sizeMultiplier);
         virtual bool        removeGLBuffer();
 
 		virtual int         bufferSizeAndData(char *pData, int *sz=NULL);
         int                 bufferSizeAndData(char *pData, Uniform* pU, int &szBytes, int &pk);
 
-        void                updateGLSL(STarget &t, bool bBindProgram);
+        void                updateGLSL(STarget &t);
 
 
         virtual ICstBuffer* setGLBuffer(int buffer);
@@ -128,11 +131,11 @@ namespace nvFX
     public:
         virtual ~UniformGLSL();
         UniformGLSL(const char* name = NULL, const char* groupname = NULL, const char* semantic = NULL);
-        virtual Uniform*    update(ShadowedData* pData, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded);
-        virtual Uniform*    update2(ShadowedData* pData, Pass *pass, bool bBindProgram, bool bCreateIfNeeded);
-        void                updateGLSL(ShadowedData* pData, STarget &t, bool bBindProgram);
+        virtual Uniform*    update(ShadowedData* pData, Pass *pass, int layerID, bool bCreateIfNeeded);
+        virtual Uniform*    update2(ShadowedData* pData, Pass *pass, bool bCreateIfNeeded);
+        void                updateGLSL(ShadowedData* pData, STarget &t);
         /// \brief update for a specific target only
-        virtual Uniform*    updateForTarget(ShadowedData* pData, int target, bool bBindProgram);
+        virtual Uniform*    updateForTarget(ShadowedData* pData, int target);
     };
 
     /*************************************************************************/ /**
@@ -313,8 +316,8 @@ namespace nvFX
         ~SamplerStateGL();
         SamplerStateGL(Container *pCont, const char* name = NULL);
         void            updateGLTexture(GLenum target, GLint tex, bool bindTexture);
-        SamplerState*   update(void *data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded);
-        SamplerState*   updateForTarget(void *data, int target, bool bBindProgram = false);
+        SamplerState*   update(void *data, Pass *pass, int layerID, bool bCreateIfNeeded);
+        SamplerState*   updateForTarget(void *data, int target);
     };
 
     /*************************************************************************/ /**

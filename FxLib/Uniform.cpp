@@ -224,11 +224,11 @@ void Uniform::setTargetDirtyFlag(STarget &t, bool bDirty)
  ** TODO: shall we also filter according to CUDA, Cg... ? I guess... see later
  ** 
  **/ /*************************************************************************/ 
-IUniform*    Uniform::update(IPass *pass, bool bBindProgram)
+IUniform*    Uniform::update(IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     if(m_data)
-        update(m_data, p, p->getActiveProgramLayer(), bBindProgram, false);
+        update(m_data, p, p->getActiveProgramLayer(), false);
     return this;
 }
 /*************************************************************************/ /**
@@ -1328,7 +1328,7 @@ IUniform*    Uniform::updateFromUniform(IUniform* pU_, IPass *pass)
     }
     m_type = pU->m_type;
 	//LOGI("updateFromUniform : sampler %s in unit %d\n", pU->m_name.c_str(), pU->m_data->tex.textureUnit);
-	update(pU->m_data, p, p->getActiveProgramLayer(), false, false);
+	update(pU->m_data, p, p->getActiveProgramLayer(), false);
     return this;
 }
 /**************************************************************************************************
@@ -1336,16 +1336,16 @@ IUniform*    Uniform::updateFromUniform(IUniform* pU_, IPass *pass)
  ** Versions of methods for direct update without use shadowing
  **
  **************************************************************************************************/
-IUniform*    Uniform::updateValue1f(float f, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue1f(float f, IPass *pass)
 {
     SETTYPE(m_type, Uniform::TFloat);
     Pass* p = static_cast<Pass*>(pass);
     //if(m_data)
     //    setValue1f(f);
-    update(WILDCAST_AS_SHADOWEDDATA(&f), p, p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(&f), p, p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue2f(float f1, float f2, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue2f(float f1, float f2, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TVec2);
@@ -1353,80 +1353,80 @@ IUniform*    Uniform::updateValue2f(float f1, float f2, IPass *pass, bool bBindP
     //if(m_data) delete m_data; m_data = NULL;
     ShadowedData v;
     v.fvals[0] = f1; v.fvals[1] = f2;
-    update(&v, p, p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p, p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue3f(float f1, float f2, float f3, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue3f(float f1, float f2, float f3, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TVec3);
     //if(m_data) delete m_data; m_data = NULL;
     ShadowedData v;
     v.fvals[0] = f1; v.fvals[1] = f2; v.fvals[2] = f3;
-    update(&v, p, p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p, p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue4f(float f1, float f2, float f3, float f4, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue4f(float f1, float f2, float f3, float f4, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TVec4);
     //if(m_data) delete m_data; m_data = NULL;
     ShadowedData v;
     v.fvals[0] = f1; v.fvals[1] = f2; v.fvals[2] = f3; v.fvals[3] = f4;
-    update(&v, p, p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p, p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue1fv(float *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue1fv(float *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TFloat);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p, p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p, p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue2fv(float *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue2fv(float *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TVec2);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p, p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p, p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue3fv(float *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue3fv(float *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TVec3);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue4fv(float *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue4fv(float *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TVec4);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValuefv(float *pf, int dim, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValuefv(float *pf, int dim, IPass *pass)
 {
     if((dim > 4)||(dim < 1))
         return NULL;
     Pass* p = static_cast<Pass*>(pass);
     //if(m_data) delete m_data; m_data = NULL;
     m_type = (Uniform::Type)((int)Uniform::TFloat + dim - 1);
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue1i(int f, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue1i(int f, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(&f), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(&f), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue2i(int f1, int f2, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue2i(int f1, int f2, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt2);
@@ -1434,10 +1434,10 @@ IUniform*    Uniform::updateValue2i(int f1, int f2, IPass *pass, bool bBindProgr
     ShadowedData v;
     int vv[1];
     v.ivals[0] = f1; v.ivals[1] = f2;
-    update(&v, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue3i(int f1, int f2, int f3, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue3i(int f1, int f2, int f3, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt3);
@@ -1445,10 +1445,10 @@ IUniform*    Uniform::updateValue3i(int f1, int f2, int f3, IPass *pass, bool bB
     ShadowedData v;
     int vv[2];
     v.ivals[0] = f1; v.ivals[1] = f2; v.ivals[2] = f3;
-    update(&v, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue4i(int f1, int f2, int f3, int f4, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue4i(int f1, int f2, int f3, int f4, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt4);
@@ -1456,62 +1456,62 @@ IUniform*    Uniform::updateValue4i(int f1, int f2, int f3, int f4, IPass *pass,
     ShadowedData v;
     int vv[3];
     v.ivals[0] = f1; v.ivals[1] = f2; v.ivals[2] = f3; v.ivals[3] = f4;
-    update(&v, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue1iv(int *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue1iv(int *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue2iv(int *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue2iv(int *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt2);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue3iv(int *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue3iv(int *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt3);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue4iv(int *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue4iv(int *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TInt4);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValueiv(int *pf, int dim, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValueiv(int *pf, int dim, IPass *pass)
 {
     if((dim > 4)||(dim < 1))
         return NULL;
     Pass* p = static_cast<Pass*>(pass);
     //if(m_data) delete m_data; m_data = NULL;
     m_type = (Uniform::Type)((int)Uniform::TInt + dim - 1);
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
 
 
-IUniform*    Uniform::updateValue1b(bool f, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue1b(bool f, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(&f), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(&f), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue2b(bool f1, bool f2, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue2b(bool f1, bool f2, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool2);
@@ -1519,10 +1519,10 @@ IUniform*    Uniform::updateValue2b(bool f1, bool f2, IPass *pass, bool bBindPro
     ShadowedData v;
     bool vv[1];
     v.bvals[0] = f1; v.bvals[1] = f2;
-    update(&v, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue3b(bool f1, bool f2, bool f3, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue3b(bool f1, bool f2, bool f3, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool3);
@@ -1530,10 +1530,10 @@ IUniform*    Uniform::updateValue3b(bool f1, bool f2, bool f3, IPass *pass, bool
     ShadowedData v;
     bool vv[2];
     v.bvals[0] = f1; v.bvals[1] = f2; v.bvals[2] = f3;
-    update(&v, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue4b(bool f1, bool f2, bool f3, bool f4, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue4b(bool f1, bool f2, bool f3, bool f4, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool4);
@@ -1541,53 +1541,53 @@ IUniform*    Uniform::updateValue4b(bool f1, bool f2, bool f3, bool f4, IPass *p
     ShadowedData v;
     bool vv[3];
     v.bvals[0] = f1; v.bvals[1] = f2; v.bvals[2] = f3; v.bvals[3] = f4;
-    update(&v, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&v, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue1bv(bool *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue1bv(bool *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue2bv(bool *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue2bv(bool *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool2);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue3bv(bool *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue3bv(bool *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool3);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValue4bv(bool *pf, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValue4bv(bool *pf, IPass *pass)
 {
     Pass* p = static_cast<Pass*>(pass);
     SETTYPE(m_type, Uniform::TBool4);
     //if(m_data) delete m_data; m_data = NULL;
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateValuebv(bool *pf, int dim, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateValuebv(bool *pf, int dim, IPass *pass)
 {
     if((dim > 4)||(dim < 1))
         return NULL;
     Pass* p = static_cast<Pass*>(pass);
     //if(m_data) delete m_data; m_data = NULL;
     m_type = (Uniform::Type)((int)Uniform::TBool + dim - 1);
-    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pf), p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateSamplerResource(ResourceType resType, int oglTexID, int texUnit, ISamplerState *pSState, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateSamplerResource(ResourceType resType, int oglTexID, int texUnit, ISamplerState *pSState, IPass *pass)
 {
     ShadowedData data;
     typeRes2Uniform(m_type, resType);
@@ -1611,11 +1611,11 @@ IUniform*    Uniform::updateSamplerResource(ResourceType resType, int oglTexID, 
     data.tex.bLayered = false;
     data.tex.layer = 0;
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&data, p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateSamplerResource(IResource* pRes, int texUnit, ISamplerState *pSState, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateSamplerResource(IResource* pRes, int texUnit, ISamplerState *pSState, IPass *pass)
 {
     if(!pRes)
         return this;
@@ -1644,10 +1644,10 @@ IUniform*    Uniform::updateSamplerResource(IResource* pRes, int texUnit, ISampl
     data.tex.bLayered = false;
     data.tex.layer = 0;
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&data, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateSamplerUnit(int i, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateSamplerUnit(int i, IPass *pass)
 {
     ShadowedData data;
 
@@ -1667,11 +1667,11 @@ IUniform*    Uniform::updateSamplerUnit(int i, IPass *pass, bool bBindProgram)
     }
     data.tex.textureUnit = i < 0 ? -1 : i;
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&data, p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateImageResource(ResourceType resType, int oglTexID, int texUnit, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateImageResource(ResourceType resType, int oglTexID, int texUnit, IPass *pass)
 {
     ShadowedData data;
 
@@ -1690,11 +1690,11 @@ IUniform*    Uniform::updateImageResource(ResourceType resType, int oglTexID, in
     data.tex.layer = 0;
     data.tex.pSState = NULL;
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&data, p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateImageResource(IResource* pRes, int texUnit, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateImageResource(IResource* pRes, int texUnit, IPass *pass)
 {
     if(!pRes)
         return this;
@@ -1716,10 +1716,10 @@ IUniform*    Uniform::updateImageResource(IResource* pRes, int texUnit, IPass *p
     data.tex.layer = 0;
 
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&data, p,p->getActiveProgramLayer(), false);
     return this;
 }
-IUniform*    Uniform::updateImageUnit(int i, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateImageUnit(int i, IPass *pass)
 {
     ShadowedData data;
     if((m_type != Uniform::TTexture)
@@ -1738,11 +1738,11 @@ IUniform*    Uniform::updateImageUnit(int i, IPass *pass, bool bBindProgram)
     }
     data.tex.textureUnit = i < 0 ? -1 : i;
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&data, p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateSamplerState(ISamplerState *pSState, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateSamplerState(ISamplerState *pSState, IPass *pass)
 {
     ShadowedData data;
 
@@ -1763,48 +1763,48 @@ IUniform*    Uniform::updateSamplerState(ISamplerState *pSState, IPass *pass, bo
     }
     data.tex.pSState = pSState;
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(&data, p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateBuffer(int buffer, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateBuffer(int buffer, IPass *pass)
 {
     //if(m_data) delete m_data; m_data = NULL;
     SETTYPE(m_type, Uniform::TUBO);
     Pass* p = static_cast<Pass*>(pass);
-    update(WILDCAST_AS_SHADOWEDDATA(&buffer), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(&buffer), p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateBuffer(void* buffer, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateBuffer(void* buffer, IPass *pass)
 {
     //if(m_data) delete m_data; m_data = NULL;
     SETTYPE(m_type, Uniform::TCB);
     Pass* p = static_cast<Pass*>(pass);
-    update(WILDCAST_AS_SHADOWEDDATA(&buffer), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(&buffer), p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateMatrix4f(float *pm, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateMatrix4f(float *pm, IPass *pass)
 {
     //if(m_data) delete m_data; m_data = NULL;
     SETTYPE(m_type, Uniform::TMat4);
     Pass* p = static_cast<Pass*>(pass);
-    update(WILDCAST_AS_SHADOWEDDATA(pm), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(pm), p,p->getActiveProgramLayer(), false);
     return this;
 }
 
-IUniform*    Uniform::updateUniform(IUniform* pU, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateUniform(IUniform* pU, IPass *pass)
 {
     //if(m_data) delete m_data; m_data = NULL;
     SETTYPE(m_type, Uniform::TUniform);
     Pass* p = static_cast<Pass*>(pass);
-    update(WILDCAST_AS_SHADOWEDDATA(&pU), p,p->getActiveProgramLayer(), bBindProgram, false);
+    update(WILDCAST_AS_SHADOWEDDATA(&pU), p,p->getActiveProgramLayer(), false);
     return this;
 }
 
 #ifndef OGLES2
-IUniform*    Uniform::updateSubroutine(const char *funcName, int idx, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateSubroutine(const char *funcName, int idx, IPass *pass)
 {
     if(idx >= 16)
         return NULL;
@@ -1823,11 +1823,11 @@ IUniform*    Uniform::updateSubroutine(const char *funcName, int idx, IPass *pas
     for(int i=0; i<tsz;i++)
         setTargetDirtyFlag(m_targets[i], true);
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, true);
+    update(&data, p,p->getActiveProgramLayer(), true);
     return this;
 }
 
-IUniform*    Uniform::updateSubroutines(const char **funcNames, IPass *pass, bool bBindProgram)
+IUniform*    Uniform::updateSubroutines(const char **funcNames, IPass *pass)
 {
     if(m_data && (m_type == TSubroutineUniform))
         for(int i=0; i<16; i++)
@@ -1850,11 +1850,11 @@ IUniform*    Uniform::updateSubroutines(const char **funcNames, IPass *pass, boo
     for(int i=0; i<tsz;i++)
         setTargetDirtyFlag(m_targets[i], true);
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, true);
+    update(&data, p,p->getActiveProgramLayer(), true);
     return this;
 }
 
-IUniform* Uniform::updateSubroutines(int *funcIDs, int numIDs, IPass *pass, bool bBindProgram)
+IUniform* Uniform::updateSubroutines(int *funcIDs, int numIDs, IPass *pass)
 {
     //if(m_data) delete m_data; m_data = NULL;
     SETTYPE(m_type, Uniform::TSubroutineUniformByID);
@@ -1869,7 +1869,7 @@ IUniform* Uniform::updateSubroutines(int *funcIDs, int numIDs, IPass *pass, bool
     for(int i=0; i<tsz;i++)
         setTargetDirtyFlag(m_targets[i], true);
     Pass* p = static_cast<Pass*>(pass);
-    update(&data, p,p->getActiveProgramLayer(), bBindProgram, true);
+    update(&data, p,p->getActiveProgramLayer(), true);
     return this;
 }
 #endif

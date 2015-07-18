@@ -83,7 +83,7 @@ UniformGLSL::~UniformGLSL()
  **  method invoked by update()
  **
  *************************************************************************/ 
-void UniformGLSL::updateGLSL(ShadowedData *pData, STarget &t, bool bBindProgram)
+void UniformGLSL::updateGLSL(ShadowedData *pData, STarget &t)
 {
     NXPROFILEFUNCCOL2(m_name.c_str(), COLOR_YELLOW2, t.uniformLocation);
     if(t.pass)
@@ -101,15 +101,6 @@ void UniformGLSL::updateGLSL(ShadowedData *pData, STarget &t, bool bBindProgram)
             bSp = false;
         }
         int prog = glslProgram->getProgram();
-//#ifdef USE_OLDPROGRAM
-        int prevProg = 0;
-        if(bBindProgram && (!bSp))
-        {
-            glslProgram->bind(t.pass->m_container);
-            //glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
-            //assert(prog == prevProg);
-        }
-//#endif
         if(!t.valid)
         {
             t.uniformLocation = glGetUniformLocation(prog, m_name.c_str());
@@ -261,10 +252,6 @@ void UniformGLSL::updateGLSL(ShadowedData *pData, STarget &t, bool bBindProgram)
                 //CHECK_TRUE(false);
                 break;
         }
-//#ifdef USE_OLDPROGRAM
-        if(bBindProgram && (!bSp))
-            glUseProgram(prevProg);//glslProgram->unbind();
-//#endif
         t.dirty = false;
     }
 }
@@ -274,13 +261,13 @@ void UniformGLSL::updateGLSL(ShadowedData *pData, STarget &t, bool bBindProgram)
  **  update a uniform for GLSL
  **
  *************************************************************************/ 
-Uniform*    UniformGLSL::update2(ShadowedData* pData, Pass *pass, bool bBindProgram, bool bCreateIfNeeded)
+Uniform*    UniformGLSL::update2(ShadowedData* pData, Pass *pass, bool bCreateIfNeeded)
 {
     if (NULL == pass)
       return this;
     int id;
     for(int i=0; (id=pass->getLayerId(i)) >= 0; i++)
-        update(pData, pass, id, bBindProgram, bCreateIfNeeded);
+        update(pData, pass, id, bCreateIfNeeded);
     return this;
 }
 /*************************************************************************
@@ -289,15 +276,15 @@ Uniform*    UniformGLSL::update2(ShadowedData* pData, Pass *pass, bool bBindProg
  ** TODO: push this code to Uniform Class, instead...
  **
  *************************************************************************/ 
-Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded)
+Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bool bCreateIfNeeded)
 {
     NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_YELLOW, 10);
     if (NULL == pass)
       return this;
     if(layerID < 0)
-        return update2(pData, pass, bBindProgram, bCreateIfNeeded);
+        return update2(pData, pass, bCreateIfNeeded);
 #ifdef USECUDA
-    UniformCUDA::update(pData, pass, layerID, bBindProgram, bCreateIfNeeded);
+    UniformCUDA::update(pData, pass, layerID, bCreateIfNeeded);
 #endif
     bool bCreate = pass ? bCreateIfNeeded : false;
 	if((m_activeTarget >= 0) 
@@ -313,7 +300,7 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
 			switch(t.ttype)
 			{
 			case TGLSL:
-				updateGLSL(pData, t, bBindProgram);
+				updateGLSL(pData, t);
 				break;
 			case TCSTBUFFER:
 				LOGI(">Warning : uniform update for Constan buffert target should not be done. use setXXX() instead and then call ICstBuffer::update()\n");
@@ -342,13 +329,13 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
 			{ // In this case we only update matching pass and return
 				if((t.pass == pass)&&(t.passLayerId == layerID))
 				{
-					updateGLSL(pData, t, bBindProgram);
+					updateGLSL(pData, t);
 					m_activeTarget = i;
 					bCreate = false;
 					break;
 				}
 			} else {
-				updateGLSL(pData, t, true/*bBindProgram*/); // if updating all, we need to bind programs in any case
+				updateGLSL(pData, t); // if updating all, we need to bind programs in any case
 				LOGI(">Warning : uniform update for many targets at the same time... normal ?\n");
 			}
 			break;
@@ -389,11 +376,6 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
 
         while(glslProgram)
         {
-//#ifdef USE_OLDPROGRAM
-            int prevProg; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
-            if(bBindProgram && (!bSp))
-                glslProgram->bind(pass->m_container);
-//#endif
 #ifndef OGLES2
             if((m_type == TSubroutineUniform) && glGetSubroutineUniformLocation)
             {
@@ -427,12 +409,8 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
                             // let's add this uniform and it's target number directly into the pass, to make it faster at pass execution
                             pass->addUniform(this, i);
                         }
-                        updateGLSL(pData, t, false);
+                        updateGLSL(pData, t);
 						m_activeTarget = i;
-//#ifdef USE_OLDPROGRAM
-                        if(bBindProgram && (!bSp))
-                            glUseProgram(prevProg);//glslProgram->unbind();
-//#endif
                     }
                     ++pShdType;
                 }
@@ -467,10 +445,7 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
                     // let's add this uniform and it's target number directly into the pass, to make it faster at pass execution
                     pass->addUniform(this, i);
                 }
-                updateGLSL(pData, t, false);
-//#ifdef USE_OLDPROGRAM
-                if(bBindProgram && (!bSp)) glUseProgram(prevProg);//glslProgram->unbind();
-//#endif
+                updateGLSL(pData, t);
             } else
 #endif
             {
@@ -502,17 +477,11 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
                         // let's add this uniform and it's target number directly into the pass, to make it faster at pass execution
                         pass->addUniform(this, i);
                     }
-                    updateGLSL(pData, t, false);
-//#ifdef USE_OLDPROGRAM
-                    if(bBindProgram&&(!bSp)) glUseProgram(prevProg);//glslProgram->unbind();
-//#endif
+                    updateGLSL(pData, t);
                 } else {
                     t.valid = false;
                 }
             }
-//#ifdef USE_OLDPROGRAM
-            if(bBindProgram&&(!bSp)) glUseProgram(prevProg);//glslProgram->unbind();
-//#endif
             //
             // Move to the next program is available
             //
@@ -523,7 +492,7 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
         }//while(glslProgram)
 #ifdef USE_CG
         else // or update uniform reference for Cg
-            return updateCg(pData, pass, bBindProgram);
+            return updateCg(pData, pass);
 #endif
     }//if(pass && bCreateIfNeeded)
     return this;
@@ -533,7 +502,7 @@ Uniform*    UniformGLSL::update(ShadowedData* pData, Pass *pass, int layerID, bo
  **  
  **
  *************************************************************************/ 
-Uniform*    UniformGLSL::updateForTarget(ShadowedData* pData, int target, bool bBindProgram)
+Uniform*    UniformGLSL::updateForTarget(ShadowedData* pData, int target)
 {
 	STarget& t = m_targets[target];
 	m_activeTarget = target;
@@ -541,11 +510,11 @@ Uniform*    UniformGLSL::updateForTarget(ShadowedData* pData, int target, bool b
     {
 #ifdef USECUDA
     case TCUDA:
-        UniformCUDA::updateForTarget(pData, target, bBindProgram);
+        UniformCUDA::updateForTarget(pData, target);
         break;
 #endif
     case TGLSL:
-        updateGLSL(pData, t, bBindProgram);
+        updateGLSL(pData, t);
         break;
     case TCSTBUFFER:
 #ifndef OGLES2

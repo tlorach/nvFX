@@ -855,9 +855,9 @@ bool Pass::validate()
             //if(!sl.program->bind())
             //    return false;
             // update uniforms related to this pass
-            m_container->updateCstBuffers(this, -1, true, false, false);
-            m_container->updateUniforms(this, -1, true, false, true);
-            m_container->updateSamplerStates(this, -1, true, false, true);
+            m_container->updateCstBuffers(this, -1, false, false);
+            m_container->updateUniforms(this, -1, false, true);
+            m_container->updateSamplerStates(this, -1, false, true);
             //m_program->unbind();
         }
         return true;
@@ -1667,7 +1667,7 @@ bool Pass::validate()
                     // this update will query targets to connect the uniform to targets ('true' flag)
                     // this method will setup the uniforms but more importantly will queue them to the usedUniforms table
                     // so that pass execution will update them when needed.
-                    uniform->update(uniform->m_data, this, -1, true, true);
+                    uniform->update(uniform->m_data, this, -1, true);
                 }
                 break;
             }
@@ -1676,9 +1676,9 @@ bool Pass::validate()
         //
         // Now let's update uniforms from the possible ones stored in the Container
         //
-        m_container->updateCstBuffers(this, -1, true, true, false);
-        m_container->updateUniforms(this, -1, true, true, false);
-        m_container->updateSamplerStates(this, -1, true, true, false);
+        m_container->updateCstBuffers(this, -1, true, false);
+        m_container->updateUniforms(this, -1, true, false);
+        m_container->updateSamplerStates(this, -1, true, false);
         //
         // Now let's walk throught uniforms to check the status of Texture Units
         // If some didn't get updated properly, we will assign a texture unit
@@ -2180,7 +2180,7 @@ bool Pass::validateUniformTextureUnits(bool allowUnitAssignment)
                     LOGD("NOTE from pass %s: %s now in unit #%d\n",m_name.c_str(), itu->pU->getName(),availableTexUnit);
                     itu->pU->setSamplerUnit(availableTexUnit);
                     // we need to update again the uniform since the unit changed
-                    itu->pU->update(itu->pU->m_data, this, it->first, true, true);
+                    itu->pU->update(itu->pU->m_data, this, it->first, true);
                     sl.textureUnits[availableTexUnit] = itu->pU;
                 }
                 break;
@@ -2313,9 +2313,9 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
                 default:
                     break;
                 }
-                ut.pU->updateForTarget(ut.pU->m_data, ut.target, false);
+                ut.pU->updateForTarget(ut.pU->m_data, ut.target);
             } else // Same as when dirty... because this doesn't make it for now
-                ut.pU->updateForTarget(ut.pU->m_data, ut.target, false);
+                ut.pU->updateForTarget(ut.pU->m_data, ut.target);
         }
         ++itu;
     }
@@ -2326,7 +2326,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
     while(itc != m_pActiveStatesLayer->usedCstBuffers.end())
     {
         CstBufferAndTarget &ut = *itc;
-        ut.pC->updateForTarget(ut.target, false);
+        ut.pC->updateForTarget(ut.target);
         ++itc;
     }
     // -----------------------------------------------------------------------
@@ -2336,7 +2336,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
     while(its != m_pActiveStatesLayer->usedSamplerStates.end())
     {
         SamplerStateAndTarget &ut = *its;
-        ut.pS->updateForTarget(ut.pS->m_data, ut.target, false);
+        ut.pS->updateForTarget(ut.pS->m_data, ut.target);
         ++its;
     }
     // ================================================================
@@ -3216,7 +3216,7 @@ bool Pass::bindAttributes(AttribMap &attributes)
         ++iSL;
     }
     // re-update the Cst buffers
-    m_container->updateCstBuffers(this, -1, true, true, false);
+    m_container->updateCstBuffers(this, -1, true, true);
     return true;
 }
 /*************************************************************************/ /**
