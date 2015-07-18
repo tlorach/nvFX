@@ -655,65 +655,65 @@ public:
     ///
     /// all return IUniform* so we can "cascade" calls
     ///@{
-    virtual IUniform*    updateValue1f(float f, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue2f(float f1, float f2, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue3f(float f1, float f2, float f3, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue4f(float f1, float f2, float f3, float f4, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue1fv(float *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue2fv(float *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue3fv(float *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue4fv(float *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValuefv(float *pf, int dim, IPass *pass, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateValue1f(float f, IPass *pass) = 0;
+    virtual IUniform*    updateValue2f(float f1, float f2, IPass *pass) = 0;
+    virtual IUniform*    updateValue3f(float f1, float f2, float f3, IPass *pass) = 0;
+    virtual IUniform*    updateValue4f(float f1, float f2, float f3, float f4, IPass *pass) = 0;
+    virtual IUniform*    updateValue1fv(float *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue2fv(float *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue3fv(float *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue4fv(float *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValuefv(float *pf, int dim, IPass *pass) = 0;
 
-    virtual IUniform*    updateValue1i(int f, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue2i(int f1, int f2, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue3i(int f1, int f2, int f3, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue4i(int f1, int f2, int f3, int f4, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue1iv(int *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue2iv(int *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue3iv(int *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue4iv(int *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValueiv(int *pf, int dim, IPass *pass, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateValue1i(int f, IPass *pass) = 0;
+    virtual IUniform*    updateValue2i(int f1, int f2, IPass *pass) = 0;
+    virtual IUniform*    updateValue3i(int f1, int f2, int f3, IPass *pass) = 0;
+    virtual IUniform*    updateValue4i(int f1, int f2, int f3, int f4, IPass *pass) = 0;
+    virtual IUniform*    updateValue1iv(int *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue2iv(int *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue3iv(int *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue4iv(int *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValueiv(int *pf, int dim, IPass *pass) = 0;
 
-    virtual IUniform*    updateValue1b(bool f, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue2b(bool f1, bool f2, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue3b(bool f1, bool f2, bool f3, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue4b(bool f1, bool f2, bool f3, bool f4, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue1bv(bool *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue2bv(bool *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue3bv(bool *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValue4bv(bool *pf, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateValuebv(bool *pf, int dim, IPass *pass, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateValue1b(bool f, IPass *pass) = 0;
+    virtual IUniform*    updateValue2b(bool f1, bool f2, IPass *pass) = 0;
+    virtual IUniform*    updateValue3b(bool f1, bool f2, bool f3, IPass *pass) = 0;
+    virtual IUniform*    updateValue4b(bool f1, bool f2, bool f3, bool f4, IPass *pass) = 0;
+    virtual IUniform*    updateValue1bv(bool *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue2bv(bool *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue3bv(bool *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValue4bv(bool *pf, IPass *pass) = 0;
+    virtual IUniform*    updateValuebv(bool *pf, int dim, IPass *pass) = 0;
 
-    virtual IUniform*    updateMatrix4f(float *pm, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateSamplerState(ISamplerState *pSState, IPass *pass, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateMatrix4f(float *pm, IPass *pass) = 0;
+    virtual IUniform*    updateSamplerState(ISamplerState *pSState, IPass *pass) = 0;
     /// \name Used for image Load Store
     /// @{
-    virtual IUniform*    updateImageUnit(int i, IPass *pass = NULL, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateImageResource(ResourceType resType, int oglTexID, int texUnit=-1, IPass *pass = NULL, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateImageResource(IResource* pRes, int texUnit=-1, IPass *pass = NULL, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateImageUnit(int i, IPass *pass = NULL) = 0;
+    virtual IUniform*    updateImageResource(ResourceType resType, int oglTexID, int texUnit=-1, IPass *pass = NULL) = 0;
+    virtual IUniform*    updateImageResource(IResource* pRes, int texUnit=-1, IPass *pass = NULL) = 0;
     /// @}
     /// \name Used for samplers (OpenGL)
     /// @{
-    virtual IUniform*    updateSamplerUnit(int i, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateSamplerResource(ResourceType resType, int oglTexID, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateSamplerResource(IResource* pRes, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateSamplerUnit(int i, IPass *pass) = 0;
+    virtual IUniform*    updateSamplerResource(ResourceType resType, int oglTexID, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL) = 0;
+    virtual IUniform*    updateSamplerResource(IResource* pRes, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL) = 0;
     /// @}
-    virtual IUniform*    updateBuffer(int buffer, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateBuffer(void* buffer, IPass *pass, bool bBindProgram=false) = 0;
-    virtual IUniform*    updateUniform(IUniform* pU, IPass *pass, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateBuffer(int buffer, IPass *pass) = 0;
+    virtual IUniform*    updateBuffer(void* buffer, IPass *pass) = 0;
+    virtual IUniform*    updateUniform(IUniform* pU, IPass *pass) = 0;
 #ifndef OGLES2
     /// \brief (\b Invokes \b GFX \b API) update a subroutine to a uniform variable by using sub-routine name
-    virtual IUniform*    updateSubroutine(const char *funcName, int idx, IPass *pass, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateSubroutine(const char *funcName, int idx, IPass *pass) = 0;
     /// \brief (\b Invokes \b GFX \b API) update many subroutine to a uniform variable by using sub-routine names
-    virtual IUniform*    updateSubroutines(const char **funcNames, IPass *pass, bool bBindProgram=false) = 0;
+    virtual IUniform*    updateSubroutines(const char **funcNames, IPass *pass) = 0;
 #endif
     // TODO: add missing cases
     ///@}
     /// \name target update and mgt
     /// @{
     /// \brief (\b Invokes \b GFX \b API) update targets with the shadowed values
-    virtual IUniform*    update(IPass *pass = NULL, bool bBindProgram=false) = 0;
+    virtual IUniform*    update(IPass *pass = NULL) = 0;
     /// \brief return # of targets available for this uniform
     virtual int         getNumTargets(TargetType t=TANY) = 0;
     /// @}

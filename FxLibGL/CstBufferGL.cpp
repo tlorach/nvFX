@@ -65,10 +65,9 @@ CstBufferGL::~CstBufferGL()
 /*************************************************************************
  **
  **  method invoked by update()
- ** TODO: remove bBindProgram
  **
  *************************************************************************/ 
-void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
+void CstBufferGL::updateGLSL(STarget &t)
 {
     NXPROFILEFUNCCOL2(m_name.c_str(), COLOR_ORANGE, 11);
     if(t.pass)
@@ -81,13 +80,6 @@ void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
 			if(glslProgramPipeline)
 				glslProgram = static_cast<GLSLProgram*>(glslProgramPipeline->getShaderProgram(t.shaderProgramNumber));
 			int prog = glslProgram->getProgram();
-	//#ifdef USE_OLDPROGRAM
-			//if(bBindProgram && !glslProgramPipeline)
-			//	glslProgram->bind(t.pass->m_container);
-			//GLint dbgProg = 0;
-			//glGetIntegerv(GL_CURRENT_PROGRAM, &dbgProg);
-			//assert(prog == dbgProg);
-	//#endif
 #ifndef OGLES2
             if(glGetUniformBlockIndex)
                 t.uniformLocation = glGetUniformBlockIndex(prog, m_name.c_str());
@@ -124,32 +116,28 @@ void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
             }
 #endif
         }
-//#ifdef USE_OLDPROGRAM
-		// TODO: remove definitely because we don't want bBindProgram anymore
-        //if(bBindProgram && !glslProgramPipeline) glslProgram->unbind(t.pass->m_container);
-//#endif
         t.dirty = false;
     }
 }
 
-CstBuffer*    CstBufferGL::update2(Pass *pass, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
+CstBuffer*    CstBufferGL::update2(Pass *pass, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
 {
     if (NULL == pass)
       return this;
     int id;
     for(int i=0; (id=pass->getLayerId(i)) >= 0; i++)
-        update(pass, id, bBindProgram, bCreateIfNeeded, bCreateBufferIfNeeded);
+        update(pass, id, bCreateIfNeeded, bCreateBufferIfNeeded);
     return this;
 }
 
-CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
+CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
 {
   if (NULL == pass)
       return this;
     NXPROFILEFUNCCOL2(__FUNCTION__, COLOR_ORANGE, 11);
 #ifndef OGLES2
     if(layerID < 0)
-        return update2(pass, bBindProgram, bCreateIfNeeded, bCreateBufferIfNeeded);
+        return update2(pass, bCreateIfNeeded, bCreateBufferIfNeeded);
     bool bCreate = pass ? bCreateIfNeeded : false;
     int tsz = (int)m_targets.size();
     for(int i=0; i<tsz; i++)
@@ -161,7 +149,7 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
         {
         case TCUDA:
 #ifdef USECUDA
-            CstBufferCUDA::update(pass, layerID, bBindProgram, bCreateIfNeeded, bCreateBufferIfNeeded);
+            CstBufferCUDA::update(pass, layerID, bCreateIfNeeded, bCreateBufferIfNeeded);
 #endif
             break;
         case TGLSL:
@@ -172,13 +160,10 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
             { // In this case we only update matching pass and return
                 if((t.pass == pass) && (t.passLayerId == layerID))
                 {
-                    updateGLSL(t, bBindProgram);
+                    updateGLSL(t);
                     bCreate = false;
                     break;
                 }
-            } else {
-                updateGLSL(t, true/*bBindProgram*/); // if updating all, we need to bind programs in any case
-                LOGI(">Warning : uniform update for many targets at the same time... normal ?");
             }
         }
     }
@@ -199,11 +184,6 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
         //
         while(glslProgram)
         {
-//#ifdef USE_OLDPROGRAM
-            int prevProg = 0; //glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
-            if(bBindProgram && !glslProgramPipeline) // we may want to remove this : no need to bind anything for uniform blocks
-                glslProgram->bind(pass->m_container);
-//#endif
 // PENDING ISSUE PENDING ISSUE PENDING ISSUE PENDING ISSUE PENDING ISSUE PENDING ISSUE
 // PENDING ISSUE PENDING ISSUE PENDING ISSUE PENDING ISSUE PENDING ISSUE PENDING ISSUE
 // I need to know how to only track uniform blocks that are really used by the source code !!!!
@@ -259,16 +239,8 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
                     m_targets.push_back(t);
                     pass->addCstBuffer(this, i);
                 }
-                updateGLSL(t, false);
-//#ifdef USE_OLDPROGRAM
-                if(bBindProgram && !glslProgramPipeline)
-                    glUseProgram(prevProg);//glslProgram->unbind();
-//#endif
+                updateGLSL(t);
             }
-//#ifdef USE_OLDPROGRAM
-            if(bBindProgram && !glslProgramPipeline) // we may want to remove this : no need to bind anything for uniform blocks
-                if(bBindProgram) glUseProgram(prevProg);//glslProgram->unbind();
-//#endif
             //
             // Move to the next program is available
             //
@@ -286,7 +258,7 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
     while(iU != m_uniforms.end())
     {
         Uniform *pU = *iU;
-        pU->update(pU->getShadowedData(), pass, layerID, bBindProgram, bCreateIfNeeded);
+        pU->update(pU->getShadowedData(), pass, layerID, bCreateIfNeeded);
         ++iU;
     }
 #endif
@@ -297,7 +269,7 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
  **  
  **
  *************************************************************************/ 
-CstBuffer*    CstBufferGL::updateForTarget(int target, bool bBindProgram)
+CstBuffer*    CstBufferGL::updateForTarget(int target)
 {
 	CstBuffer::STarget &t = m_targets[target];
 	m_activeTarget = target;
@@ -314,7 +286,7 @@ CstBuffer*    CstBufferGL::updateForTarget(int target, bool bBindProgram)
         if((m_bufferId == 0))// && bCreateBufferIfNeeded)
             buildGLBuffer(ICstBuffer::STATIC_DRAW, 1);
         CHECK_TRUE(m_bufferId!=0);
-        updateGLSL(t, bBindProgram);
+        updateGLSL(t);
     }
     return this;
 }

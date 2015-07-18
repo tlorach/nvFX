@@ -718,7 +718,7 @@ protected:
     CstBuffer(const char* name);
     virtual ~CstBuffer();
     /// \brief update for a specific target only
-    virtual CstBuffer*    updateForTarget(int target, bool bBindProgram = false) = 0;
+    virtual CstBuffer*    updateForTarget(int target) = 0;
     virtual int           bufferSizeAndData(char *pData, int *sz=NULL) = 0;
 public:
     bool        getDirty(Pass *pass=NULL); ///< get Dirty status for either all targets or one specific, using pass ptr
@@ -727,7 +727,7 @@ public:
     virtual CstBuffer*  invalidateTarget(IPass *pass, int layerID);
 
     virtual IAnnotation *annotations() { return &m_annotations; }
-    virtual CstBuffer*  update(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded) = 0;
+    virtual CstBuffer*  update(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded) = 0;
     virtual const char* getName() { return m_name.c_str(); }
     virtual void        setName(const char *name) { m_name = name; }
     virtual ICstBuffer* setGLBuffer(int buffer);
@@ -840,7 +840,7 @@ protected:
 public:
     virtual ~Uniform();
     Uniform(const char* name = NULL, const char* groupname = NULL, const char* semantic = NULL);
-    virtual Uniform*    update(ShadowedData* pData, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded) = 0;
+    virtual Uniform*    update(ShadowedData* pData, Pass *pass, int layerID, bool bCreateIfNeeded) = 0;
     ShadowedData* getShadowedData() { return m_data; }
     /// \brief returns the interface for annotations
     virtual IAnnotation *annotations() { return &m_annotations; }
@@ -931,64 +931,64 @@ public:
     bool         getValueRaw(void *, int szMax=0, int bytesPadding=0);
     ///@}
     /// \brief update targets with the shadowed values
-    IUniform*    update(IPass *pass = NULL, bool bBindProgram=false);
+    IUniform*    update(IPass *pass = NULL);
     /// \brief update for a specific target only
-    virtual Uniform*    updateForTarget(ShadowedData* pData, int target, bool bBindProgram = false) = 0;
+    virtual Uniform*    updateForTarget(ShadowedData* pData, int target) = 0;
     /// \name methods to directly assign values to targets without the use of shadowed area
     /// When using these methods, you must be aware that the values won't be persistent
     /// in the unfiform class, as it would when using setXXX().
     ///
     /// all return IUniform* so we can "cascade" calls
     ///@{
-    IUniform*    updateValue1f(float f, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue2f(float f1, float f2, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue3f(float f1, float f2, float f3, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue4f(float f1, float f2, float f3, float f4, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue1fv(float *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue2fv(float *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue3fv(float *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue4fv(float *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValuefv(float *pf, int dim, IPass *pass = NULL, bool bBindProgram=false);
+    IUniform*    updateValue1f(float f, IPass *pass = NULL);
+    IUniform*    updateValue2f(float f1, float f2, IPass *pass = NULL);
+    IUniform*    updateValue3f(float f1, float f2, float f3, IPass *pass = NULL);
+    IUniform*    updateValue4f(float f1, float f2, float f3, float f4, IPass *pass = NULL);
+    IUniform*    updateValue1fv(float *pf, IPass *pass = NULL);
+    IUniform*    updateValue2fv(float *pf, IPass *pass = NULL);
+    IUniform*    updateValue3fv(float *pf, IPass *pass = NULL);
+    IUniform*    updateValue4fv(float *pf, IPass *pass = NULL);
+    IUniform*    updateValuefv(float *pf, int dim, IPass *pass = NULL);
 
-    IUniform*    updateValue1i(int f, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue2i(int f1, int f2, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue3i(int f1, int f2, int f3, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue4i(int f1, int f2, int f3, int f4, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue1iv(int *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue2iv(int *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue3iv(int *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValue4iv(int *pf, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateValueiv(int *pf, int dim, IPass *pass = NULL, bool bBindProgram=false);
+    IUniform*    updateValue1i(int f, IPass *pass = NULL);
+    IUniform*    updateValue2i(int f1, int f2, IPass *pass = NULL);
+    IUniform*    updateValue3i(int f1, int f2, int f3, IPass *pass = NULL);
+    IUniform*    updateValue4i(int f1, int f2, int f3, int f4, IPass *pass = NULL);
+    IUniform*    updateValue1iv(int *pf, IPass *pass = NULL);
+    IUniform*    updateValue2iv(int *pf, IPass *pass = NULL);
+    IUniform*    updateValue3iv(int *pf, IPass *pass = NULL);
+    IUniform*    updateValue4iv(int *pf, IPass *pass = NULL);
+    IUniform*    updateValueiv(int *pf, int dim, IPass *pass = NULL);
 
-    IUniform*    updateValue1b(bool f, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValue2b(bool f1, bool f2, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValue3b(bool f1, bool f2, bool f3, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValue4b(bool f1, bool f2, bool f3, bool f4, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValue1bv(bool *pf, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValue2bv(bool *pf, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValue3bv(bool *pf, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValue4bv(bool *pf, IPass *pass, bool bBindProgram=false);
-    IUniform*    updateValuebv(bool *pf, int dim, IPass *pass, bool bBindProgram=false);
+    IUniform*    updateValue1b(bool f, IPass *pass);
+    IUniform*    updateValue2b(bool f1, bool f2, IPass *pass);
+    IUniform*    updateValue3b(bool f1, bool f2, bool f3, IPass *pass);
+    IUniform*    updateValue4b(bool f1, bool f2, bool f3, bool f4, IPass *pass);
+    IUniform*    updateValue1bv(bool *pf, IPass *pass);
+    IUniform*    updateValue2bv(bool *pf, IPass *pass);
+    IUniform*    updateValue3bv(bool *pf, IPass *pass);
+    IUniform*    updateValue4bv(bool *pf, IPass *pass);
+    IUniform*    updateValuebv(bool *pf, int dim, IPass *pass);
 
-    IUniform*    updateMatrix4f(float *pm, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateSamplerState(ISamplerState *pSState, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateSamplerUnit(int i, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateSamplerResource(ResourceType resType, int oglTexID, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateSamplerResource(IResource* pRes, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL, bool bBindProgram=false);
+    IUniform*    updateMatrix4f(float *pm, IPass *pass = NULL);
+    IUniform*    updateSamplerState(ISamplerState *pSState, IPass *pass = NULL);
+    IUniform*    updateSamplerUnit(int i, IPass *pass = NULL);
+    IUniform*    updateSamplerResource(ResourceType resType, int oglTexID, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL);
+    IUniform*    updateSamplerResource(IResource* pRes, int texUnit=-1, ISamplerState *pSState=NULL, IPass *pass = NULL);
     /// \name Used for image Load Store
     /// @{
-    IUniform*    updateImageUnit(int i, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateImageResource(ResourceType resType, int oglTexID, int texUnit=-1, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateImageResource(IResource* pRes, int texUnit=-1, IPass *pass = NULL, bool bBindProgram=false);
+    IUniform*    updateImageUnit(int i, IPass *pass = NULL);
+    IUniform*    updateImageResource(ResourceType resType, int oglTexID, int texUnit=-1, IPass *pass = NULL);
+    IUniform*    updateImageResource(IResource* pRes, int texUnit=-1, IPass *pass = NULL);
     /// @}
-    IUniform*    updateBuffer(int buffer, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateBuffer(void* buffer, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateUniform(IUniform* pU, IPass *pass = NULL, bool bBindProgram=false);
+    IUniform*    updateBuffer(int buffer, IPass *pass = NULL);
+    IUniform*    updateBuffer(void* buffer, IPass *pass = NULL);
+    IUniform*    updateUniform(IUniform* pU, IPass *pass = NULL);
     IUniform*    updateFromUniform(IUniform* pU, IPass *pass = NULL);
 #ifndef OGLES2
-    IUniform*    updateSubroutine(const char *funcName, int idx, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateSubroutines(const char **funcNames, IPass *pass = NULL, bool bBindProgram=false);
-    IUniform*    updateSubroutines(int *funcIDs, int numIDs, IPass *pass, bool bBindProgram=false);
+    IUniform*    updateSubroutine(const char *funcName, int idx, IPass *pass = NULL);
+    IUniform*    updateSubroutines(const char **funcNames, IPass *pass = NULL);
+    IUniform*    updateSubroutines(int *funcIDs, int numIDs, IPass *pass);
 #endif
     // TODO: add missing cases
     ///@}
@@ -1185,29 +1185,29 @@ private:
     };
     std::map<shaderset, Program*, shadercompareLess> m_programs;*/
 
-    //int                 updateUniforms(Technique *tech, bool bBindProgram, bool bCreateIfNeeded, bool bOnlyShadowed); ///< walk through uniforms and update them for a technique only
+    //int                 updateUniforms(Technique *tech, bool bCreateIfNeeded, bool bOnlyShadowed); ///< walk through uniforms and update them for a technique only
     /// \name Cst buffer updating (OGL / D3D)
     /// @{
-    bool                updateCstBuffers(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
+    bool                updateCstBuffers(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
     void                deleteCstBuffersTarget(Pass *pass, int layerID); ///< removes any reference to pass
     void                invalidateCstBuffersTarget(Pass *pass, int layerID); ///< removes any reference to pass
     /// @}
     /// \name Uniforms updating (essentially for OGL)
     /// @{
-    bool                updateUniforms(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bOnlyShadowed);
+    bool                updateUniforms(Pass *pass, int layerID, bool bCreateIfNeeded, bool bOnlyShadowed);
     void                deleteUniformsTarget(Pass *pass, int layerID); ///< removes any reference to pass
     void                invalidateUniformsTarget(Pass *pass, int layerID); ///< removes any reference to pass
     /// @}
     /// \name SamplerState updating (essentially for D3D)
     /// @{
-    bool                updateSamplerStates(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bOnlyShadowed);
+    bool                updateSamplerStates(Pass *pass, int layerID, bool bCreateIfNeeded, bool bOnlyShadowed);
     void                deleteSamplerStatesTarget(Pass *pass, int layerID); ///< removes any reference to pass
     void                invalidateSamplerStatesTarget(Pass *pass, int layerID); ///< removes any reference to pass
     bool                validateSamplerStates(); ///< \brief validate SamplerStates (create the D3D objects)
     /// @}
     /// \name Texture updating (essentially for D3D, where texture are really part of shaders)
     /// @{
-    //bool                updateTextures(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bOnlyShadowed);
+    //bool                updateTextures(Pass *pass, int layerID, bool bCreateIfNeeded, bool bOnlyShadowed);
     //void                deleteTexturesTarget(Pass *pass, int layerID); ///< removes any reference to pass
     //void                invalidateTexturesTarget(Pass *pass, int layerID); ///< removes any reference to pass
     /// @}
@@ -1830,8 +1830,8 @@ protected:
     Annotation              m_annotations;
 
     /// \brief update targets with the shadowed values
-    virtual SamplerState*  update(void *data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded) = 0;
-    virtual SamplerState*  updateForTarget(void *data, int target, bool bBindProgram = false) = 0;
+    virtual SamplerState*  update(void *data, Pass *pass, int layerID, bool bCreateIfNeeded) = 0;
+    virtual SamplerState*  updateForTarget(void *data, int target = false) = 0;
 public:
     virtual ~SamplerState();
     SamplerState(Container* pCont, const char* name = NULL);
