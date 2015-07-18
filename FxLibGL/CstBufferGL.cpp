@@ -39,6 +39,11 @@ using namespace nvFX;
 std::map<int, CUDABuffer>	buffers;
 #endif
 
+//
+// Just to find a free block binding ID
+//
+unsigned int CstBufferGL::availableBlockBindingID = 1;
+
 CstBufferGL::CstBufferGL(const char* name) :
 #ifdef USECUDA
     CstBufferCUDA(name)
@@ -46,6 +51,10 @@ CstBufferGL::CstBufferGL(const char* name) :
     CstBuffer(name)
 #endif
 {
+    //
+    // get a free block binding
+    //
+    m_blockBinding = availableBlockBindingID++;
 }
 
 CstBufferGL::~CstBufferGL()
@@ -82,6 +91,7 @@ void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
 #ifndef OGLES2
             if(glGetUniformBlockIndex)
                 t.uniformLocation = glGetUniformBlockIndex(prog, m_name.c_str());
+            glUniformBlockBinding(prog, t.uniformLocation, m_blockBinding);
 #endif
             t.valid = t.uniformLocation < 0 ? false : true;
         }
@@ -105,11 +115,11 @@ void CstBufferGL::updateGLSL(STarget &t, bool bBindProgram)
             {
                 //GLint res = 111;
                 //glGetActiveUniformBlockiv(prog,t.uniformLocation, GL_UNIFORM_BLOCK_BINDING, &res);
-                //glUniformBlockBinding(prog, t.uniformLocation, t.uniformLocation);
+                //glUniformBlockBinding(prog, t.uniformLocation, m_blockBinding);
                 if(m_bufferOffset > 0)
-                    glBindBufferRange(GL_UNIFORM_BUFFER, t.uniformLocation, m_bufferId, m_bufferOffset*m_sizeOfCstBufferAligned, m_sizeOfCstBuffer);
+                    glBindBufferRange(GL_UNIFORM_BUFFER, m_blockBinding, m_bufferId, m_bufferOffset*m_sizeOfCstBufferAligned, m_sizeOfCstBuffer);
                 else
-                    glBindBufferBase(GL_UNIFORM_BUFFER, t.uniformLocation, m_bufferId);
+                    glBindBufferBase(GL_UNIFORM_BUFFER, m_blockBinding, m_bufferId);
                 CHECKGLERRORS("Uniform::TUBO");
             }
 #endif
@@ -223,9 +233,9 @@ CstBuffer*    CstBufferGL::update(Pass *pass, int layerID, bool bBindProgram, bo
 //                                  nam);
 //    loc = glGetUniformLocation(glslProgram->getProgram(), nam);
 //}
-                // we must bind this block index to our own number... yeah... let's take the same
+                // we must bind this block index to our own number... m_blockBinding
                 // http://www.opengl.org/sdk/docs/man4/xhtml/glUniformBlockBinding.xml
-                glUniformBlockBinding(glslProgram->getProgram(), t.uniformLocation, t.uniformLocation);
+                glUniformBlockBinding(glslProgram->getProgram(), t.uniformLocation, m_blockBinding);
                 CHECKGLERRORS("Uniform::TUBO");
                 t.valid = t.uniformLocation < 0 ? false : true;
                 t.pass = pass;
