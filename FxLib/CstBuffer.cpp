@@ -68,6 +68,8 @@ ICstBufferEx()
 /*************************************************************************/ /**
 ** \brief sets the offset where to use the data for the uniform block
 **
+** TODO: we need to differenciate the update of the inside of the buffer
+** from the update of the buffer-range.
 **/ /*************************************************************************/
 bool		CstBuffer::bindBufferRange(int n, IPass* pPass)
 {
@@ -76,7 +78,10 @@ bool		CstBuffer::bindBufferRange(int n, IPass* pPass)
 	if(m_bufferOffset != n)
 	{
 		m_bufferOffset = n;
-		//setDirty(true);
+        // TODO: do better!! Hacky...
+        // at least one sub-uniform must be tagged as dirty so we trigger properly later update
+        if(!m_uniforms.empty())
+            m_uniforms[0]->setDirty(true, static_cast<Pass*>(pPass));
 	}
 	if(pPass)
 	{
