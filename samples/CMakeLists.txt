@@ -105,6 +105,7 @@ if( OPENGL_FOUND AND GLEW_FOUND OR (APPLE AND GLUT_FOUND))
     add_subdirectory(OpenGL_GS_Sparkles)
     add_subdirectory(OpenGL_GLSLCompute)
     add_subdirectory(OpenGLLigthingEffect)
+    add_subdirectory(ShaderToyViewer)
     # Broken...to fix and check before activating it
     #add_subdirectory(OpenGLFluitSimEffect)
     # Not ready yet
