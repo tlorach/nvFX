@@ -2351,7 +2351,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
         // decide to optimize the binding.
         //if(pr->prevFBO != pr->currentFBO)
         {
-            pRep->setCurrent(pr->currentFBO, ((pr->flags & PR_VIEWPORT)==0));
+            pRep->setCurrent(pr->currentFBO, ((pr->flags & PR_VIEWPORT)));
         }
         pr->prevFBO = pr->currentFBO;
     }
