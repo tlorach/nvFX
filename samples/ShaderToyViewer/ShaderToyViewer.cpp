@@ -350,6 +350,11 @@ void MyWindow::mouse(NVPWindow::MouseButton button, ButtonAction action, int mod
     bool bRes = nvFX::loadEffectFromFile(fx_EffectScene, "ShaderToyEffect.glslfx");
     if(!bRes)
         bRes = nvFX::loadEffectFromFile(fx_EffectScene, SOURCE_DIR "/ShaderToyEffect.glslfx");
+    if(!bRes)
+    {
+        OutputDebugStringA("Effect file not found. Make sure it is close to the exe file...");
+        return false;
+    }
     fx_TechScene = fx_EffectScene->findTechnique(0);
     fx_TechScene->validate();
     iResolution = fx_EffectScene->findUniform("iResolution");
