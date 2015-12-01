@@ -206,7 +206,7 @@ if(USE_OPENGL)
   # or even allow to use CUDA without any Gfx API...
   if(USE_CUDA AND CUDA_FOUND)
     add_subdirectory( FxLibCUDA )
-    list(APPEND NVFX_LIBS FxLibCUDA)
+    list(APPEND NVFX_LIBS FxLibCUDA) # FxLib refers to it when cmake allowed CUDA... so we need it for all :-(
   endif()
   # for now, Optix makes sense only for OpenGL, too
   if(USE_OPTIX AND OPTIX_FOUND)

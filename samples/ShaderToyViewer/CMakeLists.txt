@@ -10,6 +10,7 @@ set(PLATFORM_LIBRARIES
     ${OPENGL_LIBRARY}
     ${GLEW_LIBRARY}
     ${NSIGHT_LIB}
+    ${CUDA_LIB}
 )
 include_directories(
     ${nvFx_SOURCE_DIR}/include

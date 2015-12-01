@@ -133,7 +133,7 @@ namespace nvFX
     public:
         CstBufferCUDA(const char* name) : CstBuffer(name) {}
         ~CstBufferCUDA() {}
-        virtual CstBuffer*  update(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
+        virtual CstBuffer*  update(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
         { /*TODO if needed*/return this; }
     };
     /*************************************************************************/ /**
@@ -146,9 +146,9 @@ namespace nvFX
         virtual ~UniformCUDA();
         UniformCUDA(const char* name = NULL, const char* groupname = NULL, const char* semantic = NULL);
 
-        Uniform*            updateTextures(ShadowedData* data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded);
-        virtual Uniform*    update(ShadowedData* pData, Pass *pass, int ppID, bool bBindProgram, bool bCreateIfNeeded);
-        virtual Uniform*    updateForTarget(ShadowedData* pData, STarget &t, bool bBindProgram = false);
+        Uniform*            updateTextures(ShadowedData* data, Pass *pass, int layerID, bool bCreateIfNeeded);
+        virtual Uniform*    update(ShadowedData* pData, Pass *pass, int ppID, bool bCreateIfNeeded);
+        virtual Uniform*    updateForTarget(ShadowedData* pData, int target);
     };
 
     /*************************************************************************/ /**
@@ -157,7 +157,7 @@ namespace nvFX
     class CUDAShader : public Shader
     {
     public:
-        CUDAShader(const char *name = NULL, IContainer* pCont = NULL);
+        CUDAShader(const char *name = NULL);
         ~CUDAShader();
 
         virtual void    cleanupShader()                     {}

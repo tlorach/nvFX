@@ -5,7 +5,7 @@ set(PLATFORM_LIBRARIES
     ${OPENGL_LIBRARY}
     ${GLEW_LIBRARY}
     ${ZLIB_LIBRARIES}
-    ${CUDA_LIBRARIES}
+    ${CUDA_LIB}
     ${NSIGHT_LIB}
 )
 include_directories(
@@ -16,6 +16,7 @@ include_directories(
     ${NV_MATH_DIR}
     ${BK3D_DIR}
     ${NV_IMAGE_DIR}
+    ${CUDA_INCLUDE_DIR}
 )
 set(SOURCE_FILES 
   OpenGL_CUDAConvolution.cpp

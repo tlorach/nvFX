@@ -5,7 +5,7 @@ set(PLATFORM_LIBRARIES
     ${OPENGL_LIBRARY}
     ${GLEW_LIBRARY}
     ${ZLIB_LIBRARIES}
-    ${CUDA_LIBRARIES}
+    ${CUDA_LIB}
     ${NSIGHT_LIB}
 )
 include_directories(

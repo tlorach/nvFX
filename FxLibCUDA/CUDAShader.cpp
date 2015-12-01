@@ -47,7 +47,7 @@ CUDAShader::~CUDAShader()
  ** 
  ** 
  **/ /*************************************************************************/ 
-CUDAShader::CUDAShader(const char * name, IContainer* pCont) : Shader(name, pCont)
+CUDAShader::CUDAShader(const char * name) : Shader(name)
 {
     m_targetType = TCUDA;
 }
