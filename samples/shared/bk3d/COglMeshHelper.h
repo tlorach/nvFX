@@ -1,21 +1,29 @@
-//----------------------------------------------------------------------------------
-// File:   nvrawmesh.h
-// Author: Tristan Lorach
-// Email:  lorachnroll@gmail.com
-// 
-// Copyright (c) 2013 Tristan Lorach. All rights reserved.
-//
-// TO  THE MAXIMUM  EXTENT PERMITTED  BY APPLICABLE  LAW, THIS SOFTWARE  IS PROVIDED
-// *AS IS*  AND T.LORACH AND  ITS SUPPLIERS DISCLAIM  ALL WARRANTIES,  EITHER  EXPRESS
-// OR IMPLIED, INCLUDING, BUT NOT LIMITED  TO, IMPLIED WARRANTIES OF MERCHANTABILITY
-// AND FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL  T.LORACH OR ITS SUPPLIERS
-// BE  LIABLE  FOR  ANY  SPECIAL,  INCIDENTAL,  INDIRECT,  OR  CONSEQUENTIAL DAMAGES
-// WHATSOEVER (INCLUDING, WITHOUT LIMITATION,  DAMAGES FOR LOSS OF BUSINESS PROFITS,
-// BUSINESS INTERRUPTION, LOSS OF BUSINESS INFORMATION, OR ANY OTHER PECUNIARY LOSS)
-// ARISING OUT OF THE  USE OF OR INABILITY  TO USE THIS SOFTWARE, EVEN IF T.LORACH HAS
-// BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
-//
-//
+/*-----------------------------------------------------------------------
+    Copyright (c) 2013, Tristan Lorach. All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Neither the name of its contributors may be used to endorse 
+       or promote products derived from this software without specific
+       prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+    OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+    feedback to lorachnroll@gmail.com (Tristan Lorach)
+*/ //--------------------------------------------------------------------
 #include "bk3dEx.h"
 #ifndef NOCURVES
 #   include "CurveReader.h"
@@ -156,6 +164,7 @@ public:
     void                unload();
     void                unloadBufferSection();
     //float*              findComponentf(const char *compname, bool **pDirty);
+    void                updateTransforms();
 #    ifndef NOCURVES
     void                bindAnimationFile(LPCSTR animfile);
     void                bindAnimationFromBk3d();
@@ -172,12 +181,11 @@ public:
         if(!(m_pHeader && m_pHeader->pMeshes)) return 0;
         return m_pHeader->pMeshes->n; 
     }
-
-    int     getNumTransforms() { return m_pHeader->pTransforms ? m_pHeader->pTransforms->n : 0; }
+	int     getNumTransforms() { return m_pHeader->pTransforms ? m_pHeader->pTransforms->nBones : 0; }
     float*  getTransformArray(float *matArrayToFill);
-
     void begin() {}
 protected:
+    void                    recTransfUpdate(Transform *ptr);
 };
 ////////////////////////////////////////////////////////////////////
 float* COGLSceneHelper::getTransformArray(float *matArrayToFill)
@@ -185,18 +193,17 @@ float* COGLSceneHelper::getTransformArray(float *matArrayToFill)
     NXPROFILEFUNC(__FUNCTION__);
     if(!m_pHeader->pTransforms)
         return NULL;
-    for(int i=0; i<m_pHeader->pTransforms->n; i++)
+    for(int i=0; i<m_pHeader->pTransforms->nBones; i++)
     {
         //assert(m_pMesh->pTransforms->p[i].p);
-        mat4 &bpM = (mat4)m_pHeader->pTransforms->p[i]->bindpose_matrix;
-        mat4 &M = (mat4)m_pHeader->pTransforms->p[i]->abs_matrix;
+        mat4 &bpM = (mat4)m_pHeader->pTransforms->pBones[i]->MatrixInvBindpose();
+        mat4 &M = (mat4)m_pHeader->pTransforms->pBones[i]->MatrixAbs();
         //mat4 bpMM = mat4(array16_id);
         mat4 bpMM = M * bpM;
         memcpy(&(matArrayToFill[16*i]), bpMM.mat_array , sizeof(float)*16);
     }
     return matArrayToFill;
 }
-
 void COGLSceneHelper::unload()
 {
     NXPROFILEFUNC(__FUNCTION__);
@@ -250,7 +257,7 @@ void COGLSceneHelper::bindAnimationFile(LPCSTR animfile)
     {
         CurveVector *pcv = m_cvPool.getCVByIndex(i);
         bool *pdirty;
-        float *pf = bk3d::findComponentf(m_pHeader, pcv->getName(), &pdirty);
+		float *pf = bk3d::FileHeader_findComponentf(m_pHeader, pcv->getName(), &pdirty);
         if(pf)
             pcv->bindPtrs(  pf, pf+1, pf+2, pf+3, pdirty);
         else
@@ -270,7 +277,7 @@ void COGLSceneHelper::bindAnimationFromBk3d()
         bk3d::MayaCurveVector *pMCV = m_pHeader->pMayaCurves->p[i];
         // First, see if the curve is of any interest
         bool *pdirty;
-        float *pf = bk3d::findComponentf(m_pHeader,pMCV->name, &pdirty);
+        float *pf = bk3d::FileHeader_findComponentf(m_pHeader,pMCV->name, &pdirty);
         if(!pf)
             continue;
         if(pMCV->nCurves == 0)
@@ -304,6 +311,82 @@ void COGLSceneHelper::bindAnimationFromBk3d()
     }
 }
 #endif
+// Joint transformation order (OpenGL order) :
+// P2 = Mtranslate * MjointOrient * Mrotation * Mrotorientation * Mscale * P
+// basic Transformation order :
+// P2 = MrotPivotTransl * MrotPivot * Mrotation * MrotOrient * MrotPivotInv * MscalePivotTransl 
+//      * MscalePivot * Mscale * MscalePivotInv * P
+// TODO: add basic transform (P2)
+void COGLSceneHelper::recTransfUpdate(Transform *ptr)
+{
+    NXPROFILEFUNC(__FUNCTION__);
+#if 1
+    //assert(!"TODO");
+#else
+        if(ptr->bDirty)
+        {
+            //translation
+            glTranslatef(   ptr->pos[0],
+                            ptr->pos[1],
+                            ptr->pos[2]);
+            //joint orientation
+            nv::matrix4f jorient;
+            nv::quaternionf qjorient(ptr->jointOrientation);
+            qjorient.get_value(jorient);
+            glMultMatrixf(jorient._array);
+            //Rotation
+            // TODO: take the order into account
+            glRotatef(ptr->rotation[2] , 0, 0, 1); //Z
+            glRotatef(ptr->rotation[1] , 0, 1, 0); //Y
+            glRotatef(ptr->rotation[0] , 1, 0, 0); //X
+            //joint orientation
+            nv::matrix4f rorient;
+            nv::quaternionf qrorient(ptr->rotationOrientation);
+            qrorient.get_value(rorient);
+            glMultMatrixf(rorient._array);
+            //scale
+            glScalef(   ptr->scale[0],
+                        ptr->scale[1],
+                        ptr->scale[2]);
+
+            glPushMatrix();
+                glMultMatrixf(ptr->bindpose_matrix);
+                glGetFloatv(GL_MODELVIEW_MATRIX, ptr->MatrixAbs() );
+            glPopMatrix();
+        } else {
+            glMultMatrixf(ptr->matrix);
+            glPushMatrix();
+                glMultMatrixf(ptr->bindpose_matrix);
+                glGetFloatv(GL_MODELVIEW_MATRIX, ptr->MatrixAbs() );
+            glPopMatrix();
+        }
+        //
+        // Children
+        //
+        if(ptr->pChildren)
+            for(int c=0; c<ptr->pChildren->n; c++)
+            {
+                glPushMatrix();
+                recTransfUpdate(ptr->pChildren->p[c]);
+                glPopMatrix();
+            }
+#endif
+}
+void COGLSceneHelper::updateTransforms()
+{
+    NXPROFILEFUNC(__FUNCTION__);
+    if(!m_pHeader->pTransforms)
+        return;
+    glPushMatrix();
+    glLoadIdentity();
+    for(int i=0; i<m_pHeader->pTransforms->nBones; i++)
+    {
+        Transform *pT = m_pHeader->pTransforms->pBones[i]->asTransf();
+        if(pT->pParent == NULL)
+            recTransfUpdate(pT);
+    }
+    glPopMatrix();
+}
 //
 // Compute the vertices in Worldspace.
 // NOTE and TODO: this can be done via vertex-buffer + stream-out... faster
@@ -318,7 +401,7 @@ bool OGLMeshWrapper::computeWorldspaceVertices(bool bYes)
         return false;
     }
     // Mark the transformation as invalid since the vertices are already transformed
-    m_pMesh->pTransforms->p[0]->validComps |= TRANSFCOMP_invalidMatrix;
+    m_pMesh->pTransforms->p[0]->ValidComps() |= TRANSFCOMP_invalidMatrix;
     for(int a=0; a< m_pMesh->pAttributes->n; a++)
     {
         Attribute   *pA = m_pMesh->pAttributes->p[a];
@@ -341,7 +424,7 @@ bool OGLMeshWrapper::computeWorldspaceVertices(bool bYes)
         float *ptSrc = (float *)pA->pAttributeBufferData;
         for(int i = 0; i<(int)pS->vertexCount;i++)
         {
-            const float *mw = m_pMesh->pTransforms->p[0]->abs_matrix;
+            const float *mw = m_pMesh->pTransforms->p[0]->MatrixAbs();
             float v[4];
             v[0] = mw[0]*ptSrc[0] + mw[4]*ptSrc[1] + mw[8]*ptSrc[2] + mw[12];
             v[1] = mw[1]*ptSrc[0] + mw[5]*ptSrc[1] + mw[9]*ptSrc[2] + mw[13];
@@ -532,9 +615,9 @@ void OGLMeshWrapper::draw(COGLSceneHelper *pOGLSceneHelper, int primGroupStart, 
         if(pPG->primRestartIndex > 0)
         {
             glPrimitiveRestartIndex(pPG->primRestartIndex);
-            glEnable(GL_PRIMITIVE_RESTART);
+            glEnableClientState(GL_PRIMITIVE_RESTART_NV);//GL_PRIMITIVE_RESTART);
         } else {
-            glDisable(GL_PRIMITIVE_RESTART);
+            glDisableClientState(GL_PRIMITIVE_RESTART_NV);//GL_PRIMITIVE_RESTART);
         }
         if(pPG->indexCount == 0)
             continue;
@@ -645,10 +728,7 @@ float* OGLMeshWrapper::getTransformArray(float *matArrayToFill)
     for(int i=0; i<m_pMesh->pTransforms->n; i++)
     {
         //assert(m_pMesh->pTransforms->p[i].p);
-        mat4 &bpM = (mat4)m_pMesh->pTransforms->p[i]->bindpose_matrix;
-        mat4 &M = (mat4)m_pMesh->pTransforms->p[i]->abs_matrix;
-        mat4 bpMM = M * bpM;
-        memcpy(&(matArrayToFill[16*i]), bpMM.mat_array , sizeof(float)*16);
+        memcpy(&(matArrayToFill[16*i]), m_pMesh->pTransforms->p[i]->MatrixAbs() , sizeof(float)*16);
     }
     return matArrayToFill;
 }
