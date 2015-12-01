@@ -98,7 +98,7 @@ if( OPENGL_FOUND AND GLEW_FOUND OR (APPLE AND GLUT_FOUND))
     add_subdirectory(OpenGLSimpleEffect)
     # sample to fix and check before activating it
     #add_subdirectory(OpenGLSimpleEffect_Subroutine)
-    add_subdirectory(OpenGLSimpleEffect_skinning)
+    #add_subdirectory(OpenGLSimpleEffect_skinning) # some obsolete code to fix... commented-out
     add_subdirectory(OpenGLSimpleEffect_PNTriangles)
     add_subdirectory(OpenGLSimpleSceneEffect)
     add_subdirectory(OpenGL_HDR_IBL_Effect)
