@@ -60,9 +60,9 @@ void delete_ProgramCUDA(IProgram *pProg)
     delete p;
 }
 
-Shader* new_ShaderCUDA(const char* name, Container *pCont)
+Shader* new_ShaderCUDA(const char* name)
 {
-    return new CUDAShader(name, pCont);
+    return new CUDAShader(name);
 }
 void delete_ShaderCUDA(IShader *pShd)
 {

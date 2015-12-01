@@ -62,7 +62,7 @@ UniformCUDA::~UniformCUDA()
     }
 }
 
-Uniform*  UniformCUDA::update(ShadowedData* data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded)
+Uniform*  UniformCUDA::update(ShadowedData* data, Pass *pass, int layerID, bool bCreateIfNeeded)
 {
     CUresult res;
     CUarray cuArray = NULL;
@@ -74,13 +74,13 @@ Uniform*  UniformCUDA::update(ShadowedData* data, Pass *pass, int layerID, bool 
     case IUniform::TTexture3D:
     case IUniform::TTextureCube:
         //if(data && data->tex.pRes)
-            return updateTextures(data, pass, layerID, bBindProgram, bCreateIfNeeded);
+            return updateTextures(data, pass, layerID, bCreateIfNeeded);
         break;
         // TODO whenever necessary
     }
     return this;
 }
-Uniform*  UniformCUDA::updateTextures(ShadowedData* data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded)
+Uniform*  UniformCUDA::updateTextures(ShadowedData* data, Pass *pass, int layerID, bool bCreateIfNeeded)
 {
     CUresult res;
     CUarray cuArray = NULL;
@@ -156,17 +156,19 @@ Uniform*  UniformCUDA::updateTextures(ShadowedData* data, Pass *pass, int layerI
                 if(data && data->tex.pRes)
                     static_cast<ResourceCUDA*>(data->tex.pRes)->setupAsCUDATexture();
                 // update again now we found it
-                return UniformCUDA::updateForTarget(data, t);
+                return UniformCUDA::updateForTarget(data, i);
             }
         }
     }
     return this;
 }
 
-Uniform*  UniformCUDA::updateForTarget(ShadowedData* data, STarget &t, bool bBindProgram)
+Uniform*  UniformCUDA::updateForTarget(ShadowedData* data, int target)
 {
     CUresult res;
     CUarray cuArray = NULL;
+	UniformCUDA::STarget &t = m_targets[target];
+	m_activeTarget = target;
     if(data && data->tex.pRes)
     {
         cuArray = static_cast<ResourceCUDA*>(data->tex.pRes)->mapResource();

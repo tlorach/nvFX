@@ -242,10 +242,12 @@ void reshape(int w, int h)
 
     perspective(g_transfBlock1.m4_Proj, 45.0f, (float)g_winSz[0] / (float)g_winSz[1], PROJ_NEAR, PROJ_FAR);
 
-    bool failed = nvFX::getResourceRepositorySingleton()->validate(0,0,W,H,1,0,NULL ) ? false : true;
+    nvFX::getResourceRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
+    bool failed = nvFX::getResourceRepositorySingleton()->validateAll() ? false : true;
     if(failed)
         assert(!"Oops");
-    failed = nvFX::getFrameBufferObjectsRepositorySingleton()->validate(0,0,W,H,1,0,NULL ) ? false : true;
+    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,W,H,1,0,NULL );
+    failed = nvFX::getFrameBufferObjectsRepositorySingleton()->validateAll() ? false : true;
     if(failed)
         assert(!"Oops");
     if(fx_gViewportSizeI)
@@ -992,9 +994,11 @@ bool loadSceneEffect()
     //int H = fboBox?fboBox->getBufferHeight():g_winSz[1];
     int W = g_winSz[0];
     int H = g_winSz[1];
-    if(!nvFX::getResourceRepositorySingleton()->validate(0,0,W,H,1,0,(void*)(fboId) ))
+    nvFX::getResourceRepositorySingleton()->setParams(0,0,W,H,1,0,(void*)(fboId) );
+    if(!nvFX::getResourceRepositorySingleton()->validateAll() )
         return false;
-    if(!nvFX::getFrameBufferObjectsRepositorySingleton()->validate(0,0,W,H,1,0,(void*)(fboId) ))
+    nvFX::getFrameBufferObjectsRepositorySingleton()->setParams(0,0,W,H,1,0,(void*)(fboId) );
+    if(!nvFX::getFrameBufferObjectsRepositorySingleton()->validateAll() )
         return false;
     //
     // Load possible textures

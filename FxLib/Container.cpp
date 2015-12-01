@@ -469,7 +469,7 @@ IShader* Container::createCUDAShader(const char *name, bool bGlobal)
             pShdRep->addShader(p);
         }
     } else {
-        p = new_ShaderCUDA(name, this);
+        p = new_ShaderCUDA(name);
         p->addUser(this);
         if(!p)
             return NULL;
