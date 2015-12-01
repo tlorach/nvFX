@@ -42,8 +42,8 @@
 
 //--------------- models : try a heavy one (if installed)
 // or fallback to a lightweight one if not found
-#define MODEL1 "gargoyle_v133.bk3d.gz"
-#define MODEL2 "teapot_v133.bk3d.gz"
+#define MODEL1 "gargoyle_v134.bk3d.gz"
+#define MODEL2 "NVShaderBall_134.bk3d.gz"
 #define EFFECTFILE "OpenGLLigthingEffect.glslfx"
 //---------------------------------------------------
 
@@ -625,7 +625,7 @@ void initGL()
         vec3 meshMin(pMesh->aabbox.min);
         vec3 meshMax(pMesh->aabbox.max);
         if(pMesh->pTransforms && pMesh->pTransforms->n == 1)
-            matModel = mat4(pMesh->pTransforms->p[0]->abs_matrix);
+            matModel = mat4(pMesh->pTransforms->p[0]->MatrixAbs());
         else
             matModel.identity();
         meshMin = matModel * meshMin;
@@ -917,7 +917,7 @@ void display()
         // if more than one transf, skip it : this might be a list of skeleton transformations
         if(pMesh->pTransforms && pMesh->pTransforms->n == 1)
         {
-            g_transfBlock2.m4_World = mat4(pMesh->pTransforms->p[0]->abs_matrix);
+            g_transfBlock2.m4_World = mat4(pMesh->pTransforms->p[0]->MatrixAbs());
             g_transfBlock2.m4_WorldView = g_transfBlock1.m4_View * g_transfBlock2.m4_World;
             g_transfBlock2.m4_WorldViewProj = g_transfBlock1.m4_Proj * g_transfBlock2.m4_WorldView;
             //g_transfBlock2.m4_WorldIT = ... todo;
@@ -978,7 +978,7 @@ void display()
             // the absolute value must be available by default
             if(pPG->pTransforms && pPG->pTransforms->n > 0)
             {
-                g_transfBlock2.m4_World = mat4(pPG->pTransforms->p[0]->abs_matrix);
+                g_transfBlock2.m4_World = mat4(pPG->pTransforms->p[0]->MatrixAbs());
                 g_transfBlock2.m4_WorldView = g_transfBlock1.m4_View * g_transfBlock2.m4_World;
                 g_transfBlock2.m4_WorldViewProj = g_transfBlock1.m4_Proj * g_transfBlock2.m4_WorldView;
                 //g_transfBlock2.m4_WorldIT = ... todo;
@@ -1006,10 +1006,10 @@ void display()
                 MaterialBlock* p;
                 fx_materialBlock->mapBuffer((void**)&p);
                 // small issue with original modell (has a black material by default...)
-                if(pMat->diffuse[0]==0.0==pMat->diffuse[1]==pMat->diffuse[2])
-                    pMat->diffuse[0]=pMat->diffuse[1]=pMat->diffuse[2]= 0.7f;
+                if(pMat->Diffuse()[0]==0.0==pMat->Diffuse()[1]==pMat->Diffuse()[2])
+                    pMat->Diffuse()[0]=pMat->Diffuse()[1]=pMat->Diffuse()[2]= 0.7f;
                 // simply copy of the data as they are in the original model memory
-                memcpy(p, pMat->diffuse, sizeof(MaterialBlock));
+                memcpy(p, pMat->Diffuse(), sizeof(MaterialBlock));
                 fx_materialBlock->unmapBuffer();
             }
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (long)pPG->userPtr);

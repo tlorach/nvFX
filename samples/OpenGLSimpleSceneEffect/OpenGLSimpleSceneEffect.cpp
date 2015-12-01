@@ -743,7 +743,7 @@ void loadModel()
     // Load a model
     const char* p = RESOURCE_DIR;
     //---------------
-    #define MODEL "gargoyle_v133.bk3d.gz"
+    #define MODEL "gargoyle_v134.bk3d.gz"
     //---------------
     LOGI("Loading Mesh... " MODEL "\n");
     meshFile = bk3d::load(MODEL);
@@ -802,7 +802,7 @@ void loadModel()
         vec3 meshMin(pMesh->aabbox.min);
         vec3 meshMax(pMesh->aabbox.max);
         if(pMesh->pTransforms && pMesh->pTransforms->n == 1)
-            matModel = mat4(pMesh->pTransforms->p[0]->abs_matrix);
+            matModel = mat4(pMesh->pTransforms->p[0]->MatrixAbs());
         else
             matModel.identity();
         meshMin = matModel * meshMin;
@@ -1023,7 +1023,7 @@ void displayScene(nvFX::PassInfo &pr)
         // if more than one transf, skip it : this might be a list of skeleton transformations
         if(pMesh->pTransforms && pMesh->pTransforms->n == 1)
         {
-            g_transfBlock2.m4_World = mat4(pMesh->pTransforms->p[0]->abs_matrix);
+            g_transfBlock2.m4_World = mat4(pMesh->pTransforms->p[0]->MatrixAbs());
             g_transfBlock2.m4_WorldView = g_transfBlock1.m4_View * g_transfBlock2.m4_World;
             g_transfBlock2.m4_WorldViewProj = g_transfBlock1.m4_Proj * g_transfBlock2.m4_WorldView;
             //g_transfBlock2.m4_WorldIT = ... todo;
@@ -1075,7 +1075,7 @@ void displayScene(nvFX::PassInfo &pr)
             // the absolute value must be available by default
             if(pPG->pTransforms && pPG->pTransforms->n > 0)
             {
-                g_transfBlock2.m4_World = mat4(pPG->pTransforms->p[0]->abs_matrix);
+                g_transfBlock2.m4_World = mat4(pPG->pTransforms->p[0]->MatrixAbs());
                 g_transfBlock2.m4_WorldView = g_transfBlock1.m4_View * g_transfBlock2.m4_World;
                 g_transfBlock2.m4_WorldViewProj = g_transfBlock1.m4_Proj * g_transfBlock2.m4_WorldView;
                 //g_transfBlock2.m4_WorldIT = ... todo;
@@ -1090,7 +1090,7 @@ void displayScene(nvFX::PassInfo &pr)
 
             bk3d::Material *pMat = pPG->pMaterial;
             //if(pMat && g_bUseMaterial)
-            //    glColor3f(pMat->diffuse[0], pMat->diffuse[1], pMat->diffuse[2]);
+            //    glColor3f(pMat->Diffuse()[0], pMat->Diffuse()[1], pMat->Diffuse()[2]);
             //else
             //    glColor3f(0.8f, 0.6f, 0.6f);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (GLuint)pPG->userPtr);
