@@ -19,7 +19,7 @@
 #define TECH_DEFAULT 2 // we assume 0 and 1 are for init and grid floor
 #define MATERIAL_EFFECT "materialEffect.glslfx"
 #define SCENE_EFFECT "OpenGL_GLSLCompute.glslfx"
-#define MODEL "gargoyle_v133.bk3d.gz"
+#define MODEL "gargoyle_v134.bk3d.gz"
 #define PROJ_NEAR   0.01f
 #define PROJ_FAR    10.0f
 
@@ -1113,7 +1113,7 @@ void loadModel()
         vec3 meshMin(pMesh->aabbox.min);
         vec3 meshMax(pMesh->aabbox.max);
         if(pMesh->pTransforms && pMesh->pTransforms->n == 1)
-            matModel = mat4(pMesh->pTransforms->p[0]->abs_matrix);
+            matModel = mat4(pMesh->pTransforms->p[0]->MatrixAbs());
         else
             matModel.identity();
         meshMin = matModel * meshMin;
@@ -1145,9 +1145,9 @@ void loadModel()
     // TODO... the idea: load texture resources needed by the mesh. But this sample doesn't suffer from not doing it
     if(g_meshFile->pMaterials)
     {
-        for(int i=0; i<g_meshFile->pMaterials->n; i++)
+        for(int i=0; i<g_meshFile->pMaterials->nMaterials; i++)
         {
-            bk3d::Material* pMat = g_meshFile->pMaterials->p[i];
+            bk3d::Material* pMat = g_meshFile->pMaterials->pMaterials[i];
             if(pMat->diffuseTexture.filename)
             {
                 LOGI("model needs diffuse texture %s...\n", pMat->diffuseTexture.filename);
@@ -1539,7 +1539,7 @@ void displayScene(nvFX::PassInfo &pr, bool useeffect=true, int instancing=0)
         // if more than one transf, skip it : this might be a list of skeleton transformations
         if(pMesh->pTransforms && pMesh->pTransforms->n == 1)
         {
-            g_transfBlock2.m4_World = mat4(pMesh->pTransforms->p[0]->abs_matrix);
+            g_transfBlock2.m4_World = mat4(pMesh->pTransforms->p[0]->MatrixAbs());
             g_transfBlock2.m4_WorldView = g_transfBlock1.m4_View * g_transfBlock2.m4_World;
             g_transfBlock2.m4_WorldViewProj = g_transfBlock1.m4_Proj * g_transfBlock2.m4_WorldView;
             mat4 WI;
@@ -1596,7 +1596,7 @@ void displayScene(nvFX::PassInfo &pr, bool useeffect=true, int instancing=0)
             bk3d::PrimGroup* pPG = pMesh->pPrimGroups->p[pg];
             if(pPG->pTransforms && pPG->pTransforms->n > 0)
             {
-                g_transfBlock2.m4_World = mat4(pPG->pTransforms->p[0]->abs_matrix);
+                g_transfBlock2.m4_World = mat4(pPG->pTransforms->p[0]->MatrixAbs());
                 g_transfBlock2.m4_WorldView = g_transfBlock1.m4_View * g_transfBlock2.m4_World;
                 g_transfBlock2.m4_WorldViewProj = g_transfBlock1.m4_Proj * g_transfBlock2.m4_WorldView;
                 mat4 WI;

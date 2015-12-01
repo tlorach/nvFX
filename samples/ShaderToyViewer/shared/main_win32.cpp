@@ -89,7 +89,7 @@ void APIENTRY myOpenGLCallback(  GLenum source,
                         GLenum severity,
                         GLsizei length,
                         const GLchar* message,
-                        GLvoid* userParam)
+                        const GLvoid* userParam)
 {
     //static std::map<GLuint, bool> ignoreMap;
     //if(ignoreMap[id] == true)
