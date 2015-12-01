@@ -602,7 +602,7 @@ void initGL()
         vec3 meshMin(pMesh->aabbox.min);
         vec3 meshMax(pMesh->aabbox.max);
         if(pMesh->pTransforms && pMesh->pTransforms->n == 1)
-            matModel = mat4(pMesh->pTransforms->p[0]->abs_matrix);
+            matModel = mat4(pMesh->pTransforms->p[0]->MatrixAbs());
         else
             matModel.identity();
         meshMin = matModel * meshMin;
