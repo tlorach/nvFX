@@ -210,8 +210,10 @@ bool ResourceCUDA::setupAsCUDATarget()
     if(m_dptr)
     {
         res = cuMemFree(m_dptr);
-        if(res)
+        if(res) {
+			LOGE("cuMemFree Failed for resource %s\n", m_name.c_str() );
             return false;
+		}
     }
     res = cuMemAllocPitch( &m_dptr, &m_pitch, m_xByteSz, m_creationData.sz[1], 4);
     if(res)
@@ -270,6 +272,8 @@ bool ResourceCUDA::setupAsCUDATexture()
     //res = cuGraphicsUnregisterResource(m_cudaResource);
     if(m_OGLId == 0)
         validate();
+    if(m_OGLId == 0)
+        return false;
     switch(m_type)
     {
     case RESTEX_1D:
@@ -301,7 +305,7 @@ bool ResourceCUDA::setupAsCUDATexture()
     if(res)
     {
         LOGE("Failed to register the texture %s for CUDA (as Read only)\n", m_name.c_str());
-        return 0;
+        return false;
     }
     return true;
 }
