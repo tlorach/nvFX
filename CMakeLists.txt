@@ -117,7 +117,7 @@ if(USE_OPENGL)
       find_package(GLEW REQUIRED)
   endif()
   # ===============> OPTIX
-  if(USE_OPTIX AND OPTIX_FOUND)
+  if(USE_OPTIX)
     find_package(OPTIX)
     if(OPTIX_FOUND)
         add_definitions(
