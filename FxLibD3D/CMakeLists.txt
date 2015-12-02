@@ -5,9 +5,9 @@ include_directories(
 "../FxLib"
 "${DXSDK_INCLUDE_DIR}")
 
-if(CUDA_INCLUDE_DIRS)
+if(CUDA_INCLUDE_DIR)
   include_directories(
-    "${CUDA_INCLUDE_DIRS}"
+    "${CUDA_INCLUDE_DIR}"
     "../FxLibD3D")
 endif()
 

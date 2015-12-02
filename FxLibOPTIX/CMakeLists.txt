@@ -6,10 +6,13 @@ include_directories(
 "../FxLibOPTIX"
 "${GLEW_INCLUDE_DIR}")
 
-if(OPTIX_INCLUDE_DIRS)
+if(OPTIX_INCLUDE_DIR)
   include_directories(
-    "${OPTIX_INCLUDE_DIRS}"
-    "../FxLibOPTIX")
+    "${OPTIX_INCLUDE_DIR}"
+    "${CUDA_INCLUDE_DIR}"
+    "../FxLibOPTIX"
+    "../FxLibGL"
+    "../FxLibCUDA")
 endif()
 
 set(PUBLIC_HEADERS
