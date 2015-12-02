@@ -38,7 +38,11 @@ using namespace nvFX;
 
 namespace nvFX
 {
+	// TODO: Need to find a more flexible way to expose these parameters
+	// easiest would be to add them in the effect as additional arguments...
+
     // you MUST use "call" if you want system() to work under Windows (!!?!?!!! @@!#$@#!?!?!!!)
+	// TODO: need to see how can CUDA avoid this dependency to C/C++ compiler
     const char *NVCC = "call \"%CUDA_BIN_PATH%\\nvcc.exe\"";
     const char *optiXIncPath = "%OPTIX_INC_PATH%";
     const char *tempPath = "C:\\tmp";//"%TEMP%";
@@ -60,9 +64,9 @@ void delete_ProgramCUDA(IProgram *pProg)
     delete p;
 }
 
-Shader* new_ShaderCUDA(const char* name, Container *pCont)
+Shader* new_ShaderCUDA(const char* name)
 {
-    return new CUDAShader(name, pCont);
+    return new CUDAShader(name);
 }
 void delete_ShaderCUDA(IShader *pShd)
 {
