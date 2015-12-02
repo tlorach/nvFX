@@ -38,14 +38,18 @@ using namespace nvFX;
 
 namespace nvFX
 {
+	// TODO: Need to find a more flexible way to expose these parameters
+	// easiest would be to add them in the effect as additional arguments...
+	// TODO: need to see how can CUDA avoid this dependency to C/C++ compiler
     // you MUST use "call" if you want system() to work under Windows (!!?!?!!! @@!#$@#!?!?!!!)
-    const char *NVCC = "call \"%CUDA_BIN_PATH%\\nvcc.exe\"";
+    const char *NVCC = "call nvcc.exe";
+    //const char *NVCC = "call \"%CUDA_BIN_PATH%\\nvcc.exe\"";
     const char *optiXIncPath = "%OPTIX_INC_PATH%";
     const char *tempPath = "C:\\tmp";//"%TEMP%";
-    const char *ccbin = " -ccbin=\"C:\\Program Files (x86)\\Microsoft Visual Studio 9.0\\VC\" ";
-    const char *compileCUDACmdCubin = " -gencode=arch=compute_10,code=sm_10 -use_fast_math -maxrregcount=32 -gencode=arch=compute_10,code=sm_10 -cubin -o \"FILET\" \"FILES\"";
-    const char *compileCUDACmdPTX = " -gencode=arch=compute_10,code=sm_10 -use_fast_math -maxrregcount=32 -gencode=arch=compute_10,code=sm_10 -ptx -o \"FILET\" \"FILES\"";
-    const char *compileCUDAOptiXCmd = " -gencode=arch=compute_10,code=sm_10 -use_fast_math -maxrregcount=32 -gencode=arch=compute_10,code=sm_10 -ptx -o \"FILET\" \"FILES\"";;
+    const char *ccbin = " -ccbin=\"C:\\Program Files (x86)\\Microsoft Visual Studio 11.0\\VC\" ";
+    const char *compileCUDACmdCubin = " -gencode=arch=compute_20,code=sm_20 -use_fast_math -maxrregcount=32 -cubin -o \"FILET\" \"FILES\"";
+    const char *compileCUDACmdPTX = " -gencode=arch=compute_20,code=sm_20 -use_fast_math -maxrregcount=32 -ptx -o \"FILET\" \"FILES\"";
+    const char *compileCUDAOptiXCmd = " -gencode=arch=compute_20,code=sm_20 -use_fast_math -maxrregcount=32 -ptx -o \"FILET\" \"FILES\"";;
 
 CUdevice    cudaDevice  = NULL;
 CUcontext   cudaContext = NULL;
