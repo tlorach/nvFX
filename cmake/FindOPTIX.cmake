@@ -17,7 +17,8 @@ if (WIN32)
         PATHS
             ${OPTIX_PATH}/include
             $ENV{OPTIX_PATH}/include
-            $ENV{PROGRAMFILES}/NVIDIA Corporation/OptiX SDK 3.0.0/include
+            ${OptiX_INSTALL_DIR}/include
+            $ENV{OptiX_INSTALL_DIR}/include
             ${PROJECT_SOURCE_DIR}/extern/optix/include
             ${OPTIX_PATH}
             $ENV{OPTIX_PATH}
@@ -31,7 +32,6 @@ if (WIN32)
               ${OPTIX_PATH}/lib/x86
               ${OPTIX_PATH}/lib/win32
               $ENV{OPTIX_PATH}/lib
-              $ENV{PROGRAMFILES}/NVIDIA Corporation/OptiX SDK 3.0.0/lib
               ${PROJECT_SOURCE_DIR}/extern/optix/lib
               ${PROJECT_SOURCE_DIR}/extern/optix/lib/x86
               ${PROJECT_SOURCE_DIR}/extern/optix/lib/win32
@@ -45,7 +45,8 @@ if (WIN32)
           PATHS
               ${OPTIX_PATH}/lib64
               $ENV{OPTIX_PATH}/lib64
-              $ENV{PROGRAMFILES}/NVIDIA Corporation/OptiX SDK 3.0.0/lib64
+              ${OptiX_INSTALL_DIR}/lib64
+              $ENV{OptiX_INSTALL_DIR}/lib64
               ${PROJECT_SOURCE_DIR}/extern/optix/lib64
               ${PROJECT_SOURCE_DIR}/extern/optix/lib/x64
               DOC "The OPTIX library")
@@ -59,6 +60,8 @@ if (${CMAKE_HOST_UNIX})
         PATHS
             ${OPTIX_PATH}/include
             $ENV{OPTIX_PATH}/include
+            ${OptiX_INSTALL_DIR}/include
+            $ENV{OptiX_INSTALL_DIR}/include
             /usr/include
             /usr/local/include
             /sw/include
@@ -72,6 +75,8 @@ if (${CMAKE_HOST_UNIX})
         PATHS
             ${OPTIX_PATH}/lib
             $ENV{OPTIX_PATH}/lib
+            ${OptiX_INSTALL_DIR}/lib
+            $ENV{OptiX_INSTALL_DIR}/lib
             /usr/lib64
             /usr/lib
             /usr/local/lib64
