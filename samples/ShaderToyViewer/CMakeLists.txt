@@ -8,7 +8,6 @@ set(NV_MATH_SOURCE_LOCAL "${NV_MATH_DIR_LOCAL}/nv_math.cpp")
 set(PLATFORM_LIBRARIES
     ${NVFX_LIBS}
     ${OPENGL_LIBRARY}
-    ${GLEW_LIBRARY}
     ${NSIGHT_LIB}
     ${CUDA_LIB}
 )

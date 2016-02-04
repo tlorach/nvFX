@@ -3,7 +3,6 @@ Project(OpenGLUniformUpdateExample)
 set(PLATFORM_LIBRARIES
     ${NVFX_LIBS}
     ${OPENGL_LIBRARY}
-    ${GLEW_LIBRARY}
     ${CUDA_LIB}
     ${NSIGHT_LIB}
 )

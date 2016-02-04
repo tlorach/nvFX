@@ -3,7 +3,6 @@ Project(OpenGLSimpleSceneEffect)
 set(PLATFORM_LIBRARIES
     ${NVFX_LIBS}
     ${OPENGL_LIBRARY}
-    ${GLEW_LIBRARY}
     ${CUDA_LIB}
     ${ZLIB_LIBRARIES}
     ${NSIGHT_LIB}

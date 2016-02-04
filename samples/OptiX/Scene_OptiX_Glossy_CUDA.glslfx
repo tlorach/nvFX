@@ -1,0 +1,396 @@
+//--------------------------------------------------------------------------------------
+// Author: Tristan Lorach
+// Email: tlorach@nvidia.com
+//
+// Copyright (c) NVIDIA Corporation 2013
+//
+// TO  THE MAXIMUM  EXTENT PERMITTED  BY APPLICABLE  LAW, THIS SOFTWARE  IS PROVIDED
+// *AS IS*  AND NVIDIA AND  ITS SUPPLIERS DISCLAIM  ALL WARRANTIES,  EITHER  EXPRESS
+// OR IMPLIED, INCLUDING, BUT NOT LIMITED  TO, IMPLIED WARRANTIES OF MERCHANTABILITY
+// AND FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL  NVIDIA OR ITS SUPPLIERS
+// BE  LIABLE  FOR  ANY  SPECIAL,  INCIDENTAL,  INDIRECT,  OR  CONSEQUENTIAL DAMAGES
+// WHATSOEVER (INCLUDING, WITHOUT LIMITATION,  DAMAGES FOR LOSS OF BUSINESS PROFITS,
+// BUSINESS INTERRUPTION, LOSS OF BUSINESS INFORMATION, OR ANY OTHER PECUNIARY LOSS)
+// ARISING OUT OF THE  USE OF OR INABILITY  TO USE THIS SOFTWARE, EVEN IF NVIDIA HAS
+// BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+//
+#extension GL_ARB_separate_shader_objects : enable
+//////////////////////////////////////////////////////////////
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 420 compatibility
+}
+//--------------------------------------------------------------------------------------
+// uniform int2		gViewportSize	: APPSCREENSIZE;
+// uniform float2		gViewportSizeI	: APPSCREENSIZEI;
+// uniform int2		AA				: APPAAMODE = int2(4,0);
+//--------------------------------------------------------------------------------------
+//	Fullscreen quad Vertex shader
+//--------------------------------------------------------------------------------------
+GLSLShader fullscreenquadVSasUVVS
+{
+    layout(location=0) in vec4 Position;
+	layout(location=1) in 	vec2 UV;
+	layout(location=0) out 	vec2 TexCoord;
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+	void main()
+	{
+		TexCoord = Position.xy;
+		gl_Position = Position;
+	}
+}
+//--------------------------------------------------------------------------------------
+//	Simple texture fetch
+//--------------------------------------------------------------------------------------
+uniform sampler2D resultSampler;
+GLSLShader fullscreenquadVSasUVPS
+{
+	layout(location=0) in  vec4 tc;
+	layout(location=0) out vec4 color;
+	void main()
+	{
+		vec2 uv = (tc.xy / tc.w)*0.5 + 0.5;
+		color = texture(resultSampler, uv);
+	}
+}
+
+//------------------------------------------------------
+// This one will receive the result from Optix reflection Computation
+RenderTexture OptiX_Result_Tex
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA32F;
+}
+
+SamplerState linearSampler
+{
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+
+//--------------------------------------------
+// FBO for the result of OptiX rendering
+FBO OptiX_Result_Tex_FBO
+{
+    Color = OptiX_Result_Tex;
+    //DepthStencil = ;
+}
+//--------------------------------------------------------------
+PTXProgramFromFile OptiX_prog_adaptive_pinhole_camera
+{
+    FileName = "adaptive_pinhole_camera.ptx";
+	EntryPoint = "pinhole_camera";
+};
+PTXProgramFromFile OptiX_prog_adaptive_pinhole_camera_ex
+{
+    FileName = "adaptive_pinhole_camera.ptx";
+	EntryPoint = "exception";
+};
+
+PTXProgramFromFile OptiX_prog_pinhole_camera
+{
+    FileName = "pinhole_camera.ptx";
+	EntryPoint = "pinhole_camera";
+};
+PTXProgramFromFile OptiX_prog_pinhole_camera_ex
+{
+    FileName = "pinhole_camera.ptx";
+	EntryPoint = "exception";
+};
+
+PTXProgramFromFile OptiX_prog_gradientbg
+{
+    FileName = "gradientbg.ptx";
+	EntryPoint = "miss";
+};
+
+PTXProgramFromFile OptiX_prog_triangle_mesh_iterative
+{
+    FileName = "triangle_mesh_iterative.ptx";
+	EntryPoint = "mesh_intersect";
+};
+
+PTXProgramFromFile OptiX_prog_triangle_mesh_bounds
+{
+    FileName = "triangle_mesh_iterative.ptx";
+	EntryPoint = "mesh_bounds";
+};
+
+PTXProgramFromFile OptiX_prog_glossy_closest_hit_radiance
+{
+    FileName = "glass.ptx";
+	EntryPoint = "closest_hit_radiance";
+};
+
+PTXProgramFromFile OptiX_prog_glossy_any_hit_shadow
+{
+    FileName = "glass.ptx";
+	EntryPoint = "any_hit_shadow";
+};
+
+PTXProgramFromFile OptiX_prog_closest_hit_radiance2
+{
+	FileName = "glossy.ptx";
+	EntryPoint = "closest_hit_radiance";
+};
+
+PTXProgramFromFile OptiX_prog_any_hit_shadow2
+{
+	FileName = "glossy_isg.ptx";
+	EntryPoint = "any_hit_shadow";
+};
+
+//--------------------------------------------------------------------------------------
+// Define Buffers. This doesn't create them
+// It only contains the definition. Then the OptiX context would create them by reference
+//
+OptixBuffer OptiX_float4_buffer
+{
+	Size = { 12,13};
+	Format = RGBA32F;//RT_FORMAT_FLOAT4;
+	//Usage = RT_BUFFER_INPUT_OUTPUT;
+	//InitialVal = {0,0,0,0};
+};
+OptixBuffer OptiX_uint_buffer
+{
+	Size = ApplicationDefined;
+	Format = RGBA8;//RED32UI;//RT_FORMAT_UNSIGNED_INT;
+	//Usage = RT_BUFFER_INPUT_OUTPUT;
+};
+
+uniform int compute_shadow_
+<
+  uimin = 0;
+  uimax = 1;
+> = 0;
+uniform float forced_transparency
+<
+  uimin = 0.0;
+  uimax = 1.0;
+> = 0.0f;
+uniform float glossy_reflect_wash
+<
+  uimin = 0.0;
+  uimax = 1.0;
+> = 1.0f;
+uniform float glossy_refract_wash
+<
+  uimin = 0.0;
+  uimax = 1.0;
+> = 0.6f;
+uniform float glossy_fresnel_exp
+<
+  uimin = 0.0;
+  uimax = 10.0;
+>		= 4.0f;
+uniform float glossy_fresnel_min
+<
+  uimin = 0.0;
+  uimax = 1.0;
+>		= 0.1f;
+uniform float glossy_fresnel_max
+<
+  uimin = 0.0;
+  uimax = 2.0;
+>		= 1.0f;
+uniform float glossy_refraction_idx
+<
+  uimin = 1.0;
+  uimax = 4.0;
+>		= 1.4f;
+uniform int refr_bounces
+<
+  uimin = 1;
+  uimax = 10;
+>		= 10;
+uniform int refl_bounces
+<
+  uimin = 1;
+  uimax = 10;
+>		= 5;
+
+//#define RAY_CLOSESTHIT 0
+//#define RAY_SHADOWCAST 1
+//--------------------------------------------------------------------------------------
+// define a material
+//
+OptixMaterial OptiX_glossyMat
+{
+	// ray types in int2... : RAY_CLOSESTHIT=0; RAY_SHADOWCAST=1
+	ClosestHitProgram =	{
+		OptiX_prog_closest_hit_radiance2,
+		NONE
+	};
+	AnyHitProgram = {
+		NONE,
+		OptiX_prog_any_hit_shadow2
+	};
+
+	Uniform(compute_shadow) = compute_shadow_;
+	Uniform(importance_cutoff)		= 0.01;
+	Uniform(cutoff_color)			= { 0.2f, 0.2f, 0.2f };
+	Uniform(fresnel_exponent)		= glossy_fresnel_exp;//4.0f;
+	Uniform(fresnel_minimum)		= glossy_fresnel_min;//0.1f;
+	Uniform(fresnel_maximum)		= glossy_fresnel_max;//1.0f;
+	Uniform(refraction_index)		= glossy_refraction_idx;//1.4f;
+	Uniform(refraction_wash)		= glossy_refract_wash;
+	Uniform(reflection_wash)		= glossy_reflect_wash;
+	Uniform(forced_transp)			= forced_transparency; // for debug...
+	Uniform(refraction_maxdepth)	= refr_bounces;
+	Uniform(reflection_maxdepth)	= refl_bounces;
+	Uniform(extinction)				= {0.95f, 0.99f, 0.95f};
+	Uniform(extinction_constant)	= {/*log(0.95)*/-0.022276, /*log(0.99)*/-0.00436, /*log(0.95)*/-0.022276}; // TODO: Log etc.
+}
+
+
+// 2 Entry points
+//#define RAY_CAMERA 0
+//#define RAY_ADAPTATIVE_CAMERA 1
+//--------------------------------------------------------------------------------------
+// Define an Optix Context : a correct setup to run something
+//
+ OptixContext OptiX_RayTrace_Glossy
+{
+	//
+	// Optix-specific
+	//
+    RayGenerationProgram = {
+    	OptiX_prog_pinhole_camera, 
+    	OptiX_prog_adaptive_pinhole_camera
+    };
+    ExceptionProgram = {
+    	OptiX_prog_pinhole_camera_ex,
+    	OptiX_prog_adaptive_pinhole_camera_ex
+    };
+
+	IntersectionProgram = OptiX_prog_triangle_mesh_iterative;
+	BoundingBoxProgram	= OptiX_prog_triangle_mesh_bounds;
+	// has many entry points. Defining it for RAY_CLOSESTHIT=0
+	MissProgram			= OptiX_prog_gradientbg;
+	// SHALL we assign materials here ?
+	// Should be associated to the instance geometry's material...
+	//int DefaultMaterial		= OptiX_checkerboardMat;
+	DefaultMaterial		= OptiX_glossyMat;
+
+	StackSize = 4096;
+
+	//
+	// custom variables
+	//
+	//float3 eye_pos = EyePos; // CBuffer0.viewIT[3].xyz... changing every frame... should be somewhere else
+	Uniform(scene_epsilon)	= 0.001; // TODO: allow to write 1e-3f;
+	Uniform(max_depth)			= 10;
+	Uniform(radiance_ray_type)	= RAY_CLOSESTHIT;
+	Uniform(shadow_ray_type)	= RAY_SHADOWCAST;
+	Uniform(frame_number)		= 0; // TODO: attach it to App value
+	Uniform(compute_shadow)		= {1,0};
+	Uniform(reflection_decay)	= 0.0;
+
+	// camera data : should be updated every frame
+	Uniform(up)				= { -0.816f, 0.4082f, -0.4082f };
+	Uniform(eye)			= { 14,14,14 };
+	Uniform(U)				= { 8.20, 0, -8.20 };
+	Uniform(V)				= { -2.05, 8.20, -2.05 };
+	Uniform(W)				= { -14, -7, -14 };
+
+	Uniform(bad_color)		= { 0.0f, 0.0f, 0.0f };
+	Uniform(background_light)	= { 1.0f, 1.0f, 1.0f };
+	Uniform(background_dark)	= { 0.3f, 0.3f, 0.3f };
+
+	// Custom list of buffers
+	Uniform(variance_sum_buffer) = OptiX_float4_buffer;
+	Uniform(variance_sum2_buffer) = OptiX_float4_buffer;
+	Uniform(num_samples_buffer)	= OptiX_uint_buffer;
+	Uniform(rnd_seeds)			= OptiX_uint_buffer;
+
+	// other 'custom' keywords (keywords depending on PTX files) for in/out
+	// connect the output buffer with a resource (RB or textures)
+	OutputBuffer = OptiX_Result_Tex;
+	// or:
+	//int OUTPUT0 = OptiX_Result_Tex;
+	// 
+}
+
+
+////////////////////////////////////////////////////////////
+/////////////////////////////////////// techniques /////////
+////////////////////////////////////////////////////////////
+Technique OptiX_Glossy_RayTrace_Adaptative
+<
+	requireOptiX = true;
+>
+{
+	// ------------------------------
+	// OPTIX: trigger the ray tracing
+	//
+	// Example of doing it in one single OptiX call
+	Pass OptiX_RayTrace
+	{
+		ClearColor = {0.0, 0.0, 0.0, 0.0};
+		ClearMode = color;
+		CurrentTarget = OptiX_Result_Tex_FBO;
+		// call arbitrary OptiX code like this:
+		OptixContext = OptiX_RayTrace_Glossy;
+		OptixContextEntry = 1/*RAY_ADAPTATIVE_CAMERA*/;
+		RenderMode = Optix;
+	}
+	//
+	// display the result ray tracing
+	//
+	Pass display
+	{
+		BLEND = false;
+		DEPTH_TEST = false;
+		CurrentTarget = backbuffer;
+		RenderMode = render_fullscreen_quad;
+		VertexProgram = fullscreenquadVSasUVVS;
+		SamplerResource(resultSampler) = OptiX_Result_Tex;
+		SamplerState(resultSampler) = linearSampler;
+		FragmentProgram = fullscreenquadVSasUVPS;
+	}
+}
+
+
+
+Technique OptiX_Glossy_RayTrace
+<
+	requireOptiX = true;
+>
+{
+	// ------------------------------
+	// OPTIX: trigger the ray tracing
+	//
+	// Example of doing it in one single OptiX call
+	Pass OptiX_RayTrace
+	{
+		ClearColor = {0.0f, 0.0f, 0.0f, 0.f};
+		ClearMode = color;
+		CurrentTarget = OptiX_Result_Tex_FBO;
+		// call arbitrary OptiX code like this:
+		OptixContext = OptiX_RayTrace_Glossy;
+		OptixContextEntry = 0/*RAY_CAMERA*/;
+		RenderMode = Optix;
+	}
+	//
+	// display the result ray tracing
+	//
+	Pass display
+	{
+		BLEND = false;
+		DEPTH_TEST = false;
+		CurrentTarget = backbuffer;
+		RenderMode = fullscreen_quad;
+		VertexProgram = fullscreenquadVSasUVVS;
+		SamplerResource(resultSampler) = OptiX_Result_Tex;
+		SamplerState(resultSampler) = linearSampler;
+		FragmentProgram = fullscreenquadVSasUVPS;
+	}
+}
+
