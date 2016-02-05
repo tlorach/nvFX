@@ -291,16 +291,8 @@ bool initGLBase()
             wglDeleteContext( g_hRC );
             g_hRC = hRC;
 #ifdef _DEBUG
-            if(!glDebugMessageCallbackARB)
-            {
-                glDebugMessageCallbackARB = (PFNGLDEBUGMESSAGECALLBACKARBPROC)wglGetProcAddress("glDebugMessageCallbackARB");
-                glDebugMessageControlARB =  (PFNGLDEBUGMESSAGECONTROLARBPROC)wglGetProcAddress("glDebugMessageControlARB");
-            }
-            if(glDebugMessageCallbackARB)
-            {
-                glDebugMessageCallbackARB(myOpenGLCallback, NULL);
-                glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_HIGH_ARB, 0, NULL, GL_TRUE);
-            }
+            glDebugMessageCallbackARB(myOpenGLCallback, NULL);
+            glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_HIGH_ARB, 0, NULL, GL_TRUE);
 #endif
         }
     }

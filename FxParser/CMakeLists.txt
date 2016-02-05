@@ -66,19 +66,18 @@ if(USE_DLLSO)
   set(PLATFORM_LIBRARIES
       ${NVFX_LIBS_PARSER}
       ${OPENGL_LIBRARY}
-      ${GLEW_LIBRARY}
       ${ZLIB_LIBRARIES}
       ${CUDA_LIBRARIES}
   )
   # Glew : source or lib
-  if(GLEW_SOURCE)
-    message(STATUS "found Glew source code. Using it instead of library")
-    LIST(APPEND SOURCE_FILES ${GLEW_SOURCE})
-    add_definitions(-DGLEW_STATIC)
-  else()
-      message(STATUS "using GLEW library")
-      LIST(APPEND PLATFORM_LIBRARIES ${GLEW_LIBRARY})
-  endif()
+  #if(GLEW_SOURCE)
+  #  message(STATUS "found Glew source code. Using it instead of library")
+  #  LIST(APPEND SOURCE_FILES ${GLEW_SOURCE})
+  #  add_definitions(-DGLEW_STATIC)
+  #else()
+  #    message(STATUS "using GLEW library")
+  #    LIST(APPEND PLATFORM_LIBRARIES ${GLEW_LIBRARY})
+  #endif()
   # GLUT
   if(USE_GLUT AND GLUT_FOUND)
     LIST(APPEND PLATFORM_LIBRARIES ${GLUT_LIBRARIES} )

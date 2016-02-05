@@ -43,7 +43,6 @@ if(USE_DLLSO)
   set(PLATFORM_LIBRARIES
       FxLib
       ${OPENGL_LIBRARY}
-      ${GLEW_LIBRARY}
       ${ZLIB_LIBRARIES}
       ${CUDA_LIBRARIES}
   )

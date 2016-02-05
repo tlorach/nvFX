@@ -3,9 +3,8 @@ Project(OpenGLSimpleEffect)
 set(PLATFORM_LIBRARIES
     ${NVFX_LIBS}
     ${OPENGL_LIBRARY}
-    ${GLEW_LIBRARY}
-    ${ZLIB_LIBRARIES}
     ${CUDA_LIB}
+    ${ZLIB_LIBRARIES}
     ${NSIGHT_LIB}
 )
 include_directories(
