@@ -195,6 +195,7 @@ endif()
 
 #include_directories(${NVFX_HOME})
 set(NVFX_LIBS FxLib)
+set(NVFX_BASE_LIBS FxLib)
 
 add_subdirectory( FxLib )
 # add this library to the list
@@ -216,10 +217,12 @@ if(USE_OPENGL)
 endif()
 if(USE_D3D AND WIN32)
   add_subdirectory( FxLibD3D )
+  set(NVFX_D3D_LIB FxLibD3D)
   list(APPEND NVFX_LIBS FxLibD3D)
 endif()
 add_subdirectory( FxParser )
 list(APPEND NVFX_LIBS FxParser)
+list(APPEND NVFX_BASE_LIBS FxParser)
 # for now, only available in Windows
 if(WIN32)
   add_subdirectory( nvFxcc )
