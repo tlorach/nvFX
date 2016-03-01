@@ -1376,6 +1376,10 @@ public:
     /// \arg \e x,y,w,h is the viewport of this backbuffer. It will allow some resources to be allocated accordingly to this
     /// \arg depthSamples and coverageSamples are MSAA+CSAA
     virtual bool    setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
+#ifdef WIN32
+    virtual const void* getDevice() = 0;
+    virtual void        setDevice(const void* pDev) = 0;
+#endif
     /// \brief (\b Invokes \b GFX \b API) creates the FBOs
     virtual bool    validateAll() = 0;
     /// \brief (\b Invokes \b GFX \b API) updates previously validated FBOs (if size changed etc)
@@ -1396,6 +1400,10 @@ public:
     /// \arg depthSamples and coverageSamples are MSAA+CSAA
     /// \arg \e pDev is essentially used in the case of D3D : D3D device.
     virtual bool        setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST=NULL, void *pDev=NULL) = 0;
+#ifdef WIN32
+    virtual const void* getDevice() = 0;
+    virtual void        setDevice(const void* pDev) = 0;
+#endif
     /// \brief (\b Invokes \b GFX \b API) validates all resources referenced by the effect(s), even those which are not used anywhere
     virtual bool        validateAll() = 0;
     /// \brief (\b Invokes \b GFX \b API) re-validates already validated resources: good if setParams changed anything
