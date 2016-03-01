@@ -67,7 +67,7 @@ UniformD3D::~UniformD3D()
  **  method invoked by update()
  **
  *************************************************************************/ 
-void UniformD3D::updateD3D(ShadowedData *pData, STarget &t, bool bBindProgram)
+void UniformD3D::updateD3D(ShadowedData *pData, STarget &t)
 {
     if(t.pass)
     {
@@ -222,7 +222,6 @@ void UniformD3D::updateD3D(ShadowedData *pData, STarget &t, bool bBindProgram)
                 assert(1);
                 break;
         }
-        //if(bBindProgram) glslProgram->unbind();
         t.dirty = false;
     }
 }
@@ -232,11 +231,11 @@ void UniformD3D::updateD3D(ShadowedData *pData, STarget &t, bool bBindProgram)
  **  update a uniform
  **
  *************************************************************************/ 
-Uniform*    UniformD3D::update2(ShadowedData* pData, Pass *pass, bool bBindProgram, bool bCreateIfNeeded)
+Uniform*    UniformD3D::update2(ShadowedData* pData, Pass *pass, bool bCreateIfNeeded)
 {
     int id;
     for(int i=0; (id=pass->getLayerId(i)) >= 0; i++)
-        update(pData, pass, id, bBindProgram, bCreateIfNeeded);
+        update(pData, pass, id, bCreateIfNeeded);
     return this;
 }
 /*************************************************************************
@@ -244,11 +243,11 @@ Uniform*    UniformD3D::update2(ShadowedData* pData, Pass *pass, bool bBindProgr
  **  update a uniform
  **
  *************************************************************************/ 
-Uniform*    UniformD3D::update(ShadowedData* pData, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded)
+Uniform*    UniformD3D::update(ShadowedData* pData, Pass *pass, int layerID, bool bCreateIfNeeded)
 {
     static bool msgOnceCstBuffer = true;
     if(layerID < 0)
-        return update2(pData, pass, bBindProgram, bCreateIfNeeded);
+        return update2(pData, pass, bCreateIfNeeded);
     for(int i=0; i<(int)m_targets.size(); i++)
     {
         STarget &t = m_targets[i];
@@ -265,11 +264,12 @@ Uniform*    UniformD3D::update(ShadowedData* pData, Pass *pass, int layerID, boo
             { // In this case we only update matching pass and return
                 if((t.pass == pass)&&(t.passLayerId == layerID))
                 {
-                    updateD3D(pData, t, bBindProgram);
+                    updateD3D(pData, t);
                     return this;
                 }
             } else {
-                updateD3D(pData, t, true/*bBindProgram*/); // if updating all, we need to bind programs in any case
+				// TODO avoroshilov: this call to updateD3D had bBindProgram forced to true, investigate this
+                updateD3D(pData, t); // if updating all, we need to bind programs in any case
                 LOGI(">Warning : uniform update for many targets at the same time... normal ?");
             }
         case TDXCOMPUTE:
@@ -315,7 +315,7 @@ Uniform*    UniformD3D::update(ShadowedData* pData, Pass *pass, int layerID, boo
             t.pBuffer = NULL;
             t.uniformLocation = -1;
             t.bufferIndex = 0;
-            updateD3D(pData, t, false);
+            updateD3D(pData, t);
             // add this target only if it is needed
             if(t.valid)
             {
@@ -345,8 +345,9 @@ Uniform*    UniformD3D::update(ShadowedData* pData, Pass *pass, int layerID, boo
     return this;
 }
 
-Uniform*    UniformD3D::updateForTarget(ShadowedData* pData, STarget &t, bool bBindProgram)
+Uniform*    UniformD3D::updateForTarget(ShadowedData* pData, int target)
 {
+	STarget& t = m_targets[target];
     static bool msgOnceCstBuffer = true;
     if(!t.valid)
         return this;
@@ -357,7 +358,7 @@ Uniform*    UniformD3D::updateForTarget(ShadowedData* pData, STarget &t, bool bB
     case THLSL_GS:
     case THLSL_HS:
     case THLSL_DS:
-        updateD3D(pData, t, bBindProgram);
+        updateD3D(pData, t);
         break;
     case TDXCOMPUTE:
         break;

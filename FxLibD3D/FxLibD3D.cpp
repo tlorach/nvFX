@@ -116,7 +116,7 @@ StateGroupPath *new_StateGroupPR(Container *pCont, const char* name)
 void delete_StateGroupPR(StateGroupPath *p)
 {
 }
-Shader* new_ShaderPath(const char* name, Container *pCont, bool bPostscript)
+Shader* new_ShaderPath(const char* name, bool bPostscript)
 {
     return NULL;
 }
@@ -136,17 +136,19 @@ void delete_Program(IProgram *pProg)
     delete p;
 }
 
-Shader* new_GLSLShader(const char* name, Container *pCont)
+Shader* new_GLSLShader(const char* name)
 {
     return NULL;
 }
-Shader* new_HLSL10Shader(const char* name, Container *pCont)
+Shader* new_HLSL10Shader(const char* name)
 {
-    return new D3DShader(name, pCont);
+	// TODO avoroshilov: trace where new_HLSL10Shader is called, and deal with containers there
+    return new D3DShader(name/*, pCont*/);
 }
-Shader* new_HLSL11Shader(const char* name, Container *pCont)
+Shader* new_HLSL11Shader(const char* name)
 {
-    return new D3DShader(name, pCont);
+	// TODO avoroshilov: trace where new_HLSL11Shader is called, and deal with containers there
+	return new D3DShader(name/*, pCont*/);
 }
 void     delete_Shader(IShader *pShd)
 {
@@ -357,23 +359,33 @@ int Pass::getD3DIASignatureSize()
 
 void Pass::setViewPort(int *viewport, float *viewportZ)
 {
-    ID3D10Device* pd3dDevice = (ID3D10Device*)nvFX::getDevice();
-    D3D10_VIEWPORT vp;
+#ifdef USE_D3D11
+	ID3D11DeviceContext *pd3d1X;
+	((ID3D1XDevice *)nvFX::getDevice())->GetImmediateContext(&pd3d1X);
+#else
+	ID3D1XDevice *pd3d1X = (ID3D1XDevice *)nvFX::getDevice();
+#endif
+	D3D1X_VIEWPORT vp;
     vp.TopLeftX = viewport[0];
     vp.TopLeftY = viewport[1];
     vp.Width = viewport[2];
     vp.Height = viewport[3];
     vp.MinDepth = viewportZ ? viewportZ[0] : 0.0f;
     vp.MaxDepth = viewportZ ? viewportZ[1] : 1.0f;
-    pd3dDevice->RSSetViewports(1, &vp);
+	pd3d1X->RSSetViewports(1, &vp);
 }
 
 /// \brief clears the viewport and eventually sets the clear color
 /// \arg numRTs : 0 means we are in the backbuffer. 1 to N means we address a FBO... yeah... lame
 void Pass::clearRenderTargets(PassInfo *pi)
 {
-    ID3D10Device* pd3dDevice = (ID3D10Device*)nvFX::getDevice();
-    int n=1;
+#ifdef USE_D3D11
+	ID3D11DeviceContext *pd3d1X;
+	((ID3D1XDevice *)nvFX::getDevice())->GetImmediateContext(&pd3d1X);
+#else
+	ID3D1XDevice *pd3d1X = (ID3D1XDevice *)nvFX::getDevice();
+#endif
+	int n=1;
     switch(pi->clearMode)
     {
     case Clear_all:
@@ -385,13 +397,13 @@ void Pass::clearRenderTargets(PassInfo *pi)
             for(int i=0; i<(int)n; i++)
             {
                 ResourceD3D* pRes = static_cast<ResourceD3D*>(pi->currentFBO->getColorResource(i));
-                ID3D10RenderTargetView* pRT = pRes->m_pTextureRTView;
-                pd3dDevice->ClearRenderTargetView( pRT, pi->clearColor[i]);
+                ID3D1XRenderTargetView* pRT = pRes->m_pTextureRTView;
+				pd3d1X->ClearRenderTargetView( pRT, pi->clearColor[i]);
             }
         } else {
             IFrameBufferObjectsRepository* pRep = getFrameBufferObjectsRepositorySingleton();
-            ID3D10RenderTargetView* pRT = static_cast<ID3D10RenderTargetView*>(pRep->getBackBuffer());
-            pd3dDevice->ClearRenderTargetView( pRT, pi->clearColor[0]);
+            ID3D1XRenderTargetView* pRT = static_cast<ID3D1XRenderTargetView*>(pRep->getBackBuffer());
+			pd3d1X->ClearRenderTargetView( pRT, pi->clearColor[0]);
         }
         break;
     }
@@ -399,14 +411,14 @@ void Pass::clearRenderTargets(PassInfo *pi)
     switch(pi->clearMode)
     {
     case Clear_depth:
-        ClearFlags = D3D10_CLEAR_DEPTH;
+        ClearFlags = D3D1X(CLEAR_DEPTH);
         break;
     case Clear_stencil:
-        ClearFlags = D3D10_CLEAR_STENCIL;
+        ClearFlags = D3D1X(CLEAR_STENCIL);
         break;
     case Clear_all:
     case Clear_depth_stencil:
-        ClearFlags = D3D10_CLEAR_DEPTH|D3D10_CLEAR_STENCIL;
+        ClearFlags = D3D1X(CLEAR_DEPTH)|D3D1X(CLEAR_STENCIL);
         break;
     }
     if(ClearFlags == 0)
@@ -414,12 +426,12 @@ void Pass::clearRenderTargets(PassInfo *pi)
     if(pi->currentFBO)
     {
         ResourceD3D* pRes = static_cast<ResourceD3D*>(pi->currentFBO->getDSTResource());
-        ID3D10DepthStencilView* pDSTV = pRes->m_pTextureDSTView;
-        pd3dDevice->ClearDepthStencilView( pDSTV, ClearFlags, 1.0f, 0);
+        ID3D1XDepthStencilView* pDSTV = pRes->m_pTextureDSTView;
+		pd3d1X->ClearDepthStencilView( pDSTV, ClearFlags, 1.0f, 0);
     } else {
         IFrameBufferObjectsRepository* pRep = getFrameBufferObjectsRepositorySingleton();
-        ID3D10DepthStencilView* pDSTV = static_cast<ID3D10DepthStencilView*>(pRep->getBackBufferDST());
-        pd3dDevice->ClearDepthStencilView( pDSTV, ClearFlags, 1.0f, 0);
+        ID3D1XDepthStencilView* pDSTV = static_cast<ID3D1XDepthStencilView*>(pRep->getBackBufferDST());
+		pd3d1X->ClearDepthStencilView( pDSTV, ClearFlags, 1.0f, 0);
     }
 }
 
@@ -428,7 +440,7 @@ void Pass::clearRenderTargets(PassInfo *pi)
  */ /*********************************************************************/
 void Pass::drawFullscreenQuad(float size, float offsetx, float offsety)
 {
-    ID3D10Device* pd3dDevice = (ID3D10Device*)nvFX::getDevice();
+    ID3D1XDevice* pd3dDevice = (ID3D1XDevice*)nvFX::getDevice();
     if(TexQuad2D::g_VtxBufferStatic == NULL)
         TexQuad2D::Init(pd3dDevice, getD3DIASignature(), getD3DIASignatureSize());
     TexQuad2D::Draw(pd3dDevice, size, offsetx, offsety);

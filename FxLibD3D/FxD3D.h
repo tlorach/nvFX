@@ -39,7 +39,9 @@
 #define SHADERCONCAT_USE // DX can't link any sort of Shader objects...
 
 #include "FxLib.h"
+#define USE_D3D11
 #ifdef USE_D3D11
+#include <dxgi.h>
 #include <d3d11.h>
 #include <d3d11Shader.h>
 #include <d3dx11.h>
@@ -83,12 +85,25 @@ typedef D3D11_SIGNATURE_PARAMETER_DESC          D3D1X_SIGNATURE_PARAMETER_DESC;
 typedef D3D11_SHADER_INPUT_BIND_DESC            D3D1X_SHADER_INPUT_BIND_DESC;
 typedef D3D11_TEXTURE_ADDRESS_MODE              D3D1X_TEXTURE_ADDRESS_MODE;
 
+typedef D3D11_INPUT_ELEMENT_DESC				D3D1X_INPUT_ELEMENT_DESC;
+typedef ID3D11InputLayout						ID3D1XInputLayout;
+typedef ID3D11RenderTargetView					ID3D1XRenderTargetView;
+typedef ID3D11DepthStencilView					ID3D1XDepthStencilView;
+typedef D3D11_VIEWPORT							D3D1X_VIEWPORT;
+typedef D3D11_TEXTURE2D_DESC					D3D1X_TEXTURE2D_DESC;
+typedef D3D11_SHADER_RESOURCE_VIEW_DESC			D3D1X_SHADER_RESOURCE_VIEW_DESC;
+typedef ID3D11Resource							ID3D1XResource;
+
+#define D3D1X_SIT_SAMPLER						D3D_SIT_SAMPLER
+#define D3D1X_SIT_TEXTURE						D3D_SIT_TEXTURE
+
 #define D3DX1XCompileFromMemory D3DX11CompileFromMemory
 #define D3D1X(a) D3D11_##a
 #define D3D1X_USAGE D3D11_USAGE
 
 #else
 
+#include <dxgi.h>
 #include <d3d10.h>
 #include <d3dx10.h>
 typedef ID3D10Texture1D         ID3D1XTexture1D;
@@ -130,6 +145,18 @@ typedef D3D10_SIGNATURE_PARAMETER_DESC          D3D1X_SIGNATURE_PARAMETER_DESC;
 typedef D3D10_SHADER_INPUT_BIND_DESC            D3D1X_SHADER_INPUT_BIND_DESC;
 typedef D3D10_TEXTURE_ADDRESS_MODE              D3D1X_TEXTURE_ADDRESS_MODE;
 
+typedef D3D10_INPUT_ELEMENT_DESC				D3D1X_INPUT_ELEMENT_DESC;
+typedef ID3D10InputLayout						ID3D1XInputLayout;
+typedef ID3D10RenderTargetView					ID3D1XRenderTargetView;
+typedef ID3D10DepthStencilView					ID3D1XDepthStencilView;
+typedef D3D10_VIEWPORT							D3D1X_VIEWPORT;
+typedef D3D10_TEXTURE2D_DESC					D3D1X_TEXTURE2D_DESC;
+typedef D3D10_SHADER_RESOURCE_VIEW_DESC			D3D1X_SHADER_RESOURCE_VIEW_DESC;
+typedef ID3D10Resource							ID3D1XResource;
+
+#define D3D1X_SIT_SAMPLER						D3D10_SIT_SAMPLER
+#define D3D1X_SIT_TEXTURE						D3D10_SIT_TEXTURE
+
 #define D3DX1XCompileFromMemory D3DX10CompileFromMemory
 #define D3D1X(a) D3D10_##a
 #define D3D1X_USAGE D3D10_USAGE
@@ -166,9 +193,9 @@ public:
 
     // TODO: change this approach : update() should be done in CstBuffer
     // target creation should be done outside of update
-    virtual CstBuffer*  update(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
-    virtual CstBuffer*  update2(Pass *pass, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
-    virtual CstBuffer*  updateForTarget(STarget &t, bool bBindProgram = false);
+    virtual CstBuffer*  update(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
+    virtual CstBuffer*  update2(Pass *pass, bool bCreateIfNeeded, bool bCreateBufferIfNeeded);
+    virtual CstBuffer*  updateForTarget(int target);
     virtual int         bufferSizeAndData(char *pData, int *sz=NULL);
     virtual void*       buildD3DBuffer(ICstBuffer::BufferUsageD3D usage);
     virtual ICstBuffer* setD3DBuffer(void* buffer);
@@ -186,10 +213,10 @@ public:
     UniformD3D(const char* name = NULL, const char* groupname = NULL, const char* semantic = NULL);
     // TODO: change this approach : update() should be done in CstBuffer
     // target creation should be done outside of update
-    virtual Uniform*    update(ShadowedData* pData, Pass *pass, int ppID, bool bBindProgram, bool bCreateIfNeeded);
-    virtual Uniform*    update2(ShadowedData* pData, Pass *pass, bool bBindProgram, bool bCreateIfNeeded);
-    void                updateD3D(ShadowedData* pData, STarget &t, bool bBindProgram);
-    virtual Uniform*    updateForTarget(ShadowedData* pData, STarget &t, bool bBindProgram = false);
+    virtual Uniform*    update(ShadowedData* pData, Pass *pass, int ppID, bool bCreateIfNeeded);
+    virtual Uniform*    update2(ShadowedData* pData, Pass *pass, bool bCreateIfNeeded);
+    void                updateD3D(ShadowedData* pData, STarget &t);
+    virtual Uniform*    updateForTarget(ShadowedData* pData, int target);
 };
 
 /*************************************************************************/ /**
@@ -253,13 +280,13 @@ public:
 class D3DShader : public Shader
 {
 public:
-    D3DShader(const char *name = NULL, IContainer* pCont = NULL);
+    D3DShader(const char *name = NULL);
     ~D3DShader();
 
     void    cleanupShader();
     /// \arg \b type can be 0 to 4 (FX_VTXPROG FX_GEOMPROG FX_FRAGPROG FX_TCSPROG FX_TESPROG)
     bool    isCompiled(int type);
-    bool    compileShader(GLenum type=0);
+    bool    compileShader(GLenum type, IContainer *pContainer);
 
     GLhandleARB getGLSLShaderObj(GLenum type);
 
@@ -360,11 +387,11 @@ public:
     /// \brief updates sampler-state. Same idea than uniform set/update mechanism. But this one is OpenGL focused
     virtual void    update(GLenum target, GLint tex, bool bindTexture=false);
     /// \brief update targets with the shadowed values. Same mechanism as for uniform (set() vs. update())
-    virtual SamplerState*  update(void *data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded);
+    virtual SamplerState*  update(void *data, Pass *pass, int layerID, bool bCreateIfNeeded);
     /// \brief update2 is called when layerID == -1
-    virtual SamplerState*  update2(void *data, Pass *pass, bool bBindProgram, bool bCreateIfNeeded);
+    virtual SamplerState*  update2(void *data, Pass *pass, bool bCreateIfNeeded);
     /// \brief update only for a specific target
-    virtual SamplerState*  updateForTarget(void *data, STarget &t, bool bBindProgram = false);
+    virtual SamplerState*  updateForTarget(void *data, int target);
     /// \validates the texture object. Essentially needed to setup something on Gfx API side (D3D, for example... not OpenGL)
     bool            validate();
     // TODO ? Add setXXX() ?
@@ -379,15 +406,15 @@ class ResourceD3D : public Resource
 protected:
     DXGI_FORMAT                         m_d3dFmt;
     union {
-        ID3D10Texture1D*                m_pTexture1D;
-        ID3D10Texture2D*                m_pTexture2D;
-        ID3D10Texture3D*                m_pTexture3D;
+        ID3D1XTexture1D*                m_pTexture1D;
+        ID3D1XTexture2D*                m_pTexture2D;
+        ID3D1XTexture3D*                m_pTexture3D;
         void*                           m_ptr;
     };
-    ID3D10ShaderResourceView*           m_pTextureView;
+    ID3D1XShaderResourceView*           m_pTextureView;
     union {
-        ID3D10RenderTargetView*         m_pTextureRTView; ///< used if the resource is part of a 'FBO'
-        ID3D10DepthStencilView*         m_pTextureDSTView; ///< used if the resource is part of a 'FBO'
+        ID3D1XRenderTargetView*         m_pTextureRTView; ///< used if the resource is part of a 'FBO'
+        ID3D1XDepthStencilView*         m_pTextureDSTView; ///< used if the resource is part of a 'FBO'
     };
     bool    createRenderResource();
 public:

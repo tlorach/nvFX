@@ -60,7 +60,7 @@ D3DShader::~D3DShader()
  ** 
  ** 
  **/ /*************************************************************************/ 
-D3DShader::D3DShader(const char * name, IContainer* pCont) : Shader(name, pCont)
+D3DShader::D3DShader(const char * name) : Shader(name)
 {
     m_targetType = THLSL;
 }
@@ -82,7 +82,7 @@ DebugBreak();
  ** 
  ** 
  **/ /*************************************************************************/ 
-bool D3DShader::compileShader(GLenum type)
+bool D3DShader::compileShader(GLenum type, IContainer *pContainer)
 {
 DebugBreak();
     if(m_shaderCode.empty())
@@ -97,7 +97,7 @@ DebugBreak();
         D3DShader *pShd;
         std::vector<codeInfo> codeBlocks;
         int lineOffset = 0;
-        for(int i=0; pShd = static_cast<D3DShader*>(m_container->findShader(i)); i++)
+        for(int i=0; pShd = static_cast<D3DShader*>(pContainer->findShader(i)); i++)
         {
             if(*(pShd->getName()) == '\0')
             {

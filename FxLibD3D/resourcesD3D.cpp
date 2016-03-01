@@ -48,7 +48,7 @@ bool ResourceD3D::setD3DResourceView(void *p)
 {
     if(m_ptr) // we can't assign an external resource view if it was create from ResourceD3D
         return false;
-    else m_pTextureView = (ID3D10ShaderResourceView*)p;
+    else m_pTextureView = (ID3D1XShaderResourceView*)p;
     return true;
 }
 void* ResourceD3D::getD3DResourceView()
@@ -280,6 +280,18 @@ bool        ResourceD3D::validationNeeded()
  ** FrameBufferObject FrameBufferObject FrameBufferObject FrameBufferObject
  **
  *************************************************************************/ 
+
+FrameBufferObject::~FrameBufferObject()
+{
+    // No reference counter to decrement... not used here
+    m_dst = NULL;
+    int i=0;
+    for(; i<(int)m_colors.size(); i++)
+    {
+        m_colors[i] = NULL;
+    }
+    //m_fboID = 0;
+}
 
 bool FrameBufferObject::validate()
 {

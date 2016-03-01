@@ -84,11 +84,11 @@ void SamplerStateD3D::update(GLenum target, GLint tex, bool bindTexture)
  ** 
  ** 
  **/ /*************************************************************************/ 
-SamplerState*  SamplerStateD3D::update2(void *data, Pass *pass, bool bBindProgram, bool bCreateIfNeeded)
+SamplerState*  SamplerStateD3D::update2(void *data, Pass *pass, bool bCreateIfNeeded)
 {
     int id;
     for(int i=0; (id=pass->getLayerId(i)) >= 0; i++)
-        update(data, pass, i, bBindProgram, bCreateIfNeeded);
+        update(data, pass, i, bCreateIfNeeded);
     return this;
 }
 
@@ -96,10 +96,10 @@ SamplerState*  SamplerStateD3D::update2(void *data, Pass *pass, bool bBindProgra
  ** \brief this update method is called internally to perform the "update"
  ** i.e. the activation of the created D3D sampler state.for the target
  **/ /*************************************************************************/ 
-SamplerState*  SamplerStateD3D::update(void *data, Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded)
+SamplerState*  SamplerStateD3D::update(void *data, Pass *pass, int layerID, bool bCreateIfNeeded)
 {
     if(layerID < 0)
-        return update2(data, pass, bBindProgram, bCreateIfNeeded);
+        return update2(data, pass, bCreateIfNeeded);
 #ifdef USE_D3D11
     ID3D11DeviceContext *pd3d1X;
     ((ID3D1XDevice *)nvFX::getDevice())->GetImmediateContext(&pd3d1X);
@@ -215,8 +215,9 @@ SamplerState*  SamplerStateD3D::update(void *data, Pass *pass, int layerID, bool
     }
     return this;
 }
-SamplerState*  SamplerStateD3D::updateForTarget(void *data, STarget &t, bool bBindProgram)
+SamplerState*  SamplerStateD3D::updateForTarget(void *data, int target)
 {
+    STarget &t = m_targets[target];
     if(!t.valid)
         return this;
 #ifdef USE_D3D11

@@ -205,7 +205,7 @@ assert(1);
         return false;
     }
     // add in the shader the target reference of this program
-    static_cast<Shader*>(pShader)->addTarget(this);
+    static_cast<Shader*>(pShader)->addUser(this);
     return true;
 }
 /*************************************************************************/ /**
@@ -232,6 +232,8 @@ bool D3DShaderProgram::addVertexShader(IShader* pShader, IContainer* pContainer)
 
 void D3DShaderProgram::cleanup()
 {
+    ShaderMap::iterator iShd;
+    ShaderMap::iterator iEnd;
     /*ShaderVec::iterator icshd = m_commonShaders.begin();
     while(icshd != m_commonShaders.end())
     {
@@ -242,7 +244,7 @@ void D3DShaderProgram::cleanup()
     iEnd = m_data.shaders.end();
     for(;iShd != iEnd; iShd++)
     {
-        iShd.second->removeTarget(this);
+        iShd->second->removeUser(this);
     }
 #define CLEANUPSHD(shd)\
     if(shd.shader)         shd.shader->Release();\

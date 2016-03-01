@@ -123,18 +123,18 @@ void CstBufferD3D::updateD3D(STarget &t)
     }
 }
 
-CstBuffer*    CstBufferD3D::update2(Pass *pass, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
+CstBuffer*    CstBufferD3D::update2(Pass *pass, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
 {
     int id;
     for(int i=0; (id=pass->getLayerId(i)) >= 0; i++)
-        update(pass, id, bBindProgram, bCreateIfNeeded, bCreateBufferIfNeeded);
+        update(pass, id, bCreateIfNeeded, bCreateBufferIfNeeded);
     return this;
 }
 
-CstBuffer*    CstBufferD3D::update(Pass *pass, int layerID, bool bBindProgram, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
+CstBuffer*    CstBufferD3D::update(Pass *pass, int layerID, bool bCreateIfNeeded, bool bCreateBufferIfNeeded)
 {
     if(layerID < 0)
-        return update2(pass, bBindProgram, bCreateIfNeeded, bCreateBufferIfNeeded);
+        return update2(pass, bCreateIfNeeded, bCreateBufferIfNeeded);
     for(int i=0; i<(int)m_targets.size(); i++)
     {
         STarget &t = m_targets[i];
@@ -218,8 +218,9 @@ CstBuffer*    CstBufferD3D::update(Pass *pass, int layerID, bool bBindProgram, b
     return this;
 }
 
-CstBuffer* CstBufferD3D::updateForTarget(STarget &t, bool bBindProgram)
+CstBuffer* CstBufferD3D::updateForTarget(int target)
 {
+	CstBuffer::STarget &t = m_targets[target];
     if(!t.valid)
         return this;
     switch(t.ttype)
