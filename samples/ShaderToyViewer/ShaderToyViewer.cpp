@@ -110,6 +110,14 @@ void MyWindow::reshape(int w, int h)
     perspective(proj, 30.0f, r, 0.01f, 10.0f);
     mat4f shift(array16_id);
 
+    nvFX::IResourceRepository* pIResRep = nvFX::getResourceRepositorySingleton();
+    pIResRep->setParams(0,0, w,h, 1, 0, NULL);
+    pIResRep->updateValidated();
+    // Not needed: IResourceRepository::updateValidated(); will do it anyways
+    //nvFX::IFrameBufferObjectsRepository* pIFBORep = nvFX::getFrameBufferObjectsRepositorySingleton();
+    //pIFBORep->setParams(0,0, w,h, 1, 0, NULL);
+    //pIFBORep->updateValidated();
+
     //ui::reshape(w,h);
 
 }
@@ -355,6 +363,9 @@ void MyWindow::mouse(NVPWindow::MouseButton button, ButtonAction action, int mod
         OutputDebugStringA("Effect file not found. Make sure it is close to the exe file...");
         return false;
     }
+    //
+    // Validate the only tech we will use
+    //
     fx_TechScene = fx_EffectScene->findTechnique(0);
     fx_TechScene->validate();
     iResolution = fx_EffectScene->findUniform("iResolution");
@@ -364,6 +375,22 @@ void MyWindow::mouse(NVPWindow::MouseButton button, ButtonAction action, int mod
     iSampleRate = fx_EffectScene->findUniform("iSampleRate");
     //iChannelTime = fx_EffectScene->findUniform("");
     //iChannelResolution = fx_EffectScene->findUniform("");
+    //
+    // Validate the resources (some may have been added by the effect)
+    //
+    // Left here just to say that it's not necessary because IResourceRepository will implicitly do it
+    //nvFX::IFrameBufferObjectsRepository* pIFBORep = nvFX::getFrameBufferObjectsRepositorySingleton();
+    //pIFBORep->setParams(0,0, getWidth(),getHeight(), 1, 0, NULL);
+    ////pIFBORep->validateAll();
+    //pIFBORep->updateValidated();
+    nvFX::IResourceRepository* pIResRep = nvFX::getResourceRepositorySingleton();
+    pIResRep->setParams(0,0, getWidth(),getHeight(), 1, 0, NULL);
+    // update/create every resources that are around. Even if not used:
+    pIResRep->validateAll();
+    // to update/create only resources involved in what was validated
+    // NOTE: I think I have a problem here and I will sort things out.
+    // in the meantime validateAll() is fine
+    //pIResRep->updateValidated(); 
 
 
     return true;

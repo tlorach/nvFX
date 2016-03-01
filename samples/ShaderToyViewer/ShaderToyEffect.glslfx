@@ -86,6 +86,21 @@ SamplerState linearSampler
     TEXTURE_MAG_FILTER = LINEAR;
 }
 
+
+RenderTexture renderTarget0
+{
+	MSAA = {0, 0};
+	Size = ApplicationDefined;
+	Format = RGBA8;
+    SamplerState = linearSampler;
+}
+
+FBO fbo0
+{
+	Color = renderTarget0;
+}
+
+
 //--------------------------------------------------------------------------------------
 //    Fullscreen quad Vertex shader
 //--------------------------------------------------------------------------------------
@@ -117,6 +132,23 @@ GLSLShader global fullscreenquadPS
         mainImage( fragColor, gl_FragCoord.xy );
     }
 }
+
+GLSLShader global fullscreenquadPS_p2
+{
+	uniform sampler2D SrcSamp;
+	
+    // we can keep local some uniforms. So they aren't visible outside from others
+    uniform sampler2D quadSampler;
+    layout(location=0) in vec3 tc;
+    layout(location=0) out vec4 fragColor;
+    void main()
+    {
+		vec4 clr = texture(SrcSamp, tc.xy);
+        //mainImage( fragColor, gl_FragCoord.xy );
+		fragColor = vec4(tc.xy, clr.r, 1.0);
+		//fragColor = vec4(tc.xy, 0.0, 1.0);
+    }
+}
 //**************************************************************************************
 //**************************************************************************************
 //****
@@ -132,9 +164,20 @@ Technique Base
     {
         DEPTH_TEST = FALSE;
         renderMode = fullscreen_quad;
-        currentTarget = backbuffer;
+        currentTarget = fbo0;
         VertexProgram = fullscreenquadVS;
         FragmentProgram = { fullscreenquadPS, SToy};
+        CULL_FACE = false;
+    }
+    Pass P2
+    {
+        SamplerResource(SrcSamp) = renderTarget0;
+	
+        DEPTH_TEST = FALSE;
+        renderMode = fullscreen_quad;
+        currentTarget = backbuffer;
+        VertexProgram = fullscreenquadVS;
+        FragmentProgram = fullscreenquadPS_p2;
         CULL_FACE = false;
     }
 }
