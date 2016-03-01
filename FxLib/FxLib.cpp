@@ -997,6 +997,8 @@ void Shader::releaseMe()
 static const void*         g_device; // device. For DX... see how to do better
 void        nvFX::setDevice(const void *p)
 {
+	nvFX::getResourceRepositorySingleton()->setDevice(p);
+    nvFX::getFrameBufferObjectsRepositorySingleton()->setDevice(p);
     g_device = p;
 }
 const void* nvFX::getDevice()

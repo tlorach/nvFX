@@ -266,7 +266,8 @@ int         FrameBufferObjectsRepository::releaseFbo(IFrameBufferObject* p)
 bool        FrameBufferObjectsRepository::setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev)
 {
 #ifdef WIN32
-    m_pDevice = pDev; // Note: in D3D, we may want to 'AddRef' the device... should be done in a FrameBufferObjectsRepositoryD3D...
+    if(m_pDevice)
+        m_pDevice = pDev; // Note: in D3D, we may want to 'AddRef' the device... should be done in a FrameBufferObjectsRepositoryD3D...
 #endif
     m_vp[0] = x;
     m_vp[1] = y;
@@ -686,7 +687,8 @@ bool ResourceRepository::removeResource(Resource *p)
 bool ResourceRepository::setParams(int x, int y, int w, int h, int depthSamples, int coverageSamples, BufferHandle backbuffer, BufferHandle backbufferDST, void *pDev)
 {
 #ifdef WIN32
-    m_pDevice = pDev; // AddRef ?
+    if(m_pDevice)
+        m_pDevice = pDev; // AddRef ?
 #endif
     m_vp[0] = x;
     m_vp[1] = y;
