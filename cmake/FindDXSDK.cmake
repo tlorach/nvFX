@@ -35,7 +35,8 @@ if (WIN32)
             "C:/Program Files/Microsoft DirectX SDK*/Lib/x64"
     )
 
-    foreach(DX_LIB d3d11 d3dcompiler)
+	## d3dx11 gxguid - remove these two libraries
+    foreach(DX_LIB d3d11 d3dcompiler d3dx11 dxguid)
 
         find_library(DXSDK_${DX_LIB}_LIBRARY
             NAMES 
