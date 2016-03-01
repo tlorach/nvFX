@@ -135,7 +135,7 @@ else()
     )
 endif()
 
-#if(DXSDK_FOUND)
-#   add_subdirectory(dxSimple)
-#endif()
+if(DXSDK_FOUND)
+    add_subdirectory(D3DSimple)
+endif()
 

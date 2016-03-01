@@ -1,0 +1,120 @@
+/*
+HLSL10Shader
+{
+
+struct VSOut
+{
+    float4 position : SV_Position;
+    float2 texcoord: TexCoord;
+};
+
+}
+*/
+//--------------------------------------------------------------------------------------
+// sampler states are outside of HLSL.
+//--------------------------------------------------------------------------------------
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+SamplerState linearSampler
+{
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+
+uniform float iGlobalTime;
+
+HLSL10Shader
+{
+	struct VSOut
+	{
+		float4 position : SV_Position;
+		float2 texcoord : TEXCOORD0;
+		float2 blobCenters[5] : TEXCOORD1;
+	};
+}
+
+//--------------------------------------------------------------------------------------
+//    Fullscreen quad Vertex shader
+//--------------------------------------------------------------------------------------
+HLSL10Shader global fullscreenquadVS
+{
+	VSOut main(uint VertexID: SV_VertexID)
+	{
+		VSOut output;
+
+		output.texcoord = float2((VertexID << 1) & 2, VertexID & 2);
+		output.position = float4(output.texcoord * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);
+
+		const float mulX[5] = { 0.5, 0.7, 0.8, 0.3, 0.6 };
+		const float mulY[5] = { 0.8, 0.6, 0.5, 0.7, 0.4 };
+		const float shiftX1[5] = { 0.1, 1.5, 3.5, 0.6, 1.9 };
+		const float shiftY1[5] = { 0.6, 1.6, 2.8, 0.1, 1.3 };
+		const float shiftX2[5] = { 0.9, 1.3, 2.9, 0.4, 2.3 };
+		const float shiftY2[5] = { 0.3, 1.9, 3.2, 0.9, 2.4 };
+		const float timeMulX1[5] = { 1.0, 1.2, 0.5, 0.6, 0.9 };
+		const float timeMulY1[5] = { 1.0, 1.3, 0.8, 1.1, 1.3 };
+
+		for (int i = 0; i < 5; ++i)
+		{
+			output.blobCenters[i] = float2(
+				mulX[i] * cos(timeMulX1[i] * iGlobalTime + shiftX1[i]) * sin(iGlobalTime + shiftX2[i]) + 0.5,
+				mulY[i] * sin(timeMulY1[i] * iGlobalTime + shiftY1[i]) * sin(iGlobalTime + shiftY2[i]) + 0.25
+				);
+		}
+		
+		return output;
+	}
+	
+}
+//--------------------------------------------------------------------------------------
+//    Simple texture fetch
+//--------------------------------------------------------------------------------------
+HLSL10Shader global fullscreenquadPS
+{
+	float4 main( VSOut frag ): SV_Target
+	{
+		const float radii[5] = { 0.4, 0.3, 0.2, 0.35, 0.25 };
+
+		float scalar = 0.0;
+		for (int i = 0; i < 5; ++i)
+		{
+			float2 blobCenter = frag.blobCenters[i];
+			scalar += smoothstep(0.0, 1.0, saturate(1.0 - length(frag.texcoord - blobCenter) / radii[i]));
+		}
+	
+#define PI_DIV2 1.57079632679
+		
+		const float base = 0.2, range = 0.2;
+		if (scalar > base && scalar < (base + range))
+			scalar = sin(PI_DIV2 / (range/2.0) * (scalar - base));
+		else if (scalar < base)
+			scalar = 0.0;
+		else
+			scalar = sin(scalar - (base + range));
+
+		return float4( scalar, scalar, scalar, 1.0 );
+	}
+}
+//**************************************************************************************
+//**************************************************************************************
+//****
+//**** EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS EFFECTS      ****
+//****
+//**************************************************************************************
+//**************************************************************************************
+
+Technique Base
+{
+    Pass P1
+    {
+        DEPTH_TEST = FALSE;
+        renderMode = fullscreen_quad;
+        //currentTarget = backbuffer;
+        VertexProgram = fullscreenquadVS;
+        FragmentProgram = fullscreenquadPS;
+        CULL_FACE = false;
+    }
+}
