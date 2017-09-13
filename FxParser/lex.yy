@@ -957,6 +957,7 @@ EntryPoint          return ENTRY_POINT;
     StencilStrokePath  { yy_pop_state(); yylval.render_mode = nvFX::RENDER_STENCILSTROKEPATH;return RENDERMODE_ENUM; }
     CoverFillPath      { yy_pop_state(); yylval.render_mode = nvFX::RENDER_COVERFILLPATH;return RENDERMODE_ENUM; }
     CoverStrokePath    { yy_pop_state(); yylval.render_mode = nvFX::RENDER_COVERSTROKEPATH;return RENDERMODE_ENUM; }
+    RenderShadowmap { yy_pop_state(); yylval.render_mode = nvFX::RENDER_SHADOWMAP;return RENDERMODE_ENUM; }
 }
 <pass,technique>{
     Attribute           return ATTRIBUTE;
