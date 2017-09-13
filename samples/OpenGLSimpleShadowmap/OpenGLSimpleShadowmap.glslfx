@@ -1,0 +1,244 @@
+#extension GL_ARB_separate_shader_objects : enable
+
+
+ConstantBuffer global transfBlock1
+{
+    uniform mat4 m4_ViewProj;
+    uniform mat4 m4_Proj;
+    uniform mat4 m4_View;
+    uniform mat4 m4_ViewIT;
+    uniform mat4 m4_shadowMatrix;
+    uniform vec3 eyePos : EYEPOS;
+    uniform float dummy;
+}
+
+ConstantBuffer global transfBlock2
+{
+    uniform mat4 m4_World;
+    uniform mat4 m4_WorldView;
+    uniform mat4 m4_WorldViewProj;
+    uniform mat4 m4_WorldIT;
+};
+uniform global vec4 scaleBias = {0,0,0,1.0}; // x,y,z bias and w==scale
+
+//uniform sampler2D shadowSampler;
+uniform sampler2DShadow shadowSampler;
+
+//
+// Resources (Testing the scene-level effect part)
+//
+// will create the texture resource
+// can be then used with "SamplerResource(diffuseSampler) = myRenderTexture;"
+// TODO: in D3D, this will lead to a Texture object in D3D, too
+
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderTexture myRenderTexture
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+RenderTexture myRenderTextureNormals
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;// a way to dynamically define the size of the resource to create
+    Format = RGBA8;
+}
+// will lead to a creation of a texture in a specific repository. nvFX will keep track of the Id
+RenderBuffer myDST
+{
+    MSAA = {0,0};
+    //Size = {800/2, 600/2};
+    Size = ApplicationDefined;
+    Format = DEPTH24STENCIL8;
+}
+// will lead to a FBO creation in a specific repository. nvFX lib will keep track of the Id
+FBO myFBO
+{
+    Color = { myRenderTexture, myRenderTextureNormals };
+    DepthStencil = myDST;
+}
+
+
+RenderTexture myDSTShadowmap
+{
+    MSAA = {0,0};
+    Size = {1024, 1024};
+    Format = DEPTH24STENCIL8;
+}
+FBO myFBOShadowmap
+{
+    // NO color buffer needed
+    DepthStencil = myDSTShadowmap;
+}
+//
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader
+{
+    #version 410 compatibility
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// sampler states are outside of GLSL.
+//
+SamplerState nearestSampler
+{
+    TEXTURE_MIN_FILTER = NEAREST;
+    TEXTURE_MAG_FILTER = NEAREST;
+}
+
+SamplerState shadowSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+    TEXTURE_COMPARE_MODE = COMPARE_R_TO_TEXTURE;
+    TEXTURE_COMPARE_FUNC = LEQUAL;
+    DEPTH_TEXTURE_MODE = LUMINANCE;
+}
+RasterizationState rasterState11
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+
+////////////////////////////////////////////////////////////////////
+/// SHADOW MAP PASS 0 VERTEX PROGRAM ///////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ShadowMapPass0VS
+{
+    layout(location=0) in vec4 Position;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+        vec4 Po    = vec4( Position.xyz, 1.0);
+        Po.xyz += scaleBias.xyz;
+        Po.xyz *= scaleBias.w;
+        gl_Position = (m4_WorldViewProj * Po);
+    }
+}
+
+GLSLShader ShadowMapPass0PS
+{
+    layout(location=0) out vec4 color;
+
+    void main() 
+    {
+        color = vec4(1);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////
+/// SHADOW MAP PASS 1 VERTEX PROGRAM ///////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ShadowMapPass1VS
+{
+    layout(location=0) in vec4 Position;
+    layout(location=1) in vec3 Normal;   // I INVERTED THEM
+    layout(location=2) in vec2 UV;
+
+    layout(location=0) out vec2 outTC;
+    layout(location=1) out vec4 outShadowCoord; // texture coordinates to the fragment shader for access to the shadow map
+    layout(location=2) out vec3 outNw;
+    layout(location=3) out vec3 outPw;
+    //layout(location=4) out vec4 outLightPos;
+    
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+        vec4 Po    = vec4( Position.xyz, 1.0);
+        Po.xyz += scaleBias.xyz; // NO NEED FOR THIS ON YOUR SIDE...
+        Po.xyz *= scaleBias.w;
+
+        gl_Position = (m4_WorldViewProj * Po);
+    
+        // position of the vertex in the scene
+        vec4 worldPos   = m4_World * vec4( Po.xyz, 1.0);
+    
+        outTC           = UV.xy;
+        
+        outShadowCoord  = m4_shadowMatrix * worldPos;
+
+        outNw           = Normal;
+        outPw           = Po.xyz;
+    }
+}
+
+GLSLShader ShadowMapPass1PS
+{
+    layout(location=0) in vec2 inTC;
+    layout(location=1) in vec4 inShadowCoord;   // texture coordinates for access to the shadow map
+    layout(location=2) in vec3 inNw;
+    layout(location=3) in vec3 inPw;
+
+    layout(location=0) out vec4 color;
+
+    void main() 
+    {
+        vec3 projCoords = inShadowCoord.xyz / inShadowCoord.w;
+        //float shadowFact = texture(shadowSampler, vec3(projCoords.xy, projCoords.z - 0.0001));
+        float shadowFact = textureProj(shadowSampler, vec4(inShadowCoord.xy, inShadowCoord.z - 0.0001, inShadowCoord.w));
+        shadowFact = shadowFact*0.5 + 0.5;
+        vec4 shadowFactor4 = vec4(shadowFact,shadowFact,shadowFact, 1.0);
+        color = vec4( shadowFactor4.x, shadowFactor4.y, shadowFactor4.z, 1.0 );
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+// Test of a scene-level Technique
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+Technique shadowmapping
+{
+    Pass Shadow
+    {
+        RasterizationState = rasterState11;
+        DEPTH_TEST = true;
+        CULL_FACE = true;
+        BLEND = false;
+        RenderMode = RenderShadowmap;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0,0.0,0.0,1};
+        CurrentTarget = myFBOShadowmap;
+        VertexProgram = ShadowMapPass0VS;
+        FragmentProgram = ShadowMapPass0PS;
+        Viewport = {0,0,1024,1024};
+    }
+    Pass render
+    {
+        DEPTH_TEST = true;
+        CULL_FACE = true;
+        BLEND = false;
+        RenderMode = SceneShading;
+        RenderGroup = 11;
+        ClearMode = all;
+        ClearColor[0] = {0,0.0,0.0,1};
+        ClearColor[1] = {0.3,0.2,0.4,1};
+        CurrentTarget = myFBO;
+        SamplerResource(shadowSampler) = myDSTShadowmap;
+        SamplerState(shadowSampler) = shadowSamplerState; // Strange: I can't use any other sampling filtering to not break the FBO
+        VertexProgram = ShadowMapPass1VS;
+        FragmentProgram = ShadowMapPass1PS;
+        //Viewport = ApplicationDefined; TODO!!
+    }
+    Pass blitme
+    {
+        BlitFBOToActiveTarget = myFBO;
+        //ViewPort = ApplicationDefined; TODO!!
+        CurrentTarget = backbuffer;
+    }
+}
+
