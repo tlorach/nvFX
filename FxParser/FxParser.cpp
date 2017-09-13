@@ -197,6 +197,7 @@
     {
         switch(BisonEnum)
         {
+        case GLNONE: return 0;
         case GLACCUM: return 0x0100;
         case GLLOAD: return 0x0101;
         case GLRETURN: return 0x0102;
@@ -284,6 +285,11 @@
         case GLCLAMPTOEDGE: return 0x812F;
         case GLREPEAT: return 0x2901;
         case GLMIRROREDREPEAT: return 0x8370;
+
+        case GLDEPTHTEXTUREMODE: return 0x884B;
+        case GLTEXTURECOMPAREMODE: return 0x884C;
+        case GLTEXTURECOMPAREFUNC: return 0x884D;
+        case GLCOMPARERTOTEXTURE: return 0x884E;
 
     /*------------------------------------------------------------------
     */

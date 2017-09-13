@@ -1,0 +1,268 @@
+//ConstantBuffer global transfBlock2
+//{
+    uniform mat4 World;
+	uniform mat4 View;
+	uniform mat4 ViewInverse;
+	uniform mat4 ViewInverseTranspose;
+    uniform mat4 WorldView;
+	uniform mat4 WorldViewProjection;
+	uniform mat4 ViewProjection;
+    uniform mat4 WorldInverseTranspose;
+//};
+
+ConstantBuffer global materialBlock
+{
+    uniform vec3     diffuse;
+    uniform float    specexp;
+    uniform vec3     ambient;
+    uniform float    reflectivity;
+    uniform vec3     transparency;
+    uniform float    translucency;
+    uniform vec3     specular;
+};
+
+uniform mat4 TextureTransform0;
+
+uniform vec4 scaleBias = {0,0,0,1.0}; // x,y,z bias and w==scale
+uniform vec3 lightPos[] = {{100.0,100.0,100.0},{-10.0,-10.0,-10.0}};
+uniform vec3 lightColor[] = {{0.8,0.8,0.8},{0.5,0.5,0.7}};
+
+uniform vec4 customLightPos = {140.0f, 144.0f, 169.0f, 0.0f};
+
+uniform mat4 lightProjectionMatrix;
+uniform mat4 lightViewMatrix;
+uniform mat4 shadowMatrix;
+
+uniform sampler2D TextureMap0;
+
+// the shadow map from first rendering pass
+//uniform sampler2DShadow	ShadowMap;			// This does not compile - Why ?
+uniform sampler2D ShadowMap;
+
+RasterizationState rasterState1
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, FILL};
+}
+
+RasterizationState rasterStateWire
+{
+    LINE_WIDTH = 1;
+    POLYGON_MODE={FRONT_AND_BACK, LINE};
+}
+
+DepthStencilState dstStateDefault
+{
+    DEPTH_TEST = true;
+    DEPTH_WRITEMASK = true;
+    DEPTH_FUNC = LEQUAL;
+}
+
+//////////////////////////////////////////////////////////////
+// GLSL Globals : meaning that all the GLSL domains (vertex, fragments etc.) will have a copy
+// of these data
+//
+GLSLShader 
+{
+    #version 420 compatibility
+    vec4 getDiffuse(vec3 inTc);
+}
+
+SamplerState defaultSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+
+SamplerState shadowSamplerState
+{
+    TEXTURE_MIN_FILTER = LINEAR_MIPMAP_LINEAR;
+    TEXTURE_MAG_FILTER = LINEAR;
+}
+
+// Texture Resources
+
+TextureResource2D Default_color <
+    defaultFile = "gargoyleMossyDiffuse.dds";
+> {
+    // this is a possible alternate way to setup sampler-states...
+    // in OpenGL, sampler-states are defined for each texture
+    // sampler-states specified in the Pass override this one
+    SamplerState = defaultSamplerState;
+}
+
+TextureResource2D ShadowMapResource <
+    defaultFile = "gargoyleMossySpec.dds";
+> {
+    SamplerState = shadowSamplerState;
+}
+
+////////////////////////////////////////////////////////////////////
+/// SHADOW MAP PASS 0 VERTEX PROGRAM ///////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ShadowMapPass0VS
+{
+    layout(location=0) in vec4 Position;
+
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+		// transform to screen space
+		// shader will save z/w value to z-buffer		
+		
+		vec4 Po     = vec4( Position.xyz, 1.0);
+		
+		gl_Position	= lightProjectionMatrix * lightViewMatrix * World * Po;
+    }
+}
+
+////////////////////////////////////////////////////////////////////
+/// SHADOW MAP PASS 1 VERTEX PROGRAM ///////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ShadowMapPass1VS
+{
+	layout(location=0) in vec4 Position;
+	layout(location=1) in vec2 UV;
+	layout(location=2) in vec3 Normal;
+
+	layout(location=0) out vec2 outTC;
+	layout(location=1) out vec4 outShadowCoord; // texture coordinates to the fragment shader for access to the shadow map
+	layout(location=2) out vec3 outNw;
+    layout(location=3) out vec3 outPw;
+	//layout(location=4) out vec4 outLightPos;
+	
+    out gl_PerVertex {
+        vec4 gl_Position;
+    };
+
+    void main(void)
+    {
+        vec4 Po    = vec4( Position.xyz, 1.0);
+
+        gl_Position = (WorldViewProjection * Po);
+	
+		// position of the vertex in the scene
+		vec4 worldPos	= World * vec4( Position.xyz, 1.0);
+	
+		outTC			= UV.xy;
+		
+		// screen space position of the vertex from the light source's point of view
+		// plus it is mapped from range [-1, 1]
+		// to [0, 1] by shadowMat in order to be used as texture coordinates
+		
+		outShadowCoord	= shadowMatrix * worldPos;
+
+		outNw           = Normal;
+		outPw           = Po.xyz;
+		//outLightPos 	= WorldViewProjection * vec4(customLightPos.x, customLightPos.y, customLightPos.z, 1.0);
+    }
+}
+
+////////////////////////////////////////////////////////////////////
+/// SHADOW MAP FRAGMENT PASS 0 PROGRAM /////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ShadowMapPass0PS
+{
+    layout(location=0) out vec4 color;
+
+    void main() 
+    {
+		// fragment shader by default is obligated to output color
+		color = vec4(0.3, 0.7, 0.9, 1.0);
+    }
+}
+
+////////////////////////////////////////////////////////////////////
+/// SHADOW MAP FRAGMENT PASS 1 PROGRAM /////////////////////////////
+////////////////////////////////////////////////////////////////////
+GLSLShader ShadowMapPass1PS
+{
+    layout(location=0) in vec2 inTC;
+	layout(location=1) in vec4 inShadowCoord;	// texture coordinates for access to the shadow map
+	layout(location=2) in vec3 inNw;
+    layout(location=3) in vec3 inPw;
+	//layout(location=4) in vec4 inLightPos;
+
+    layout(location=0) out vec4 color;
+
+    void main() 
+    {
+		vec4 texcolor = texture(TextureMap0, vec2(inTC.x, inTC.y));
+
+		// sampling from the shadow map
+		// textureProj() divides o_shadowCoord.xyz by o_shadowCoord.w
+		// then inShadowCoord.xy are used as 2D texture coords to sample the shadow map
+		// inShadowCoord.z is automatically compared to the value from the shadow map
+		//float shadowFactor = textureProj(ShadowMap, inShadowCoord);
+				
+		//---------------------------------------------------------------------------------------------
+		// Just a test .
+		//vec4 shadowFactor4 = texture(ShadowMap, vec2(inShadowCoord.x, inShadowCoord.y));
+		//vec4 shadowFactor4 = texture(ShadowMap, vec2(inTC.x, inTC.y));
+		//---------------------------------------------------------------------------------------------
+
+		vec4 shadowFactor4 = textureProj(ShadowMap, inShadowCoord);
+		
+		//vec4 shadowFactor4 = shadow2DProj(ShadowMap, vec2(inShadowCoord.x, inShadowCoord.y));				// This does not compilte - why ?
+		//vec4 shadowFactor4 = shadow2D(ShadowMap, vec2(inShadowCoord.x, inShadowCoord.y));					// This does not compilte - why ?
+				
+		//color = texcolor*shadowFactor;
+		
+		// The lighting works , But , for the propose of the shadows , it can be ignored , we just want to see the shadow texture receive content .
+		// So , for the test , all of the lighthing calculations are ignored and the shadowmap texture is displayed on the geometry ( Line 238 ) .
+		// Currently we see a black texture .
+
+		// Lighting :	
+//		vec3 lightPos1 = lightPos[0].xyz;
+		//vec3 lightPos1 = inLightPos.xyz;
+		//vec3 lightPos1 = customLightPos.xyz;
+		
+//		vec4 vertexWorldPoint = ( ViewInverseTranspose * vec4( inPw.x, inPw.y, inPw.z, 1.0 ) );
+		
+		//vec3 Ln1 = normalize(lightPos1.xyz - inPw);
+//		vec3 Ln1 = normalize(lightPos1.xyz - vertexWorldPoint.xyz);
+//		vec3 Nn = normalize(inNw);
+//		float RollOff = 0.3;
+//		float ldn1 = dot(Ln1,Nn);
+//		float diffComp = max(0.0, ldn1);
+//		vec4 Diffuse = vec4((diffComp * texcolor).xyz,1);
+//		float subLamb = smoothstep(-RollOff, 1.0, ldn1) - smoothstep(0.0, 1.0, ldn1);
+//		subLamb = max(0.0,subLamb);
+//		vec3 lightingContrib = (Diffuse + subLamb).xyz;
+//		vec3 diffuseLighting = lightingContrib*0.5 + (texcolor*0.5).xyz;
+		
+		//color = vec4( diffuseLighting.x, diffuseLighting.y, diffuseLighting.z, 1.0 );
+		//color = vec4( shadowFactor4.x, shadowFactor4.y, shadowFactor4.z, 1.0 ) * vec4( diffuseLighting.x, diffuseLighting.y, diffuseLighting.z, 1.0 );
+		
+		
+		color = vec4( shadowFactor4.x, shadowFactor4.y, shadowFactor4.z, 1.0 );
+		
+		//color = vec4( texcolor.x, texcolor.y, texcolor.z, 1.0 );
+    }
+}
+
+Technique SHADOW_MAP
+{
+	Pass p0
+	{
+		RasterizationState = rasterState1;
+		DepthStencilState = dstStateDefault;
+		VertexProgram = ShadowMapPass0VS;
+		FragmentProgram = ShadowMapPass0PS;
+	}
+	
+	Pass p1
+    {
+        RasterizationState = rasterState1;
+        SamplerState(TextureMap0) = defaultSamplerState;
+        SamplerResource(TextureMap0) = Default_color;
+		SamplerState(ShadowMap) = shadowSamplerState;
+		samplerTexUnit(ShadowMap) = 1;
+		SamplerResource(ShadowMap) = ShadowMapResource;
+        VertexProgram = ShadowMapPass1VS;
+		FragmentProgram = ShadowMapPass1PS;
+    }
+}

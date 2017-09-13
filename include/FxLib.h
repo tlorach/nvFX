@@ -539,6 +539,7 @@ public:
         // Those typed texture/GL-samplers are when the parser encoutered an external declaration of uniform : it needs to know the type
         TTexture1D,
         TTexture2D,
+        TTexture2DShadow,
         TTexture2DRect,
         TTexture3D,
         TTextureCube,

@@ -335,11 +335,13 @@ EntryPoint          return ENTRY_POINT;
     lowp    return LOWP;
     Texture1D       return TEXTURE1D_TYPE;
     Texture2D       return TEXTURE2D_TYPE;
+    Texture2DShadow return TEXTURE2DSHADOW_TYPE;
     Texture2DRect   return TEXTURE2DRECT_TYPE;
     Texture3D       return TEXTURE3D_TYPE;
     TextureCube     return TEXTURECUBE_TYPE;
     sampler1D       return SAMPLER1D_TYPE;
     sampler2D       return SAMPLER2D_TYPE;
+    sampler2DShadow return SAMPLER2DSHADOW_TYPE;
     sampler2DRect   return SAMPLER2DRECT_TYPE;
     sampler3D       return SAMPLER3D_TYPE;
     samplerCube     return SAMPLERCUBE_TYPE;
@@ -1089,6 +1091,10 @@ EntryPoint          return ENTRY_POINT;
     NEAREST             yylval.glenum=GLNEAREST; return GLNEAREST;
     MIRRORED_REPEAT     yylval.glenum=GLMIRROREDREPEAT; return GLMIRROREDREPEAT;
     MIRROR              yylval.glenum=GLMIRROREDREPEAT; return GLMIRROREDREPEAT;
+    TEXTURE_COMPARE_MODE yylval.glenum=GLTEXTURECOMPAREMODE; return GLTEXTURECOMPAREMODE;
+    COMPARE_R_TO_TEXTURE yylval.glenum=GLCOMPARERTOTEXTURE; return GLCOMPARERTOTEXTURE;
+    TEXTURE_COMPARE_FUNC yylval.glenum=GLTEXTURECOMPAREFUNC; return GLTEXTURECOMPAREFUNC;
+    DEPTH_TEXTURE_MODE   yylval.glenum=GLDEPTHTEXTUREMODE; return GLDEPTHTEXTUREMODE;
 }
 
     /*==================================================================

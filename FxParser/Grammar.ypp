@@ -364,6 +364,7 @@
             case IUniform::TTexture:
             case IUniform::TTexture1D:
             case IUniform::TTexture2D:
+            case IUniform::TTexture2DShadow:
             case IUniform::TTexture2DRect:
             case IUniform::TTexture3D:
             case IUniform::TTextureCube:
@@ -524,11 +525,13 @@ TODO: New resource types (from D3D)
 %token              INT4_TYPE
 %token              TEXTURE1D_TYPE
 %token              TEXTURE2D_TYPE
+%token              TEXTURE2DSHADOW_TYPE
 %token              TEXTURE2DRECT_TYPE
 %token              TEXTURE3D_TYPE
 %token              TEXTURECUBE_TYPE
 %token              SAMPLER1D_TYPE
 %token              SAMPLER2D_TYPE
+%token              SAMPLER2DSHADOW_TYPE
 %token              SAMPLER2DRECT_TYPE
 %token              SAMPLER3D_TYPE
 %token              SAMPLERCUBE_TYPE
@@ -594,6 +597,7 @@ TODO: New resource types (from D3D)
   but less grammar code to write
   Using the same values as OpenGL spec
 */
+%token <glenum>     GLNONE
 %token <glenum>     GLACCUM
 %token <glenum>     GLLOAD
 %token <glenum>     GLRETURN
@@ -684,6 +688,10 @@ TODO: New resource types (from D3D)
 %token <glenum>     GLCLAMP
 %token <glenum>     GLREPEAT
 %token <glenum>     GLMIRROREDREPEAT
+%token <glenum>     GLTEXTURECOMPAREMODE
+%token <glenum>     GLCOMPARERTOTEXTURE
+%token <glenum>     GLTEXTURECOMPAREFUNC
+%token <glenum>     GLDEPTHTEXTUREMODE
 
 /*------------------------------------------------------------------
 */
@@ -788,6 +796,10 @@ TODO: New resource types (from D3D)
 */
 %type   <glenum>            glenum
 %type   <glenum>            suvmapping
+%type   <glenum>            texcomparemode
+%type   <glenum>            texcomparefn
+%type   <glenum>            dtexmode
+
 %type   <glenum>            sfilter
 
 %type   <varNameList>       varnamelist
@@ -3119,6 +3131,27 @@ suvmapping: GLREPEAT
 | error { yyerror("Error in Sampler State UV Addressing\n");}
 ;
 
+dtexmode: GLLUMINANCE
+| GLINTENSITY
+| GLALPHA
+| error { yyerror("Error in Sampler State depth texture mode\n");}
+;
+
+texcomparefn: GLNEVER
+| GLLEQUAL	
+| GLGEQUAL	
+| GLLESS	
+| GLGREATER	
+| GLEQUAL	
+| GLNOTEQUAL	
+| GLALWAYS	
+| error { yyerror("Error in Sampler State compare Fn\n");}
+;
+
+texcomparemode: GLNONE
+| GLCOMPARERTOTEXTURE
+| error { yyerror("Error in Sampler State compare mode\n");}
+;
 /*==================================================================
    Sampler state items
    TODO: add more
@@ -3137,6 +3170,15 @@ sstates: /* empty */
     curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
 }
 | sstates GLTEXTUREWRAPR '=' suvmapping ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates GLTEXTURECOMPAREMODE '=' texcomparemode ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates GLTEXTURECOMPAREFUNC '=' texcomparefn ';' {
+    curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
+}
+| sstates GLDEPTHTEXTUREMODE '=' dtexmode ';' {
     curSamplerState->getExInterface()->createState(getGLEnumValue($2), getGLEnumValue($4));
 }
 | sstates error ';' { yyerror("Error in one of sampler-state states\n"); }
@@ -3971,11 +4013,13 @@ uniform_type:
 |  MAT4_TYPE { $$ = nvFX::IUniform::TMat4; }
 |  TEXTURE1D_TYPE { $$ = nvFX::IUniform::TTexture1D; }
 |  TEXTURE2D_TYPE { $$ = nvFX::IUniform::TTexture2D; }
+|  TEXTURE2DSHADOW_TYPE { $$ = nvFX::IUniform::TTexture2DShadow; }
 |  TEXTURE2DRECT_TYPE { $$ = nvFX::IUniform::TTexture2DRect; }
 |  TEXTURE3D_TYPE { $$ = nvFX::IUniform::TTexture3D; }
 |  TEXTURECUBE_TYPE { $$ = nvFX::IUniform::TTextureCube; }
 |  SAMPLER1D_TYPE { $$ = nvFX::IUniform::TTexture1D; }
 |  SAMPLER2D_TYPE { $$ = nvFX::IUniform::TTexture2D; }
+|  SAMPLER2DSHADOW_TYPE { $$ = nvFX::IUniform::TTexture2DShadow; }
 |  SAMPLER2DRECT_TYPE { $$ = nvFX::IUniform::TTexture2DRect; }
 |  SAMPLER3D_TYPE { $$ = nvFX::IUniform::TTexture3D; }
 |  SAMPLERCUBE_TYPE { $$ = nvFX::IUniform::TTextureCube; }

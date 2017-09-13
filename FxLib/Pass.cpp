@@ -2051,6 +2051,7 @@ bool Pass::validateUniformTextureUnit(Uniform* pU, bool allowUnitAssignment, int
         case IUniform::TTexture:
         case IUniform::TTexture1D:
         case IUniform::TTexture2D:
+        case IUniform::TTexture2DShadow:
         case IUniform::TTexture2DRect:
         case IUniform::TTexture3D:
         case IUniform::TTextureCube:
@@ -2099,6 +2100,7 @@ bool Pass::validateUniformTextureUnits(bool allowUnitAssignment)
                 case IUniform::TTexture:
                 case IUniform::TTexture1D:
                 case IUniform::TTexture2D:
+                case IUniform::TTexture2DShadow:
                 case IUniform::TTexture2DRect:
                 case IUniform::TTexture3D:
                 case IUniform::TTextureCube:
@@ -2122,6 +2124,7 @@ bool Pass::validateUniformTextureUnits(bool allowUnitAssignment)
             case IUniform::TTexture:
             case IUniform::TTexture1D:
             case IUniform::TTexture2D:
+            case IUniform::TTexture2DShadow:
             case IUniform::TTexture2DRect:
             case IUniform::TTexture3D:
             case IUniform::TTextureCube:
@@ -2172,6 +2175,7 @@ bool Pass::validateUniformTextureUnits(bool allowUnitAssignment)
             case IUniform::TTexture:
             case IUniform::TTexture1D:
             case IUniform::TTexture2D:
+            case IUniform::TTexture2DShadow:
             case IUniform::TTexture2DRect:
             case IUniform::TTexture3D:
             case IUniform::TTextureCube:
@@ -2301,6 +2305,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
                 case IUniform::TTexture:
                 case IUniform::TTexture1D:
                 case IUniform::TTexture2D:
+                case IUniform::TTexture2DShadow:
                 case IUniform::TTexture2DRect:
                 case IUniform::TTexture3D:
                 case IUniform::TTextureCube:
@@ -2416,6 +2421,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
             case IUniform::TTexture:
             case IUniform::TTexture1D:
             case IUniform::TTexture2D:
+            case IUniform::TTexture2DShadow:
             case IUniform::TTexture2DRect:
             case IUniform::TTexture3D:
             case IUniform::TTextureCube:
@@ -2438,6 +2444,7 @@ bool Pass::execute(PassInfo * pr, unsigned int cancelInternalAction)
                 case IUniform::TTexture:
                 case IUniform::TTexture1D:
                 case IUniform::TTexture2D:
+                case IUniform::TTexture2DShadow:
                 case IUniform::TTexture2DRect:
                 case IUniform::TTexture3D:
                 case IUniform::TTextureCube:

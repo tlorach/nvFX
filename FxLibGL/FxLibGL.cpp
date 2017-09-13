@@ -275,6 +275,7 @@ std::string buildCodeForThisUniform(IContainer* pCont, Uniform* pUniform)
         // texture part. Obviously we don't expect them in constant buffers but let's use buildCodeForThisUniform for this anyways
         case IUniform::TTexture1D: code += "sampler1D "; break;
         case IUniform::TTexture2D: code += "sampler2D "; break;
+        case IUniform::TTexture2DShadow: code += "sampler2DShadow "; break;
         case IUniform::TTexture2DRect: code += "sampler2DRect "; break;
         case IUniform::TTexture3D: code += "sampler3D "; break;
         case IUniform::TTextureCube: code += "samplerCube "; break;
@@ -287,6 +288,7 @@ std::string buildCodeForThisUniform(IContainer* pCont, Uniform* pUniform)
                 {
                 case IUniform::TTexture1D: code += "sampler1D "; break;
                 case IUniform::TTexture2D: code += "sampler2D "; break;
+                case IUniform::TTexture2DShadow: code += "sampler2DShadow "; break;
                 case IUniform::TTexture2DRect: code += "sampler2DRect "; break;
                 case IUniform::TTexture3D: code += "sampler3D "; break;
                 case IUniform::TTextureCube: code += "samplerCube "; break;

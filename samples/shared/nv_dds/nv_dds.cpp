@@ -188,6 +188,10 @@
 #include <assert.h>
 #include "nv_dds.h"
 
+#define max(a,b)    (((a) > (b)) ? (a) : (b))
+#define min(a,b)    (((a) < (b)) ? (a) : (b))
+
+
 using namespace std;
 using namespace nv_dds;
 

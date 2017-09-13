@@ -1810,6 +1810,7 @@ void Container::moveGlobalUniformsToBuffer(CstBuffer* pBuff)
         case IUniform::TTexture:
         case IUniform::TTexture1D:
         case IUniform::TTexture2D:
+        case IUniform::TTexture2DShadow:
         case IUniform::TTexture2DRect:
         case IUniform::TTexture3D:
         case IUniform::TTextureCube:

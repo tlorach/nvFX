@@ -106,6 +106,7 @@ bool Uniform::ShadowedData::tooSmall(IUniform::Type type, size_t nitems, size_t*
     case TTexture:
     case TTexture1D:
     case TTexture2D:
+    case TTexture2DShadow:
     case TTexture2DRect:
     case TTexture3D:
     case TTextureCube:
@@ -1062,6 +1063,7 @@ IUniform*    Uniform::setSamplerUnit(int i)
     case IUniform::TTexture:
     case IUniform::TTexture1D:
     case IUniform::TTexture2D:
+    case IUniform::TTexture2DShadow:
     case IUniform::TTexture2DRect:
     case IUniform::TTexture3D:
     case IUniform::TTextureCube:
@@ -1096,6 +1098,7 @@ IUniform*    Uniform::setSamplerState(ISamplerState *pSState)
     case IUniform::TTexture:
     case IUniform::TTexture1D:
     case IUniform::TTexture2D:
+    case IUniform::TTexture2DShadow:
     case IUniform::TTexture2DRect:
     case IUniform::TTexture3D:
     case IUniform::TTextureCube:
@@ -1215,6 +1218,7 @@ IUniform*    Uniform::setImageUnit(int i)
     case IUniform::TTexture:
     case IUniform::TTexture1D:
     case IUniform::TTexture2D:
+    case IUniform::TTexture2DShadow:
     case IUniform::TTexture2DRect:
     case IUniform::TTexture3D:
     case IUniform::TTextureCube:
@@ -1256,6 +1260,7 @@ IUniform*    Uniform::setFromUniform(IUniform* pU_)
     if((m_type == Uniform::TTexture)
         ||(m_type == IUniform::TTexture1D)
         ||(m_type == IUniform::TTexture2D)
+        ||(m_type == IUniform::TTexture2DShadow)
         ||(m_type == IUniform::TTexture2DRect)
         ||(m_type == IUniform::TTexture3D)
         ||(m_type == IUniform::TTextureCube) )
@@ -1263,6 +1268,7 @@ IUniform*    Uniform::setFromUniform(IUniform* pU_)
     if((pU->m_type == Uniform::TTexture)
         ||(pU->m_type == IUniform::TTexture1D)
         ||(pU->m_type == IUniform::TTexture2D)
+        ||(pU->m_type == IUniform::TTexture2DShadow)
         ||(pU->m_type == IUniform::TTexture2DRect)
         ||(pU->m_type == IUniform::TTexture3D)
         ||(pU->m_type == IUniform::TTextureCube) )
@@ -1286,6 +1292,7 @@ IUniform*    Uniform::setFromUniform(IUniform* pU_)
     else if((pU->m_type == Uniform::TTexture)
         ||(pU->m_type == IUniform::TTexture1D)
         ||(pU->m_type == IUniform::TTexture2D)
+        ||(pU->m_type == IUniform::TTexture2DShadow)
         ||(pU->m_type == IUniform::TTexture2DRect)
         ||(pU->m_type == IUniform::TTexture3D)
         ||(pU->m_type == IUniform::TTextureCube) )
@@ -1654,6 +1661,7 @@ IUniform*    Uniform::updateSamplerUnit(int i, IPass *pass)
     if((m_type != Uniform::TTexture)
         &&(m_type != IUniform::TTexture1D)
         &&(m_type != IUniform::TTexture2D)
+        &&(m_type != IUniform::TTexture2DShadow)
         &&(m_type != IUniform::TTexture2DRect)
         &&(m_type != IUniform::TTexture3D)
         &&(m_type != IUniform::TTextureCube) )
@@ -1725,6 +1733,7 @@ IUniform*    Uniform::updateImageUnit(int i, IPass *pass)
     if((m_type != Uniform::TTexture)
         &&(m_type != IUniform::TTexture1D)
         &&(m_type != IUniform::TTexture2D)
+        &&(m_type != IUniform::TTexture2DShadow)
         &&(m_type != IUniform::TTexture2DRect)
         &&(m_type != IUniform::TTexture3D)
         &&(m_type != IUniform::TTextureCube) )
@@ -1749,6 +1758,7 @@ IUniform*    Uniform::updateSamplerState(ISamplerState *pSState, IPass *pass)
     if((m_type != Uniform::TTexture)
         &&(m_type != IUniform::TTexture1D)
         &&(m_type != IUniform::TTexture2D)
+        &&(m_type != IUniform::TTexture2DShadow)
         &&(m_type != IUniform::TTexture2DRect)
         &&(m_type != IUniform::TTexture3D)
         &&(m_type != IUniform::TTextureCube) )
@@ -1924,6 +1934,7 @@ int Uniform::getSizeOfType()
     case TTexture:
     case TTexture1D:
     case TTexture2D:
+    case TTexture2DShadow:
     case TTexture2DRect:
     case TTexture3D:
     case TTextureCube:
